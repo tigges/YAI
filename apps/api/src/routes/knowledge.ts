@@ -1,6 +1,7 @@
 import type { FastifyInstance } from 'fastify'
 import { PrismaClient } from '@ybot/db'
 import { z } from 'zod'
+import { enqueueKnowledgeSync } from '../queues.js'
 
 const prisma = new PrismaClient()
 type JWT = { sub: string; tenantId: string; role: string }
@@ -127,8 +128,8 @@ export async function knowledgeRoutes(app: FastifyInstance) {
     const { botId, id } = request.params as { botId: string; id: string }
     const src = await prisma.knowledgeSource.findFirst({ where: { id, botId, tenantId } })
     if (!src) return reply.status(404).send({ error: { code: 'NOT_FOUND' } })
+    await enqueueKnowledgeSync({ tenantId, sourceId: id, botId, kind: src.kind as 'website' | 'file', config: src.config as Record<string, unknown> })
     await prisma.knowledgeSource.update({ where: { id }, data: { lastSyncAt: new Date() } })
-    // In production: enqueue BullMQ job here
     return { data: { queued: true, sourceId: id } }
   })
 
@@ -138,15 +139,34 @@ export async function knowledgeRoutes(app: FastifyInstance) {
     const { botId } = request.params as { botId: string }
     const bot = await prisma.bot.findFirst({ where: { id: botId, tenantId } })
     if (!bot) return reply.status(404).send({ error: { code: 'NOT_FOUND' } })
-    return { data: { model: 'gpt-4o', temperature: 0.3, maxTokens: 2048, systemPrompt: 'You are a helpful support assistant for Acme Corp. Be concise, friendly, and professional.' } }
+    const cfg = await prisma.botConfig.findUnique({ where: { botId } })
+    return {
+      data: {
+        model: cfg?.model ?? 'claude-sonnet-4-5',
+        temperature: cfg?.temperature ?? 0.3,
+        maxTokens: cfg?.maxTokens ?? 2048,
+        systemPrompt: cfg?.systemPrompt ?? `You are a helpful support assistant for ${bot.name}. Be concise, friendly, and professional.`,
+      },
+    }
   })
 
   app.put('/:botId/training', async (request, reply) => {
     const { tenantId } = request.user as JWT
     const { botId } = request.params as { botId: string }
-    const body = z.object({ model: z.string(), temperature: z.number().min(0).max(2), maxTokens: z.number().optional(), systemPrompt: z.string().optional() }).safeParse(request.body)
+    const body = z.object({
+      model: z.string(),
+      temperature: z.number().min(0).max(2),
+      maxTokens: z.number().optional(),
+      systemPrompt: z.string().optional(),
+    }).safeParse(request.body)
     if (!body.success) return reply.status(400).send({ error: { code: 'VALIDATION', details: body.error.flatten() } })
+    const { model, temperature, maxTokens, systemPrompt } = body.data
+    const cfg = await prisma.botConfig.upsert({
+      where: { botId },
+      create: { tenantId, botId, model, temperature, maxTokens: maxTokens ?? 2048, systemPrompt: systemPrompt ?? 'You are a helpful assistant.' },
+      update: { model, temperature, ...(maxTokens !== undefined ? { maxTokens } : {}), ...(systemPrompt !== undefined ? { systemPrompt } : {}) },
+    })
     await prisma.activity.create({ data: { tenantId, userId: (request.user as JWT).sub, action: 'training.updated', resource: 'bot', resourceId: botId } })
-    return { data: { ...body.data, botId } }
+    return { data: cfg }
   })
 }

@@ -10,16 +10,19 @@
 # ─────────────────────────────────────────────────────────────────────────────
 
 :80 {
-    # API proxy — all /api/* and /ws requests go to the backend
-    handle /api/* {
+    # WebSocket — use named matcher so Caddy correctly handles the upgrade
+    @ws {
+        path /ws
+        header Connection *Upgrade*
+        header Upgrade websocket
+    }
+    handle @ws {
         reverse_proxy ybot-api:3001
     }
 
-    handle /ws {
-        reverse_proxy ybot-api:3001 {
-            header_up Upgrade {http.request.header.Upgrade}
-            header_up Connection {http.request.header.Connection}
-        }
+    # API proxy — all /api/* requests go to the backend
+    handle /api/* {
+        reverse_proxy ybot-api:3001
     }
 
     # MinIO console (optional)
@@ -42,8 +45,9 @@
 
 # ── Public domain with automatic HTTPS (uncomment and edit) ──────────────────
 # ybot.example.com {
+#     @ws { path /ws; header Connection *Upgrade*; header Upgrade websocket }
+#     handle @ws  { reverse_proxy ybot-api:3001 }
 #     handle /api/* { reverse_proxy ybot-api:3001 }
-#     handle /ws    { reverse_proxy ybot-api:3001 }
 #     handle        { reverse_proxy ybot-web:80 }
 #     log { output stdout; format console; level INFO }
 # }
