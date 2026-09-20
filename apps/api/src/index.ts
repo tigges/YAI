@@ -2,6 +2,7 @@ import Fastify from 'fastify'
 import cors from '@fastify/cors'
 import cookie from '@fastify/cookie'
 import jwt from '@fastify/jwt'
+import wsPlugin from '@fastify/websocket'
 import { authRoutes } from './routes/auth.js'
 import { meRoutes } from './routes/me.js'
 import { botsRoutes } from './routes/bots.js'
@@ -11,8 +12,10 @@ import { knowledgeRoutes } from './routes/knowledge.js'
 import { conversationsRoutes, ticketsRoutes, contactsRoutes } from './routes/inbox.js'
 import { campaignsRoutes, templatesRoutes } from './routes/engage.js'
 import { channelsRoutes, webhooksRoutes, teamRoutes, analyticsRoutes, auditRoutes } from './routes/config.js'
+import { previewRoutes } from './routes/preview.js'
 import { startKnowledgeSyncWorker } from './workers/knowledge-sync.js'
 import { authMiddleware } from './middleware/auth.js'
+import { wsRoutes, broadcastToTenant } from './ws.js'
 
 const PORT = parseInt(process.env['PORT'] ?? '3001', 10)
 const HOST = process.env['HOST'] ?? '0.0.0.0'
@@ -42,8 +45,14 @@ await app.register(jwt, {
 })
 
 app.decorate('authenticate', authMiddleware)
+// Expose broadcastToTenant so runtime-bridge can call it without importing ws.ts directly
+app.decorate('broadcastToTenant', broadcastToTenant)
 
 app.get('/health', async () => ({ status: 'ok', ts: new Date().toISOString() }))
+
+// WebSocket must be registered before route plugins that use it
+await app.register(wsPlugin)
+await app.register(wsRoutes)
 
 await app.register(authRoutes, { prefix: '/api/v1/auth' })
 await app.register(meRoutes, { prefix: '/api/v1/me' })
@@ -61,11 +70,11 @@ await app.register(webhooksRoutes, { prefix: '/api/v1/webhooks' })
 await app.register(teamRoutes, { prefix: '/api/v1/team' })
 await app.register(analyticsRoutes, { prefix: '/api/v1/analytics' })
 await app.register(auditRoutes, { prefix: '/api/v1/audit' })
+await app.register(previewRoutes, { prefix: '/api/v1/bots' })
 
 try {
   await app.listen({ port: PORT, host: HOST })
   console.log(`API running on http://${HOST}:${PORT}`)
-  // Start background workers (non-blocking)
   startKnowledgeSyncWorker().catch(() => {})
 } catch (err) {
   app.log.error(err)

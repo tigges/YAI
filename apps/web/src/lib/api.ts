@@ -185,6 +185,35 @@ export const audit = {
   list: (params?: Record<string, string>) => apiFetch<{ data: AuditEvent[] }>(`/audit?${new URLSearchParams(params ?? {})}`),
 }
 
+export const preview = {
+  knowledgeStats: (botId: string) =>
+    apiFetch<{ data: { chunkCount: number; sourceCount: number } }>(`/bots/${botId}/preview/knowledge-stats`),
+  /** Returns the raw fetch Response so the caller can consume the SSE stream. */
+  chatStream: (botId: string, body: { message: string; systemPrompt?: string; history?: Array<{ role: 'user' | 'assistant'; content: string }> }): Promise<Response> => {
+    const token = (() => { try { const r = localStorage.getItem('ybot-app'); if (!r) return null; const p = JSON.parse(r) as { state?: { token?: string } }; return p?.state?.token ?? null } catch { return null } })()
+    return fetch(`${BASE}/bots/${botId}/preview/chat`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      credentials: 'include',
+      body: JSON.stringify(body),
+    })
+  },
+}
+
+/** Build the WebSocket URL for the tenant real-time channel. */
+export function buildWsUrl(token: string): string {
+  const apiBase = import.meta.env.VITE_API_URL ?? '/api/v1'
+  const isRelative = apiBase.startsWith('/')
+  const origin = isRelative ? window.location.origin : new URL(apiBase).origin
+  const proto = origin.startsWith('https') ? 'wss' : 'ws'
+  const host = origin.replace(/^https?:\/\//, '')
+  return `${proto}://${host}/ws?token=${encodeURIComponent(token)}`
+}
+
+
 // ── Types ─────────────────────────────────────────────────────────────────────
 export interface BotSummary { id: string; name: string; description?: string; status: string; environments: Array<{ id: string; kind: string; name: string }> }
 export interface Flow { id: string; name: string; description?: string; kind: string; tags: string[]; updatedAt: string; versions: FlowVersion[] }

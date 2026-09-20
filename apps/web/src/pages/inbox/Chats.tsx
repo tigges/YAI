@@ -15,6 +15,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogBody, DialogFoo
 import { SubNav } from '../../components/SubNav'
 import { cn } from '@ybot/ui'
 import { useConversations, useConversation, useSendMessage, useAssignConversation, useResolveConversation } from '../../lib/hooks'
+import { useConversationWS, useTenantWS } from '../../lib/ws'
 
 const SUBNAV = [
   { label: 'Chats', path: '/inbox/chats' },
@@ -127,11 +128,22 @@ export function ChatsPage() {
   const assignConversation = useAssignConversation()
   const resolveConversation = useResolveConversation()
 
+  // Connect to WS on mount (establishes tenant-level connection)
+  useTenantWS()
+
   useEffect(() => {
     if (conversations.length && !selectedId) setSelectedId(conversations[0]?.id ?? null)
   }, [conversations, selectedId])
 
-  const { data: selectedConvo } = useConversation(selectedId ?? '')
+  const { data: selectedConvo, refetch: refetchConvo } = useConversation(selectedId ?? '')
+
+  // Real-time WS events for the selected conversation
+  const { newMessage, streamingText } = useConversationWS(selectedId)
+
+  // When a new bot/agent message arrives, refresh the conversation
+  useEffect(() => {
+    if (newMessage) refetchConvo()
+  }, [newMessage, refetchConvo])
 
   const [reply, setReply] = useState('')
   const [noteType, setNoteType] = useState<NoteType>('reply')
@@ -185,7 +197,7 @@ export function ChatsPage() {
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [messages, selectedId])
+  }, [messages, selectedId, streamingText])
 
   function handleReplyChange(val: string) {
     setReply(val)
@@ -463,6 +475,19 @@ export function ChatsPage() {
                 )}
               </div>
             ))}
+            {/* Streaming bot reply in progress */}
+            {streamingText && (
+              <div className="flex gap-3 px-4 py-2 justify-start">
+                <Avatar name="YBot" size="xs" />
+                <div className="max-w-[70%]">
+                  <p className="text-[11px] text-[var(--text-muted)] mb-1">YBot</p>
+                  <div className="rounded-2xl rounded-tl-sm px-3 py-2 text-sm bg-[var(--accent-muted)] text-[var(--text-primary)] border border-[var(--accent)]/20">
+                    {streamingText}
+                    <span className="inline-block w-1.5 h-3.5 ml-0.5 bg-[var(--accent)] rounded-sm animate-pulse align-middle" />
+                  </div>
+                </div>
+              </div>
+            )}
             <div ref={messagesEndRef} />
           </div>
 
