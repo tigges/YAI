@@ -389,3 +389,21 @@ export function useAuditLog(params?: Record<string, string>) {
     queryFn: withDemoFallback(() => api.audit.list(params).then((r) => r.data), demo.DEMO_AUDIT),
   })
 }
+
+// ── System Status ─────────────────────────────────────────────────────────────
+export function useSystemStatus(options?: { refetchInterval?: number }) {
+  return useQuery({
+    queryKey: ['system-status'],
+    queryFn: withDemoFallback(() => api.system.status().then((r) => r.data), demo.DEMO_SYSTEM_STATUS),
+    staleTime: 0,
+    refetchInterval: options?.refetchInterval,
+  })
+}
+
+export function useSystemConfig() {
+  return useQuery({
+    queryKey: ['system-config'],
+    queryFn: withDemoFallback(() => api.system.config().then((r) => r.data), demo.DEMO_SYSTEM_CONFIG),
+    staleTime: 60_000,
+  })
+}

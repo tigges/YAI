@@ -14,6 +14,7 @@ import { campaignsRoutes, templatesRoutes } from './routes/engage.js'
 import { channelsRoutes, webhooksRoutes, teamRoutes, analyticsRoutes, auditRoutes } from './routes/config.js'
 import { previewRoutes } from './routes/preview.js'
 import { startKnowledgeSyncWorker } from './workers/knowledge-sync.js'
+import { systemRoutes } from './routes/system.js'
 import { authMiddleware } from './middleware/auth.js'
 import { wsRoutes, broadcastToTenant } from './ws.js'
 
@@ -71,6 +72,7 @@ await app.register(teamRoutes, { prefix: '/api/v1/team' })
 await app.register(analyticsRoutes, { prefix: '/api/v1/analytics' })
 await app.register(auditRoutes, { prefix: '/api/v1/audit' })
 await app.register(previewRoutes, { prefix: '/api/v1/bots' })
+await app.register(systemRoutes, { prefix: '/api/v1/system' })
 
 try {
   await app.listen({ port: PORT, host: HOST })
