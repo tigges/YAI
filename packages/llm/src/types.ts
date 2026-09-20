@@ -13,6 +13,16 @@ export interface LlmCompleteParams {
   stream?: false
 }
 
+export interface LlmStreamParams {
+  messages: LlmMessage[]
+  model?: string
+  temperature?: number
+  maxTokens?: number
+  systemPrompt?: string
+  /** Called for each text chunk as it arrives. */
+  onChunk: (chunk: string) => void
+}
+
 export interface LlmCompleteResult {
   content: string
   model: string
@@ -44,6 +54,7 @@ export interface LlmClassifyResult {
 // ── Provider interface ────────────────────────────────────────────────────────
 export interface LlmProvider {
   complete(params: LlmCompleteParams): Promise<LlmCompleteResult>
+  stream?(params: LlmStreamParams): Promise<LlmCompleteResult>
   embed(params: LlmEmbedParams): Promise<LlmEmbedResult>
 }
 
@@ -53,6 +64,23 @@ export class LlmAdapter {
 
   async complete(params: LlmCompleteParams): Promise<LlmCompleteResult> {
     return this.provider.complete({ model: this.defaultModel, ...params })
+  }
+
+  /** Stream tokens via onChunk; falls back to a single complete() call if provider doesn't support streaming. */
+  async stream(params: LlmStreamParams): Promise<LlmCompleteResult> {
+    if (this.provider.stream) {
+      return this.provider.stream({ model: this.defaultModel, ...params })
+    }
+    // Fallback: call complete() and emit full content as single chunk
+    const result = await this.provider.complete({
+      model: this.defaultModel,
+      messages: params.messages,
+      temperature: params.temperature,
+      maxTokens: params.maxTokens,
+      systemPrompt: params.systemPrompt,
+    })
+    params.onChunk(result.content)
+    return result
   }
 
   async embed(params: LlmEmbedParams): Promise<LlmEmbedResult> {
@@ -87,6 +115,7 @@ export class LlmAdapter {
     context: string[]
     systemPrompt?: string
     model?: string
+    onChunk?: (chunk: string) => void
   }): Promise<LlmCompleteResult> {
     const contextBlock = params.context.map((c, i) => `[${i + 1}] ${c}`).join('\n\n')
     const systemPrompt = [
@@ -98,6 +127,16 @@ export class LlmAdapter {
       contextBlock,
       '--- END CONTEXT ---',
     ].join('\n')
+
+    if (params.onChunk) {
+      return this.stream({
+        messages: [{ role: 'user', content: params.question }],
+        systemPrompt,
+        model: params.model ?? this.defaultModel,
+        temperature: 0.2,
+        onChunk: params.onChunk,
+      })
+    }
 
     return this.provider.complete({
       messages: [{ role: 'user', content: params.question }],

@@ -25,7 +25,7 @@ export async function tenantsRoutes(app: FastifyInstance) {
       include: { user: true },
     })
     return {
-      data: members.map((m) => ({
+      data: members.map((m: { user: { id: string; email: string; displayName: string; avatarUrl?: string | null; createdAt: Date }; role: string }) => ({
         id: m.user.id,
         email: m.user.email,
         displayName: m.user.displayName,

@@ -1,26 +1,27 @@
 import type { FastifyInstance, FastifyRequest } from 'fastify'
 
-// Track connected clients per tenant
-const clients = new Map<string, Set<{ send(data: string): void; readyState: number; on(event: string, cb: (data: Buffer | string) => void): void }>>();
-
-type WsClient = { send(data: string): void; readyState: number; on(event: string, cb: (data: Buffer | string) => void): void }
+type WsClient = {
+  send(data: string): void
+  readyState: number
+  on(event: string, cb: (data: Buffer | string) => void): void
+}
 const WS_OPEN = 1
 
-export function broadcastToTenant(tenantId: string, event: object) {
-  const sockets = clients.get(tenantId) ?? new Set()
+// Tenant → set of open sockets
+const clients = new Map<string, Set<WsClient>>()
+
+/** Broadcast a JSON-serialisable event to every WS client for a given tenant. */
+export function broadcastToTenant(tenantId: string, event: object): void {
   const payload = JSON.stringify(event)
-  for (const ws of sockets) {
-    if (ws.readyState === WS_OPEN) ws.send(payload)
+  for (const ws of clients.get(tenantId) ?? []) {
+    if (ws.readyState === WS_OPEN) {
+      try { ws.send(payload) } catch { /* ignore dead socket */ }
+    }
   }
 }
 
 export async function wsRoutes(app: FastifyInstance) {
-  if (!('websocket' in app)) {
-    console.warn('⚠️  @fastify/websocket not registered — skipping WS routes')
-    return
-  }
-
-  // @ts-ignore — websocket plugin type
+  // @ts-ignore — websocket handler type provided by @fastify/websocket
   app.get('/ws', { websocket: true }, (connection: { socket: WsClient }, request: FastifyRequest) => {
     const socket = connection.socket
     const token = (request.query as Record<string, string>)['token']

@@ -16,14 +16,15 @@ import {
 import '@xyflow/react/dist/style.css'
 import { useNavigate, useParams } from '@tanstack/react-router'
 import {
-  ArrowLeft, Save, Play, Share2, GitBranch,
-  Undo2, Redo2, ZoomIn, ZoomOut, Maximize2,
+  ArrowLeft, Save, Play, Share2,
+  Undo2, Redo2, X,
 } from 'lucide-react'
 import { Button, Badge } from '@ybot/ui'
 import { cn } from '@ybot/ui'
 import { nodeTypes } from '../../../components/canvas/FlowNode'
 import { NodePalette } from '../../../components/canvas/NodePalette'
 import { NodeConfigPanel } from '../../../components/canvas/NodeConfigPanel'
+import { ChatWidget } from '../../../components/ChatWidget'
 import type { FlowNodeData } from '../../../components/canvas/FlowNode'
 import type { NodeKind } from '@ybot/shared'
 
@@ -124,6 +125,8 @@ export function FlowCanvasPage() {
       setStatus(savedCanvas.status as 'draft' | 'saved' | 'published')
     }
   }, [savedCanvas])
+
+  const [showTestPanel, setShowTestPanel] = useState(false)
 
   const dragKindRef = useRef<{ kind: NodeKind; label: string } | null>(null)
   const reactFlowWrapper = useRef<HTMLDivElement>(null)
@@ -244,8 +247,12 @@ export function FlowCanvasPage() {
           <Button variant="ghost" size="sm" onClick={handleSave} disabled={saving}>
             <Save size={13} /> {saving ? 'Saving…' : 'Save'}
           </Button>
-          <Button variant="secondary" size="sm">
-            <Play size={13} /> Test
+          <Button
+            variant={showTestPanel ? 'secondary' : 'ghost'}
+            size="sm"
+            onClick={() => setShowTestPanel((v) => !v)}
+          >
+            <Play size={13} /> {showTestPanel ? 'Hide Test' : 'Test Bot'}
           </Button>
           <Button size="sm" onClick={handlePublish} disabled={saving}>
             <Share2 size={13} /> Publish
@@ -307,6 +314,26 @@ export function FlowCanvasPage() {
           onDelete={handleDeleteNode}
           onClose={() => setSelectedNode(null)}
         />
+
+        {/* Test Bot panel */}
+        {showTestPanel && (
+          <div className="w-[340px] shrink-0 border-l border-[var(--border)] flex flex-col overflow-hidden">
+            <div className="flex items-center justify-between px-4 py-2 border-b border-[var(--border)] bg-[var(--bg-surface)] shrink-0">
+              <span className="text-[13px] font-semibold text-[var(--text-primary)]">Test Bot</span>
+              <button
+                onClick={() => setShowTestPanel(false)}
+                className="p-1 rounded hover:bg-[var(--bg-hover)] text-[var(--text-muted)]"
+              >
+                <X size={13} />
+              </button>
+            </div>
+            <ChatWidget
+              botId={selectedBotId}
+              botName="Bot Preview"
+              className="flex-1 rounded-none border-0 shadow-none"
+            />
+          </div>
+        )}
       </div>
     </div>
   )
