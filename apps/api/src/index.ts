@@ -17,6 +17,7 @@ import { startKnowledgeSyncWorker } from './workers/knowledge-sync.js'
 import { systemRoutes } from './routes/system.js'
 import { authMiddleware } from './middleware/auth.js'
 import { wsRoutes, broadcastToTenant } from './ws.js'
+import { initQueues } from './queues.js'
 
 const PORT = parseInt(process.env['PORT'] ?? '3001', 10)
 const HOST = process.env['HOST'] ?? '0.0.0.0'
@@ -78,6 +79,7 @@ try {
   await app.listen({ port: PORT, host: HOST })
   console.log(`API running on http://${HOST}:${PORT}`)
   startKnowledgeSyncWorker().catch(() => {})
+  initQueues(process.env['REDIS_URL'] ?? 'redis://localhost:6379').catch(() => {})
 } catch (err) {
   app.log.error(err)
   process.exit(1)

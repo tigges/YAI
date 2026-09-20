@@ -24,7 +24,7 @@ export async function initQueues(redisUrl: string) {
   }
 }
 
-export async function enqueueKnowledgeSync(payload: { tenantId: string; sourceId: string; botId: string }) {
+export async function enqueueKnowledgeSync(payload: { tenantId: string; sourceId: string; botId: string; kind?: string; config?: Record<string, unknown> }) {
   await knowledgeSyncQueue?.add('sync', payload, { attempts: 3, backoff: { type: 'exponential', delay: 5000 } })
 }
 

@@ -139,8 +139,24 @@ model Bot {
   templates    Template[]
   dashboards   Dashboard[]
   reports      Report[]
+  config       BotConfig?
 
   @@map("bots")
+}
+
+model BotConfig {
+  id           String   @id @default(cuid())
+  tenantId     String
+  botId        String   @unique
+  model        String   @default("claude-sonnet-4-5")
+  temperature  Float    @default(0.3)
+  maxTokens    Int      @default(2048)
+  systemPrompt String   @default("You are a helpful assistant.")
+  updatedAt    DateTime @updatedAt
+
+  bot Bot @relation(fields: [botId], references: [id], onDelete: Cascade)
+
+  @@map("bot_configs")
 }
 
 model Environment {
