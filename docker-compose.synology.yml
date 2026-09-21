@@ -81,8 +81,9 @@ services:
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       # On Synology, docker commands require sudo so credentials are stored
-      # under /root rather than the regular user's home directory.
-      - /root/.docker/config.json:/config.json:ro
+      # under /root. Mount to the same path inside the container so Watchtower
+      # finds them at the standard Docker config location for the root user.
+      - /root/.docker/config.json:/root/.docker/config.json:ro
     environment:
       WATCHTOWER_POLL_INTERVAL: "300"        # check every 5 minutes
       WATCHTOWER_CLEANUP: "true"             # remove old images after update
