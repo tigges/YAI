@@ -178,6 +178,14 @@ export function useCreateSource() {
   })
 }
 
+export function useUploadSource() {
+  const qc = useQueryClient(); const bid = botId()
+  return useMutation({
+    mutationFn: (file: File) => api.knowledge.sources.upload(bid, file).then((r) => r.data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['sources', bid] }),
+  })
+}
+
 export function useSyncSource() {
   const qc = useQueryClient(); const bid = botId()
   return useMutation({
@@ -412,7 +420,7 @@ export function useChannels() {
   const bid = botId()
   return useQuery({
     queryKey: ['channels', bid],
-    queryFn: withDemoFallback(() => api.channels.list(bid).then((r) => r.data), []),
+    queryFn: withDemoFallback(() => api.channels.list(bid).then((r) => r.data), demo.DEMO_CHANNELS),
   })
 }
 

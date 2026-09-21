@@ -101,6 +101,22 @@ export const knowledge = {
     list: (botId: string) => apiFetch<{ data: KnowledgeSource[] }>(`/bots/${botId}/sources`),
     create: (botId: string, body: { name: string; kind: string; config: Record<string, unknown> }) =>
       apiFetch<{ data: KnowledgeSource }>(`/bots/${botId}/sources`, { method: 'POST', body: JSON.stringify(body) }),
+    upload: async (botId: string, file: File): Promise<{ data: KnowledgeSource }> => {
+      const token = getToken()
+      const form = new FormData()
+      form.append('file', file)
+      const res = await fetch(`${BASE}/bots/${botId}/sources/upload`, {
+        method: 'POST',
+        headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+        credentials: 'include',
+        body: form,
+      })
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({ code: 'UNKNOWN', message: `HTTP ${res.status}` }))
+        throw new ApiError(res.status, body?.error ?? body)
+      }
+      return res.json()
+    },
     sync: (botId: string, id: string) => apiFetch<{ data: { queued: boolean } }>(`/bots/${botId}/sources/${id}/sync`, { method: 'POST' }),
     delete: (botId: string, id: string) => apiFetch<void>(`/bots/${botId}/sources/${id}`, { method: 'DELETE' }),
   },

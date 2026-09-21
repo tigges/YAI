@@ -230,6 +230,27 @@ export function ChannelsPage() {
                   </div>
                 )}
 
+                {selected.kind === 'web' && (
+                  <div>
+                    <div className="flex items-center justify-between mb-2">
+                      <label className="text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wide">Live preview</label>
+                      <Button variant="ghost" size="sm" className="gap-1.5 h-6 text-xs" onClick={() => window.open(getTestUrl(selected.id), '_blank')}>
+                        <FlaskConical size={11} /> Open full page
+                      </Button>
+                    </div>
+                    <div className="relative rounded-[var(--radius-md)] border border-[var(--border)] overflow-hidden bg-[#f8fafc]" style={{ height: 300 }}>
+                      <iframe
+                        key={selected.id}
+                        src={getTestUrl(selected.id)}
+                        title="Widget preview"
+                        className="w-full h-full border-0"
+                        sandbox="allow-scripts allow-same-origin allow-forms"
+                      />
+                    </div>
+                    <p className="text-[11px] text-[var(--text-muted)] mt-1.5">Click the 💬 bubble to start a test conversation.</p>
+                  </div>
+                )}
+
                 <div>
                   <p className="text-xs text-[var(--text-muted)]">Channel ID: <code className="font-mono bg-[var(--bg-overlay)] px-1 rounded">{selected.id}</code></p>
                 </div>
