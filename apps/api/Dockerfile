@@ -30,6 +30,17 @@ RUN pnpm --filter @ybot/api build
 # ── Production stage ──────────────────────────────────────────────────────────
 FROM node:22-alpine AS runner
 
+# Version info baked in at build time — readable at runtime via process.env
+ARG APP_VERSION=1.1.0
+ARG APP_BUILD_NUMBER=local
+ARG APP_GIT_SHA=dev
+ARG APP_BUILD_DATE
+
+ENV APP_VERSION=${APP_VERSION} \
+    APP_BUILD_NUMBER=${APP_BUILD_NUMBER} \
+    APP_GIT_SHA=${APP_GIT_SHA} \
+    APP_BUILD_DATE=${APP_BUILD_DATE}
+
 RUN apk add --no-cache curl
 
 # Install prisma CLI globally so migrations can be run from this container.
