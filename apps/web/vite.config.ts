@@ -19,4 +19,19 @@ export default defineConfig({
       },
     },
   },
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          'vendor-react':   ['react', 'react-dom'],
+          'vendor-router':  ['@tanstack/react-router'],
+          'vendor-query':   ['@tanstack/react-query'],
+          'vendor-charts':  ['recharts'],
+          'vendor-flow':    ['@xyflow/react'],
+          'vendor-ui':      ['@ybot/ui'],
+        },
+      },
+    },
+    chunkSizeWarningLimit: 600,
+  },
 })

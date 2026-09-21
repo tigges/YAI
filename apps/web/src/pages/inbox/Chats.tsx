@@ -14,8 +14,9 @@ import {
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogBody, DialogFooter } from '@ybot/ui'
 import { SubNav } from '../../components/SubNav'
 import { cn } from '@ybot/ui'
-import { useConversations, useConversation, useSendMessage, useAssignConversation, useResolveConversation } from '../../lib/hooks'
+import { useConversations, useConversation, useSendMessage, useAssignConversation, useResolveConversation, useCreateConversation } from '../../lib/hooks'
 import { useConversationWS, useTenantWS } from '../../lib/ws'
+import { useAppStore } from '../../store/app'
 
 const SUBNAV = [
   { label: 'Chats', path: '/inbox/chats' },
@@ -127,6 +128,10 @@ export function ChatsPage() {
   const sendMessage = useSendMessage()
   const assignConversation = useAssignConversation()
   const resolveConversation = useResolveConversation()
+  const createConversation = useCreateConversation()
+  const [showNewConvo, setShowNewConvo] = useState(false)
+  const [newConvoMessage, setNewConvoMessage] = useState('')
+  const selectedBotId = useAppStore((s: { selectedBotId: string | null }) => s.selectedBotId)
 
   // Connect to WS on mount (establishes tenant-level connection)
   useTenantWS()
@@ -254,8 +259,11 @@ export function ChatsPage() {
       <div className="flex w-[280px] flex-col border-r border-[var(--border)] bg-[var(--bg-surface)] shrink-0">
         {/* Header + subnav */}
         <div className="border-b border-[var(--border)]">
-          <div className="px-4 pt-4 pb-0">
+          <div className="flex items-center justify-between px-4 pt-4 pb-0">
             <h1 className="text-base font-semibold text-[var(--text-primary)]">Inbox</h1>
+            <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => setShowNewConvo(true)} title="New conversation">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 5v14M5 12h14"/></svg>
+            </Button>
           </div>
           <SubNav items={SUBNAV} />
         </div>
@@ -803,6 +811,46 @@ export function ChatsPage() {
           </DialogBody>
           <DialogFooter>
             <Button onClick={() => setShowLabelDialog(false)}>Done</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── New Conversation dialog ──────────────────────────────── */}
+      <Dialog open={showNewConvo} onOpenChange={setShowNewConvo}>
+        <DialogContent size="md">
+          <DialogHeader><DialogTitle>New Conversation</DialogTitle></DialogHeader>
+          <DialogBody className="space-y-4">
+            <p className="text-sm text-[var(--text-muted)]">
+              Start a new outbound conversation. A bot session will be created using the active bot.
+            </p>
+            <div>
+              <label className="text-xs font-medium text-[var(--text-muted)] mb-1.5 block">Opening message (optional)</label>
+              <textarea
+                className="w-full rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--bg-overlay)] px-3 py-2 text-sm text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--accent)]/40 resize-none"
+                rows={3}
+                placeholder="Hi! How can I help you today?"
+                value={newConvoMessage}
+                onChange={(e) => setNewConvoMessage(e.target.value)}
+              />
+            </div>
+          </DialogBody>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setShowNewConvo(false)}>Cancel</Button>
+            <Button
+              disabled={createConversation.isPending || !selectedBotId}
+              onClick={async () => {
+                if (!selectedBotId) return
+                const convo = await createConversation.mutateAsync({
+                  botId: selectedBotId,
+                  ...(newConvoMessage.trim() ? { message: newConvoMessage.trim() } : {}),
+                })
+                setShowNewConvo(false)
+                setNewConvoMessage('')
+                if (convo?.id) setSelectedId(convo.id)
+              }}
+            >
+              {createConversation.isPending ? 'Creating…' : 'Create'}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

@@ -169,20 +169,87 @@ export async function analyticsRoutes(app: FastifyInstance) {
     }
   })
 
-  // GET /analytics/conversations?botId=...&groupBy=day
+  // GET /analytics/conversations?botId=...&days=7
   app.get('/conversations', async (request) => {
     const { tenantId } = request.user as JWT
-    // In production: GROUP BY date using Prisma raw query
-    // Returning shaped mock for now
-    return { data: [
-      { date: 'Sep 14', conversations: 120, resolved: 98, escalated: 22 },
-      { date: 'Sep 15', conversations: 145, resolved: 118, escalated: 27 },
-      { date: 'Sep 16', conversations: 98, resolved: 82, escalated: 16 },
-      { date: 'Sep 17', conversations: 160, resolved: 140, escalated: 20 },
-      { date: 'Sep 18', conversations: 175, resolved: 155, escalated: 20 },
-      { date: 'Sep 19', conversations: 88, resolved: 76, escalated: 12 },
-      { date: 'Sep 20', conversations: 65, resolved: 58, escalated: 7 },
-    ]}
+    const q = request.query as Record<string, string>
+    const botId = q['botId']
+    const days = Math.min(Math.max(parseInt(q['days'] ?? '7', 10), 1), 90)
+    const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000)
+
+    type TrendRow = { day: Date; conversations: string; resolved: string; escalated: string }
+    const rows = await (prisma.$queryRawUnsafe as (sql: string, ...p: unknown[]) => Promise<TrendRow[]>)(
+      botId
+        ? `SELECT date_trunc('day', "createdAt") AS day,
+             COUNT(*)::text AS conversations,
+             SUM(CASE WHEN status='resolved' THEN 1 ELSE 0 END)::text AS resolved,
+             SUM(CASE WHEN status='escalated' THEN 1 ELSE 0 END)::text AS escalated
+           FROM conversations WHERE "tenantId"=$1 AND "botId"=$2 AND "createdAt">=$3
+           GROUP BY 1 ORDER BY 1 ASC`
+        : `SELECT date_trunc('day', "createdAt") AS day,
+             COUNT(*)::text AS conversations,
+             SUM(CASE WHEN status='resolved' THEN 1 ELSE 0 END)::text AS resolved,
+             SUM(CASE WHEN status='escalated' THEN 1 ELSE 0 END)::text AS escalated
+           FROM conversations WHERE "tenantId"=$1 AND "createdAt">=$2
+           GROUP BY 1 ORDER BY 1 ASC`,
+      ...(botId ? [tenantId, botId, since] : [tenantId, since]),
+    )
+
+    return {
+      data: rows.map((row) => ({
+        date: new Date(row.day).toLocaleDateString('en-GB', { month: 'short', day: 'numeric' }),
+        conversations: parseInt(row.conversations, 10),
+        resolved: parseInt(row.resolved, 10),
+        escalated: parseInt(row.escalated, 10),
+      }))
+    }
+  })
+
+  // GET /analytics/agents — per-agent resolution stats
+  app.get('/agents', async (request) => {
+    const { tenantId } = request.user as JWT
+    const q = request.query as Record<string, string>
+    const days = Math.min(Math.max(parseInt(q['days'] ?? '30', 10), 1), 90)
+    const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000)
+
+    type AgentRow = { agentId: string; name: string; total: string; resolved: string; escalated: string }
+    const rows = await (prisma.$queryRawUnsafe as (sql: string, ...p: unknown[]) => Promise<AgentRow[]>)(
+      `SELECT c."assignedTo" AS "agentId", u."displayName" AS name,
+         COUNT(*)::text AS total,
+         SUM(CASE WHEN c.status='resolved' THEN 1 ELSE 0 END)::text AS resolved,
+         SUM(CASE WHEN c.status='escalated' THEN 1 ELSE 0 END)::text AS escalated
+       FROM conversations c
+       LEFT JOIN users u ON u.id=c."assignedTo"
+       WHERE c."tenantId"=$1 AND c."createdAt">=$2 AND c."assignedTo" IS NOT NULL
+       GROUP BY 1, 2 ORDER BY total DESC LIMIT 10`,
+      tenantId, since,
+    )
+    return {
+      data: rows.map((r) => ({
+        agentId: r.agentId, name: r.name ?? 'Unknown',
+        total: parseInt(r.total, 10),
+        resolved: parseInt(r.resolved, 10),
+        escalated: parseInt(r.escalated, 10),
+        resolutionRate: parseInt(r.total, 10) > 0 ? Math.round((parseInt(r.resolved, 10) / parseInt(r.total, 10)) * 100) : 0,
+      }))
+    }
+  })
+
+  // GET /analytics/channels — conversation volume per channel
+  app.get('/channels', async (request) => {
+    const { tenantId } = request.user as JWT
+    type ChanRow = { channelId: string; name: string; total: string }
+    const rows = await (prisma.$queryRawUnsafe as (sql: string, ...p: unknown[]) => Promise<ChanRow[]>)(
+      `SELECT c."channelId", ch.name, COUNT(*)::text AS total
+       FROM conversations c
+       LEFT JOIN channels ch ON ch.id=c."channelId"
+       WHERE c."tenantId"=$1
+       GROUP BY 1, 2 ORDER BY total DESC LIMIT 10`,
+      tenantId,
+    )
+    return {
+      data: rows.map((r) => ({ channelId: r.channelId, name: r.name ?? 'Unknown', total: parseInt(r.total, 10) }))
+    }
   })
 }
 

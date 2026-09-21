@@ -152,13 +152,27 @@ export async function executeSearchKnowledge(ctx: NodeContext): Promise<NodeResu
 
 // ── llm_generate ──────────────────────────────────────────────────────────────
 export async function executeLlmGenerate(ctx: NodeContext): Promise<NodeResult> {
-  const { config, session, services } = ctx
+  const { config, session, services, streamChunk } = ctx
   const systemPrompt = String(config['systemPrompt'] ?? 'You are a helpful assistant.')
   const prompt = interpolate(String(config['prompt'] ?? '{{flow.last_user_message}}'), {
     ...session.variables.flow,
     contact: session.variables.contact,
   })
   try {
+    // Stream token-by-token if a streaming callback is wired and the provider supports it
+    if (streamChunk && services.llm.stream) {
+      let fullText = ''
+      await services.llm.stream({
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: prompt },
+        ],
+        onChunk: (chunk) => { fullText += chunk; streamChunk(chunk) },
+      })
+      const text = fullText || "I'm sorry, I couldn't generate a response."
+      return { output: { generated: text }, newMessages: [{ direction: 'outbound', content: { text } }] }
+    }
+
     const response = await services.llm.complete({ messages: [
       { role: 'system', content: systemPrompt },
       { role: 'user', content: prompt },

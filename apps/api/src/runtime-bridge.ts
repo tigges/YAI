@@ -246,7 +246,11 @@ export async function processInboundMessage(
     }
 
     const machine = new SessionMachine(buildServices())
-    const result = await machine.run(session, graph, incomingText)
+    // Pass a streamChunk callback so llm_generate nodes emit real-time WS events
+    const flowStreamChunk = (chunk: string) => {
+      app.broadcastToTenant(tenantId, { event: 'message.chunk', data: { conversationId, chunk } })
+    }
+    const result = await machine.run(session, graph, incomingText, flowStreamChunk)
 
     for (const msg of result.newMessages) {
       const saved = await prisma.message.create({

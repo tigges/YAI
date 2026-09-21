@@ -213,6 +213,15 @@ export function useConversations(params?: Record<string, string>) {
   })
 }
 
+export function useCreateConversation() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (body: { botId: string; channelId?: string; contactId?: string; message?: string }) =>
+      api.conversations.create(body).then((r) => r.data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['conversations'] }),
+  })
+}
+
 export function useConversation(id: string) {
   return useQuery({
     queryKey: ['conversation', id],
@@ -284,6 +293,61 @@ export function useCampaigns() {
   return useQuery({
     queryKey: ['campaigns', bid],
     queryFn: withDemoFallback(() => api.campaigns.list(bid).then((r) => r.data), demo.DEMO_CAMPAIGNS),
+  })
+}
+
+export function useLaunchCampaign() {
+  const qc = useQueryClient()
+  const bid = botId()
+  return useMutation({
+    mutationFn: (id: string) => api.campaigns.launch(bid, id).then((r) => r.data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['campaigns', bid] }),
+  })
+}
+
+export function usePauseCampaign() {
+  const qc = useQueryClient()
+  const bid = botId()
+  return useMutation({
+    mutationFn: (id: string) => api.campaigns.pause(bid, id).then((r) => r.data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['campaigns', bid] }),
+  })
+}
+
+export function useDeleteCampaign() {
+  const qc = useQueryClient()
+  const bid = botId()
+  return useMutation({
+    mutationFn: (id: string) => api.campaigns.delete(bid, id),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['campaigns', bid] }),
+  })
+}
+
+// ── Channels ──────────────────────────────────────────────────────────────────
+export function useChannels() {
+  const bid = botId()
+  return useQuery({
+    queryKey: ['channels', bid],
+    queryFn: withDemoFallback(() => api.channels.list(bid).then((r) => r.data), []),
+  })
+}
+
+export function useCreateChannel() {
+  const qc = useQueryClient()
+  const bid = botId()
+  return useMutation({
+    mutationFn: (body: { name: string; kind: string; environmentId: string; config?: Record<string, unknown> }) =>
+      api.channels.create(bid, body).then((r) => r.data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['channels', bid] }),
+  })
+}
+
+export function useDeleteChannel() {
+  const qc = useQueryClient()
+  const bid = botId()
+  return useMutation({
+    mutationFn: (id: string) => api.channels.delete(bid, id),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['channels', bid] }),
   })
 }
 

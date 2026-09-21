@@ -1,6 +1,7 @@
 import type { FastifyInstance } from 'fastify'
 import { PrismaClient } from '@ybot/db'
 import { z } from 'zod'
+import { enqueueCampaignSend } from '../queues.js'
 
 const prisma = new PrismaClient()
 type JWT = { sub: string; tenantId: string; role: string }
@@ -27,6 +28,34 @@ export async function campaignsRoutes(app: FastifyInstance) {
     const { botId, id } = request.params as { botId: string; id: string }
     const body = z.object({ name: z.string().optional(), status: z.string().optional(), scheduledAt: z.string().optional() }).parse(request.body)
     return { data: await prisma.campaign.updateMany({ where: { id, botId, tenantId }, data: { ...body, scheduledAt: body.scheduledAt ? new Date(body.scheduledAt) : undefined } }) }
+  })
+
+  // POST /:botId/campaigns/:id/launch — transition to running/scheduled + enqueue
+  app.post('/:botId/campaigns/:id/launch', async (request, reply) => {
+    const { tenantId } = request.user as JWT
+    const { botId, id } = request.params as { botId: string; id: string }
+    const campaign = await prisma.campaign.findFirst({ where: { id, botId, tenantId } })
+    if (!campaign) return reply.status(404).send({ error: { code: 'NOT_FOUND' } })
+    if (campaign.status !== 'draft' && campaign.status !== 'paused') {
+      return reply.status(400).send({ error: { code: 'INVALID_STATE', message: 'Only draft or paused campaigns can be launched' } })
+    }
+    const newStatus = campaign.scheduledAt && campaign.scheduledAt > new Date() ? 'scheduled' : 'running'
+    await prisma.campaign.updateMany({ where: { id, botId, tenantId }, data: { status: newStatus, ...(newStatus === 'running' ? { sentAt: new Date() } : {}) } })
+    await enqueueCampaignSend({ tenantId, botId, campaignId: id }).catch(() => {})
+    return { data: { ok: true, status: newStatus } }
+  })
+
+  // POST /:botId/campaigns/:id/pause
+  app.post('/:botId/campaigns/:id/pause', async (request, reply) => {
+    const { tenantId } = request.user as JWT
+    const { botId, id } = request.params as { botId: string; id: string }
+    const campaign = await prisma.campaign.findFirst({ where: { id, botId, tenantId } })
+    if (!campaign) return reply.status(404).send({ error: { code: 'NOT_FOUND' } })
+    if (campaign.status !== 'running' && campaign.status !== 'scheduled') {
+      return reply.status(400).send({ error: { code: 'INVALID_STATE', message: 'Only running or scheduled campaigns can be paused' } })
+    }
+    await prisma.campaign.updateMany({ where: { id, botId, tenantId }, data: { status: 'paused' } })
+    return { data: { ok: true, status: 'paused' } }
   })
 
   app.delete('/:botId/campaigns/:id', async (request, reply) => {
