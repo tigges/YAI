@@ -12,7 +12,7 @@ import {
 } from '@ybot/ui'
 import { SubNav } from '../../components/SubNav'
 import { cn } from '@ybot/ui'
-import { useCampaigns, useCreateCampaign, useLaunchCampaign, usePauseCampaign, useDeleteCampaign } from '../../lib/hooks'
+import { useCampaigns, useCreateCampaign, useUpdateCampaign, useLaunchCampaign, usePauseCampaign, useDeleteCampaign } from '../../lib/hooks'
 
 const SUBNAV = [
   { label: 'Campaigns', path: '/engage/campaigns' },
@@ -63,6 +63,7 @@ function pct(a?: number, b?: number): string {
 export function CampaignsPage() {
   const { data: rawCampaigns = [], isLoading } = useCampaigns()
   const createCampaign = useCreateCampaign()
+  const updateCampaign = useUpdateCampaign()
   const launchCampaign = useLaunchCampaign()
   const pauseCampaign = usePauseCampaign()
   const deleteCampaign = useDeleteCampaign()
@@ -73,6 +74,35 @@ export function CampaignsPage() {
   const [newTemplate, setNewTemplate] = useState('')
   const [newSchedule, setNewSchedule] = useState('immediate')
   const [formError, setFormError] = useState('')
+
+  // Edit state
+  const [editCampaign, setEditCampaign] = useState<Campaign | null>(null)
+  const [editName, setEditName] = useState('')
+  const [editChannel, setEditChannel] = useState('email')
+  const [editError, setEditError] = useState('')
+
+  function openEdit(c: Campaign) {
+    setEditCampaign(c)
+    setEditName(c.name)
+    setEditChannel(c.channel ?? 'email')
+    setEditError('')
+  }
+
+  function closeEdit() {
+    setEditCampaign(null)
+    setEditName('')
+    setEditChannel('email')
+    setEditError('')
+  }
+
+  async function handleSaveEdit() {
+    if (!editCampaign || !editName.trim()) return
+    setEditError('')
+    try {
+      await updateCampaign.mutateAsync({ id: editCampaign.id, name: editName.trim(), channel: editChannel })
+      closeEdit()
+    } catch (e) { setEditError(e instanceof Error ? e.message : 'Failed to save') }
+  }
 
   function resetForm() {
     setNewName(''); setNewChannel('email'); setNewTemplate(''); setNewSchedule('immediate'); setFormError('')
@@ -155,7 +185,7 @@ export function CampaignsPage() {
               const st = STATUS_CONFIG[c.status] ?? STATUS_CONFIG['draft']
               const chColor: Record<CampaignChannel, string> = { email: 'info', whatsapp: 'success', sms: 'warning', web: 'muted' }
               return (
-                <tr key={c.id} className="hover:bg-[var(--bg-hover)] transition-colors cursor-pointer group">
+                <tr key={c.id} className="hover:bg-[var(--bg-hover)] transition-colors cursor-pointer group" onClick={() => openEdit(c)}>
                   <td className="px-4 py-3">
                     <p className="text-sm font-medium text-[var(--text-primary)] max-w-xs truncate">{c.name}</p>
                     {c.template && <p className="text-[11px] text-[var(--text-muted)] mt-0.5">Template: {c.template}</p>}
@@ -199,6 +229,7 @@ export function CampaignsPage() {
                         </button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
+                        <DropdownMenuItem onClick={() => openEdit(c)}>Edit</DropdownMenuItem>
                         <DropdownMenuItem>View report</DropdownMenuItem>
                         <DropdownMenuItem>Duplicate</DropdownMenuItem>
                         {(c.status === 'draft' || c.status === 'paused') && (
@@ -310,6 +341,59 @@ export function CampaignsPage() {
             >
               {createCampaign.isPending ? <Loader2 size={13} className="animate-spin mr-1" /> : null}
               Launch campaign
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      {/* Edit campaign dialog */}
+      <Dialog open={!!editCampaign} onOpenChange={(o) => { if (!o) closeEdit() }}>
+        <DialogContent size="md">
+          <DialogHeader>
+            <DialogTitle>Edit campaign</DialogTitle>
+          </DialogHeader>
+          <DialogBody className="space-y-4">
+            <div>
+              <label className="text-xs font-medium text-[var(--text-muted)] mb-1.5 block">Campaign name *</label>
+              <input
+                autoFocus
+                className="w-full rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--bg-overlay)] px-3 py-2 text-sm text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--accent)]/40"
+                placeholder="Campaign name"
+                value={editName}
+                onChange={(e) => setEditName(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') handleSaveEdit() }}
+              />
+            </div>
+            <div>
+              <label className="text-xs font-medium text-[var(--text-muted)] mb-1.5 block">Channel</label>
+              <select
+                value={editChannel}
+                onChange={(e) => setEditChannel(e.target.value)}
+                className="w-full rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--bg-overlay)] px-3 py-2 text-sm text-[var(--text-primary)] focus:outline-none"
+              >
+                <option value="email">Email</option>
+                <option value="whatsapp">WhatsApp</option>
+                <option value="sms">SMS</option>
+                <option value="web">Web</option>
+              </select>
+            </div>
+            {editCampaign && (
+              <p className="text-xs text-[var(--text-muted)]">
+                Status: <span className="font-medium text-[var(--text-secondary)]">{STATUS_CONFIG[editCampaign.status]?.label ?? editCampaign.status}</span>
+                {editCampaign.scheduledAt && <> · Scheduled: {editCampaign.scheduledAt}</>}
+              </p>
+            )}
+            {editError && (
+              <p className="text-xs text-[var(--danger)] bg-[var(--danger)]/10 rounded-[var(--radius-md)] px-3 py-2">{editError}</p>
+            )}
+          </DialogBody>
+          <DialogFooter>
+            <Button variant="ghost" onClick={closeEdit}>Cancel</Button>
+            <Button
+              disabled={!editName.trim() || updateCampaign.isPending}
+              onClick={handleSaveEdit}
+            >
+              {updateCampaign.isPending ? <Loader2 size={13} className="animate-spin mr-1" /> : null}
+              Save changes
             </Button>
           </DialogFooter>
         </DialogContent>
