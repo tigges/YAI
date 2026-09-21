@@ -57,24 +57,6 @@ interface Message {
   isNote?: boolean
 }
 
-const MOCK_CONVOS: Convo[] = [
-  { id: '1', name: 'Alice Johnson', message: 'Hi! I need help with my order #12345', time: '2m', status: 'active', unread: 3, channel: 'web', assignee: null, sla: '12m left', labels: ['billing', 'urgent'], email: 'alice@example.com', phone: '+44 7700 900123', location: 'London, UK', previousConvos: 3 },
-  { id: '2', name: 'Bob Smith', message: 'How do I track my shipment?', time: '8m', status: 'active', unread: 1, channel: 'whatsapp', assignee: 'Sarah K', sla: '28m left', email: 'bob@example.com', phone: '+44 7700 900456', previousConvos: 1 },
-  { id: '3', name: 'Carol White', message: 'Thanks for the help!', time: '24m', status: 'resolved', unread: 0, channel: 'web', assignee: 'Sarah K', email: 'carol@example.com', previousConvos: 5 },
-  { id: '4', name: 'David Lee', message: 'Product not delivered yet', time: '1h', status: 'escalated', unread: 2, channel: 'sms', assignee: null, sla: 'Breached', labels: ['delivery', 'priority'], email: 'david@example.com', phone: '+44 7700 900789', previousConvos: 2 },
-  { id: '5', name: 'Eve Brown', message: 'Can I change my delivery address?', time: '2h', status: 'active', unread: 0, channel: 'web', assignee: 'Mike R', sla: '1h 14m left', email: 'eve@example.com', previousConvos: 0 },
-  { id: '6', name: 'Frank Moore', message: 'I was charged twice for my order', time: '3h', status: 'pending', unread: 0, channel: 'email', assignee: 'Tom B', sla: '45m left', labels: ['billing'], email: 'frank@example.com', previousConvos: 1 },
-]
-
-const MOCK_MESSAGES: Message[] = [
-  { id: '1', from: 'user', name: 'Alice Johnson', text: 'Hi! I need help with my order #12345', time: '10:32 AM' },
-  { id: '2', from: 'bot', name: 'YBot', text: 'Hello! I can help you with that. Can you please share your order number?', time: '10:32 AM' },
-  { id: '3', from: 'user', name: 'Alice Johnson', text: "It's order #12345, placed 3 days ago", time: '10:33 AM' },
-  { id: '4', from: 'bot', name: 'YBot', text: "I found your order. It's currently in transit and expected to arrive tomorrow by 6 PM.", time: '10:33 AM' },
-  { id: '5', from: 'user', name: 'Alice Johnson', text: 'Great, thank you! Can I change the delivery address?', time: '10:35 AM' },
-  { id: '6', from: 'agent', name: 'Sarah K', text: 'Hi Alice! Sarah here. I can definitely help you update the delivery address. Could you share the new address?', time: '10:36 AM' },
-]
-
 const CANNED_RESPONSES = [
   { id: '1', shortcut: '/greeting', text: 'Hi! Thanks for reaching out. How can I help you today?' },
   { id: '2', shortcut: '/thanks', text: "Thank you for your patience! I've resolved the issue. Is there anything else I can help with?" },

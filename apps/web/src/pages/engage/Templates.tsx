@@ -1,8 +1,8 @@
 import React, { useState } from 'react'
 import {
-  Plus, Search, Filter, MoreHorizontal, FileText,
+  Plus, Search, MoreHorizontal, FileText,
   CheckCircle2, Clock, AlertCircle, Edit2, Copy, Trash2,
-  Mail, MessageSquare, Phone, Globe, Eye,
+  Mail, MessageSquare, Phone, Globe, Eye, Loader2,
 } from 'lucide-react'
 import { Badge, Button, Input } from '@ybot/ui'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogBody, DialogFooter } from '@ybot/ui'
@@ -12,7 +12,7 @@ import {
 } from '@ybot/ui'
 import { SubNav } from '../../components/SubNav'
 import { cn } from '@ybot/ui'
-import { useTemplates } from '../../lib/hooks'
+import { useTemplates, useCreateTemplate, useDeleteTemplate } from '../../lib/hooks'
 
 const SUBNAV = [
   { label: 'Campaigns', path: '/engage/campaigns' },
@@ -36,54 +36,6 @@ interface Template {
   updatedAt: string
 }
 
-const MOCK_TEMPLATES: Template[] = [
-  {
-    id: 'T-001', name: 'Black Friday Sale', channel: 'email', category: 'marketing', status: 'approved',
-    language: 'en', body: "🛍️ Our biggest sale of the year is here! Get up to 60% off on everything. Use code BLACKFRIDAY at checkout. Shop now →",
-    usedIn: 3, createdAt: '2w ago', updatedAt: '3d ago',
-  },
-  {
-    id: 'T-002', name: 'Order Confirmation', channel: 'whatsapp', category: 'transactional', status: 'approved',
-    language: 'en', body: "Hi {{1}}! Your order #{{2}} has been confirmed and will be delivered by {{3}}. Track your order here: {{4}}",
-    usedIn: 8, createdAt: '1m ago', updatedAt: '1w ago',
-  },
-  {
-    id: 'T-003', name: 'Cart Recovery', channel: 'email', category: 'marketing', status: 'approved',
-    language: 'en', body: "Hey {{1}}, you left something behind! Your cart is waiting. Complete your purchase today and save 10% with code COMEBACK.",
-    usedIn: 2, createdAt: '3w ago', updatedAt: '5d ago',
-  },
-  {
-    id: 'T-004', name: 'Re-engagement Nudge', channel: 'whatsapp', category: 'marketing', status: 'pending',
-    language: 'en', body: "Hi {{1}}! We miss you 👋 It's been a while since your last visit. Here's 15% off your next order: {{2}}",
-    usedIn: 1, createdAt: '1w ago', updatedAt: '1d ago',
-  },
-  {
-    id: 'T-005', name: 'OTP Verification', channel: 'sms', category: 'utility', status: 'approved',
-    language: 'en', body: "Your YBot verification code is {{1}}. Valid for 10 minutes. Do not share this code with anyone.",
-    usedIn: 12, createdAt: '2m ago', updatedAt: '2m ago',
-  },
-  {
-    id: 'T-006', name: 'Shipping Update', channel: 'sms', category: 'transactional', status: 'approved',
-    language: 'en', body: "Your order #{{1}} is out for delivery! Expected arrival: {{2}}. Track: {{3}}",
-    usedIn: 5, createdAt: '1m ago', updatedAt: '1w ago',
-  },
-  {
-    id: 'T-007', name: 'Promo Banner', channel: 'web', category: 'marketing', status: 'draft',
-    language: 'en', body: "🎉 Limited time offer! Get free shipping on orders over £50. Use code FREESHIP at checkout.",
-    usedIn: 0, createdAt: '2d ago', updatedAt: '2d ago',
-  },
-  {
-    id: 'T-008', name: 'Support Ticket Created', channel: 'email', category: 'support', status: 'approved',
-    language: 'en', body: "Hi {{1}}, your support ticket #{{2}} has been created. Our team will respond within 24 hours. View your ticket: {{3}}",
-    usedIn: 4, createdAt: '2m ago', updatedAt: '2m ago',
-  },
-  {
-    id: 'T-009', name: 'Onboarding Welcome', channel: 'email', category: 'utility', status: 'rejected',
-    language: 'en', body: "Welcome to YBot, {{1}}! 🎉 Get started by setting up your first bot. Watch the 2-min intro video here: {{2}}",
-    usedIn: 0, createdAt: '5d ago', updatedAt: '2d ago',
-  },
-]
-
 const STATUS_CONFIG: Record<ApprovalStatus, { label: string; variant: 'success' | 'warning' | 'error' | 'muted'; icon: React.ReactNode }> = {
   approved: { label: 'Approved', variant: 'success', icon: <CheckCircle2 size={11} /> },
   pending: { label: 'Pending review', variant: 'warning', icon: <Clock size={11} /> },
@@ -102,29 +54,40 @@ const CHANNEL_COLORS: Record<TemplateChannel, 'info' | 'success' | 'warning' | '
   email: 'info', whatsapp: 'success', sms: 'warning', web: 'muted',
 }
 
+const CHANNEL_VALUES: TemplateChannel[] = ['email', 'whatsapp', 'sms', 'web']
+const CATEGORY_VALUES: TemplateCategory[] = ['marketing', 'transactional', 'support', 'utility']
+
 export function TemplatesPage() {
   const { data: rawTemplates = [] } = useTemplates()
-  // Normalize API shape (approvalStatus + content.body) → component shape (status + body)
+  const createTemplate = useCreateTemplate()
+  const deleteTemplate = useDeleteTemplate()
+
   const templates = (rawTemplates as unknown as Array<{
     id: string; name: string; channel: string
     approvalStatus?: string; status?: string
-    content?: { body?: string }; body?: string
+    content?: { body?: string; category?: string }; body?: string
     category?: string; usedIn?: number; language?: string
     createdAt: string; updatedAt: string
   }>).map((t) => ({
     ...t,
     status: (t.status ?? t.approvalStatus ?? 'draft') as ApprovalStatus,
     body: t.body ?? (t.content as { body?: string } | undefined)?.body ?? '',
-    category: (t.category ?? 'marketing') as TemplateCategory,
+    category: (t.category ?? (t.content as { category?: string } | undefined)?.category ?? 'marketing') as TemplateCategory,
     usedIn: t.usedIn ?? 0,
     language: t.language ?? 'en',
+    createdAt: t.createdAt,
+    updatedAt: t.updatedAt,
   })) as Template[]
+
   const [search, setSearch] = useState('')
   const [channelFilter, setChannelFilter] = useState<TemplateChannel | 'all'>('all')
   const [preview, setPreview] = useState<Template | null>(null)
   const [showNew, setShowNew] = useState(false)
   const [newName, setNewName] = useState('')
+  const [newChannel, setNewChannel] = useState<TemplateChannel>('email')
+  const [newCategory, setNewCategory] = useState<TemplateCategory>('marketing')
   const [newBody, setNewBody] = useState('')
+  const [deleteConfirm, setDeleteConfirm] = useState<Template | null>(null)
 
   const filtered = templates.filter((t) => {
     const matchSearch = !search || t.name.toLowerCase().includes(search.toLowerCase())
@@ -132,17 +95,36 @@ export function TemplatesPage() {
     return matchSearch && matchChannel
   })
 
-  const categories = ['all', 'marketing', 'transactional', 'support', 'utility'] as const
+  function resetNew() {
+    setNewName(''); setNewChannel('email'); setNewCategory('marketing'); setNewBody('')
+  }
+
+  async function handleCreate(submitForReview: boolean) {
+    if (!newName.trim() || !newBody.trim()) return
+    await createTemplate.mutateAsync({
+      name: newName.trim(),
+      channel: newChannel,
+      content: { body: newBody.trim(), category: newCategory },
+      submitForReview,
+    })
+    setShowNew(false)
+    resetNew()
+  }
+
+  async function handleDelete() {
+    if (!deleteConfirm) return
+    await deleteTemplate.mutateAsync(deleteConfirm.id)
+    setDeleteConfirm(null)
+    if (preview?.id === deleteConfirm.id) setPreview(null)
+  }
 
   return (
     <div className="flex flex-col h-full">
-      {/* Header */}
       <div className="border-b border-[var(--border)] bg-[var(--bg-surface)] px-6 pt-4 pb-0 shrink-0">
         <h1 className="text-base font-semibold text-[var(--text-primary)]">Engage</h1>
         <SubNav items={SUBNAV} />
       </div>
 
-      {/* Toolbar */}
       <div className="flex items-center gap-3 px-6 py-3 border-b border-[var(--border)] bg-[var(--bg-surface)] shrink-0">
         <Input
           placeholder="Search templates…"
@@ -152,12 +134,11 @@ export function TemplatesPage() {
           className="w-64"
         />
 
-        {/* Channel filter pills */}
         <div className="flex gap-1">
-          {(['all', 'email', 'whatsapp', 'sms', 'web'] as const).map((ch) => (
+          {(['all', ...CHANNEL_VALUES] as const).map((ch) => (
             <button
               key={ch}
-              onClick={() => setChannelFilter(ch)}
+              onClick={() => setChannelFilter(ch as TemplateChannel | 'all')}
               className={cn(
                 'px-3 py-1 rounded-full text-xs font-medium capitalize transition-colors border',
                 channelFilter === ch
@@ -177,7 +158,6 @@ export function TemplatesPage() {
         </div>
       </div>
 
-      {/* Stats */}
       <div className="flex items-center gap-6 px-6 py-2.5 bg-[var(--bg-overlay)] border-b border-[var(--border)] shrink-0">
         {[
           { label: 'Total', value: templates.length },
@@ -192,7 +172,6 @@ export function TemplatesPage() {
         ))}
       </div>
 
-      {/* Template grid */}
       <div className="flex-1 overflow-y-auto p-6">
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
           {filtered.map((t) => {
@@ -203,7 +182,6 @@ export function TemplatesPage() {
                 className="rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--bg-surface)] overflow-hidden hover:border-[var(--accent)]/40 transition-colors group cursor-pointer"
                 onClick={() => setPreview(t)}
               >
-                {/* Card header */}
                 <div className="flex items-start justify-between p-4 pb-3 border-b border-[var(--border)]">
                   <div className="flex items-start gap-2.5 min-w-0">
                     <span className="mt-0.5 text-[var(--text-muted)]">{CHANNEL_ICONS[t.channel]}</span>
@@ -227,14 +205,8 @@ export function TemplatesPage() {
                         <DropdownMenuItem onClick={(e) => { e.stopPropagation(); setPreview(t) }}>
                           <Eye size={13} /> Preview
                         </DropdownMenuItem>
-                        <DropdownMenuItem onClick={(e) => e.stopPropagation()}>
-                          <Edit2 size={13} /> Edit
-                        </DropdownMenuItem>
-                        <DropdownMenuItem onClick={(e) => e.stopPropagation()}>
-                          <Copy size={13} /> Duplicate
-                        </DropdownMenuItem>
                         <DropdownMenuSeparator />
-                        <DropdownMenuItem destructive onClick={(e) => { e.stopPropagation(); /* template delete would call API */ }}>
+                        <DropdownMenuItem destructive onClick={(e) => { e.stopPropagation(); setDeleteConfirm(t) }}>
                           <Trash2 size={13} /> Delete
                         </DropdownMenuItem>
                       </DropdownMenuContent>
@@ -242,12 +214,10 @@ export function TemplatesPage() {
                   </div>
                 </div>
 
-                {/* Body preview */}
                 <div className="px-4 py-3">
                   <p className="text-xs text-[var(--text-secondary)] line-clamp-3 leading-relaxed">{t.body}</p>
                 </div>
 
-                {/* Footer */}
                 <div className="flex items-center justify-between px-4 py-2.5 bg-[var(--bg-overlay)] border-t border-[var(--border)] text-[11px] text-[var(--text-muted)]">
                   <span>{(t.language ?? 'EN').toUpperCase()} · {t.usedIn ?? 0} campaign{(t.usedIn ?? 0) !== 1 ? 's' : ''}</span>
                   <span>Updated {t.updatedAt}</span>
@@ -260,7 +230,14 @@ export function TemplatesPage() {
             <div className="col-span-3 flex flex-col items-center justify-center py-20 text-center">
               <FileText size={32} className="text-[var(--text-muted)] mb-3" />
               <p className="text-sm font-medium text-[var(--text-primary)]">No templates found</p>
-              <p className="text-xs text-[var(--text-muted)] mt-1">Try a different search or filter.</p>
+              <p className="text-xs text-[var(--text-muted)] mt-1">
+                {search || channelFilter !== 'all' ? 'Try a different search or filter.' : 'Create your first template to get started.'}
+              </p>
+              {!search && channelFilter === 'all' && (
+                <Button size="sm" className="mt-4 gap-1.5" onClick={() => setShowNew(true)}>
+                  <Plus size={14} /> New Template
+                </Button>
+              )}
             </div>
           )}
         </div>
@@ -290,14 +267,20 @@ export function TemplatesPage() {
             </DialogBody>
             <DialogFooter>
               <Button variant="ghost" onClick={() => setPreview(null)}>Close</Button>
-              <Button className="gap-1.5"><Edit2 size={13} /> Edit template</Button>
+              <Button
+                variant="destructive"
+                className="gap-1.5"
+                onClick={() => { setDeleteConfirm(preview); setPreview(null) }}
+              >
+                <Trash2 size={13} /> Delete
+              </Button>
             </DialogFooter>
           </DialogContent>
         )}
       </Dialog>
 
       {/* New template dialog */}
-      <Dialog open={showNew} onOpenChange={setShowNew}>
+      <Dialog open={showNew} onOpenChange={(o) => { if (!o) { setShowNew(false); resetNew() } }}>
         <DialogContent size="md">
           <DialogHeader>
             <DialogTitle>New template</DialogTitle>
@@ -316,14 +299,26 @@ export function TemplatesPage() {
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="text-xs font-medium text-[var(--text-muted)] mb-1.5 block">Channel</label>
-                <select className="w-full rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--bg-overlay)] px-3 py-2 text-sm text-[var(--text-primary)] focus:outline-none">
-                  <option>Email</option><option>WhatsApp</option><option>SMS</option><option>Web</option>
+                <select
+                  className="w-full rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--bg-overlay)] px-3 py-2 text-sm text-[var(--text-primary)] focus:outline-none"
+                  value={newChannel}
+                  onChange={(e) => setNewChannel(e.target.value as TemplateChannel)}
+                >
+                  {CHANNEL_VALUES.map((ch) => (
+                    <option key={ch} value={ch} className="capitalize">{ch.charAt(0).toUpperCase() + ch.slice(1)}</option>
+                  ))}
                 </select>
               </div>
               <div>
                 <label className="text-xs font-medium text-[var(--text-muted)] mb-1.5 block">Category</label>
-                <select className="w-full rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--bg-overlay)] px-3 py-2 text-sm text-[var(--text-primary)] focus:outline-none">
-                  <option>Marketing</option><option>Transactional</option><option>Support</option><option>Utility</option>
+                <select
+                  className="w-full rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--bg-overlay)] px-3 py-2 text-sm text-[var(--text-primary)] focus:outline-none"
+                  value={newCategory}
+                  onChange={(e) => setNewCategory(e.target.value as TemplateCategory)}
+                >
+                  {CATEGORY_VALUES.map((cat) => (
+                    <option key={cat} value={cat} className="capitalize">{cat.charAt(0).toUpperCase() + cat.slice(1)}</option>
+                  ))}
                 </select>
               </div>
             </div>
@@ -337,13 +332,57 @@ export function TemplatesPage() {
                 onChange={(e) => setNewBody(e.target.value)}
               />
             </div>
+            {createTemplate.isError && (
+              <p className="text-xs text-[var(--danger)]">Failed to create template. Please try again.</p>
+            )}
           </DialogBody>
           <DialogFooter>
-            <Button variant="ghost" onClick={() => setShowNew(false)}>Cancel</Button>
-            <Button variant="secondary" disabled={!newName.trim()}>Save as draft</Button>
-            <Button disabled={!newName.trim() || !newBody.trim()} onClick={() => setShowNew(false)}>Submit for review</Button>
+            <Button variant="ghost" onClick={() => { setShowNew(false); resetNew() }}>Cancel</Button>
+            <Button
+              variant="secondary"
+              disabled={!newName.trim() || createTemplate.isPending}
+              onClick={() => handleCreate(false)}
+            >
+              {createTemplate.isPending ? <Loader2 size={13} className="animate-spin" /> : null}
+              Save as draft
+            </Button>
+            <Button
+              disabled={!newName.trim() || !newBody.trim() || createTemplate.isPending}
+              onClick={() => handleCreate(true)}
+            >
+              {createTemplate.isPending ? <Loader2 size={13} className="animate-spin" /> : null}
+              Submit for review
+            </Button>
           </DialogFooter>
         </DialogContent>
+      </Dialog>
+
+      {/* Delete confirmation dialog */}
+      <Dialog open={!!deleteConfirm} onOpenChange={(o) => { if (!o) setDeleteConfirm(null) }}>
+        {deleteConfirm && (
+          <DialogContent size="sm">
+            <DialogHeader>
+              <DialogTitle>Delete template?</DialogTitle>
+            </DialogHeader>
+            <DialogBody>
+              <p className="text-sm text-[var(--text-secondary)]">
+                Are you sure you want to delete <strong className="text-[var(--text-primary)]">{deleteConfirm.name}</strong>?
+                This action cannot be undone.
+              </p>
+            </DialogBody>
+            <DialogFooter>
+              <Button variant="ghost" onClick={() => setDeleteConfirm(null)}>Cancel</Button>
+              <Button
+                variant="destructive"
+                disabled={deleteTemplate.isPending}
+                onClick={handleDelete}
+              >
+                {deleteTemplate.isPending ? <Loader2 size={13} className="animate-spin" /> : <Trash2 size={13} />}
+                Delete
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        )}
       </Dialog>
     </div>
   )
