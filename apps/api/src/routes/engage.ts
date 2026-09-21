@@ -24,6 +24,12 @@ export async function campaignsRoutes(app: FastifyInstance) {
       channel:     z.string().optional(),
       status:      z.enum(['draft', 'scheduled', 'running']).default('draft'),
       scheduledAt: z.string().optional(),
+      filters: z.object({
+        hasEmail: z.boolean().optional(),
+        hasPhone: z.boolean().optional(),
+        channel: z.string().optional(),
+        tags: z.array(z.string()).optional(),
+      }).optional(),
     }).safeParse(request.body)
     if (!body.success) return reply.status(400).send({ error: { code: 'VALIDATION', details: body.error.flatten() } })
     const campaign = await prisma.campaign.create({
@@ -35,9 +41,9 @@ export async function campaignsRoutes(app: FastifyInstance) {
         tenantId,
         botId,
         scheduledAt: body.data.scheduledAt ? new Date(body.data.scheduledAt) : undefined,
+        filters:     (body.data.filters ?? {}) as never,
       },
     })
-    // If created with status 'running', treat as immediate launch
     if (body.data.status === 'running') {
       await enqueueCampaignSend({ tenantId, botId, campaignId: campaign.id }).catch(() => {})
     }
@@ -54,13 +60,44 @@ export async function campaignsRoutes(app: FastifyInstance) {
       subject: z.string().optional(),
       body: z.string().optional(),
       scheduledAt: z.string().optional(),
+      filters: z.object({
+        hasEmail: z.boolean().optional(),
+        hasPhone: z.boolean().optional(),
+        channel: z.string().optional(),
+        tags: z.array(z.string()).optional(),
+      }).optional(),
     }).safeParse(request.body)
     if (!body.success) return reply.status(400).send({ error: { code: 'VALIDATION' } })
+    const { filters, ...rest } = body.data
     const updated = await prisma.campaign.updateMany({
       where: { id, botId, tenantId },
-      data: { ...body.data, ...(body.data.scheduledAt ? { scheduledAt: new Date(body.data.scheduledAt) } : {}) },
+      data: {
+        ...rest,
+        ...(rest.scheduledAt ? { scheduledAt: new Date(rest.scheduledAt) } : {}),
+        ...(filters !== undefined ? { filters: filters as never } : {}),
+      },
     })
     return { data: updated }
+  })
+
+  // GET /:botId/campaigns/audience-count — estimate audience size for given filters
+  app.get('/:botId/campaigns/audience-count', async (request) => {
+    const { tenantId } = request.user as JWT
+    const { botId } = request.params as { botId: string }
+    const q = request.query as { hasEmail?: string; hasPhone?: string; channel?: string; tags?: string }
+    const where: Record<string, unknown> = { tenantId }
+    if (q.hasEmail === 'true') where['email'] = { not: null }
+    if (q.hasPhone === 'true') where['phone'] = { not: null }
+    if (q.tags) {
+      const tags = q.tags.split(',').map((t) => t.trim()).filter(Boolean)
+      if (tags.length) where['tags'] = { hasEvery: tags }
+    }
+    if (q.channel) {
+      where['conversations'] = { some: { channel: { kind: q.channel } } }
+    }
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const count = await (prisma.contact.count as unknown as (args: { where: Record<string, unknown> }) => Promise<number>)({ where })
+    return { data: { count } }
   })
 
   // POST /:botId/campaigns/:id/launch — transition to running/scheduled + enqueue

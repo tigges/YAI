@@ -154,13 +154,21 @@ export const contacts = {
 // ── Campaigns + Templates ──────────────────────────────────────────────────────
 export const campaigns = {
   list: (botId: string) => apiFetch<{ data: Campaign[] }>(`/bots/${botId}/campaigns`),
-  create: (botId: string, body: { name: string; direction?: string; channel?: string; status?: 'draft' | 'running'; scheduledAt?: string; subject?: string; body?: string }) =>
+  audienceCount: (botId: string, params: { hasEmail?: boolean; hasPhone?: boolean; channel?: string; tags?: string[] }) => {
+    const q = new URLSearchParams()
+    if (params.hasEmail) q.set('hasEmail', 'true')
+    if (params.hasPhone) q.set('hasPhone', 'true')
+    if (params.channel) q.set('channel', params.channel)
+    if (params.tags?.length) q.set('tags', params.tags.join(','))
+    return apiFetch<{ data: { count: number } }>(`/bots/${botId}/campaigns/audience-count?${q}`)
+  },
+  create: (botId: string, body: { name: string; direction?: string; channel?: string; status?: 'draft' | 'running'; scheduledAt?: string; subject?: string; body?: string; filters?: { hasEmail?: boolean; hasPhone?: boolean; channel?: string; tags?: string[] } }) =>
     apiFetch<{ data: Campaign }>(`/bots/${botId}/campaigns`, { method: 'POST', body: JSON.stringify(body) }),
   launch: (botId: string, id: string) =>
     apiFetch<{ data: { ok: boolean; status: string } }>(`/bots/${botId}/campaigns/${id}/launch`, { method: 'POST' }),
   pause: (botId: string, id: string) =>
     apiFetch<{ data: { ok: boolean; status: string } }>(`/bots/${botId}/campaigns/${id}/pause`, { method: 'POST' }),
-  update: (botId: string, id: string, body: Partial<{ name: string; status: string; scheduledAt: string; subject: string; body: string }>) =>
+  update: (botId: string, id: string, body: Partial<{ name: string; status: string; scheduledAt: string; subject: string; body: string; filters: { hasEmail?: boolean; hasPhone?: boolean; channel?: string; tags?: string[] } }>) =>
     apiFetch<{ data: unknown }>(`/bots/${botId}/campaigns/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
   delete: (botId: string, id: string) =>
     apiFetch<void>(`/bots/${botId}/campaigns/${id}`, { method: 'DELETE' }),

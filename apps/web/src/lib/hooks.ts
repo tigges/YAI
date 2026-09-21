@@ -348,11 +348,22 @@ export function useCampaigns() {
   })
 }
 
+export function useAudienceCount(params: { hasEmail?: boolean; hasPhone?: boolean; channel?: string; tags?: string[] }) {
+  const bid = botId()
+  const enabled = bid !== 'demo'
+  return useQuery({
+    queryKey: ['audience-count', bid, params],
+    queryFn: () => api.campaigns.audienceCount(bid, params).then((r) => r.data.count),
+    enabled,
+    staleTime: 10_000,
+  })
+}
+
 export function useCreateCampaign() {
   const bid = botId()
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: (body: { name: string; channel?: string; status?: 'draft' | 'running'; subject?: string; body?: string; scheduledAt?: string }) =>
+    mutationFn: (body: { name: string; channel?: string; status?: 'draft' | 'running'; subject?: string; body?: string; scheduledAt?: string; filters?: { hasEmail?: boolean; hasPhone?: boolean; channel?: string; tags?: string[] } }) =>
       api.campaigns.create(bid, body).then((r) => r.data),
     onSuccess: () => { void qc.invalidateQueries({ queryKey: ['campaigns', bid] }) },
   })
@@ -381,7 +392,7 @@ export function useUpdateCampaign() {
   const qc = useQueryClient()
   const bid = botId()
   return useMutation({
-    mutationFn: ({ id, ...body }: { id: string; name?: string; channel?: string; status?: string; scheduledAt?: string }) =>
+    mutationFn: ({ id, ...body }: { id: string; name?: string; channel?: string; status?: string; scheduledAt?: string; filters?: { hasEmail?: boolean; hasPhone?: boolean; channel?: string; tags?: string[] } }) =>
       api.campaigns.update(bid, id, body).then((r) => r.data),
     onSuccess: () => { void qc.invalidateQueries({ queryKey: ['campaigns', bid] }) },
   })
