@@ -100,8 +100,10 @@ services:
     environment:
       WATCHTOWER_POLL_INTERVAL: "300"        # check every 5 minutes
       WATCHTOWER_CLEANUP: "true"             # remove old images after update
-      WATCHTOWER_LABEL_ENABLE: "true"        # only update labelled containers
-      WATCHTOWER_SCOPE: "ybot"               # match the label above
+      # WATCHTOWER_SCOPE alone is enough to target labelled containers.
+      # WATCHTOWER_LABEL_ENABLE would additionally require each container to
+      # carry com.centurylinklabs.watchtower.enable=true — causing Scanned=0.
+      WATCHTOWER_SCOPE: "ybot"               # only watch containers with scope=ybot label
       WATCHTOWER_NOTIFICATION_URL: ${DEPLOY_WEBHOOK_URL:-}
       WATCHTOWER_NOTIFICATIONS: "shoutrrr"
       TZ: ${TZ:-UTC}
