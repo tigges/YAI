@@ -93,6 +93,16 @@ jobs:
       #   AVIORI_PATH  — path to compose files, e.g. /volume1/docker/ybot/src
       # When secrets are absent the step is skipped (continue-on-error keeps
       # the build green while AVIORI is not yet configured).
+      # ── Optional: SSH deploy to AVIORI ─────────────────────────────────────
+      # NOTE: AVIORI is on a private LAN (192.168.x.x) — GitHub Actions runners
+      # cannot reach it directly.  This step is kept for when a VPN/tunnel is
+      # configured.  Until then, Watchtower on the NAS auto-deploys via GHCR.
+      #
+      # Secrets required (Settings → Secrets → Actions):
+      #   AVIORI_HOST  — NAS hostname or IP reachable from GitHub Actions
+      #   AVIORI_USER  — SSH user (e.g. ct)
+      #   AVIORI_KEY   — private SSH key
+      # AVIORI_PATH is hardcoded to /volume1/docker/ybot (confirmed path).
       - name: Deploy to AVIORI
         if: github.ref == 'refs/heads/main'
         continue-on-error: true
@@ -103,30 +113,21 @@ jobs:
           key: ${{ secrets.AVIORI_KEY }}
           script: |
             set -euo pipefail
-            cd "${{ secrets.AVIORI_PATH }}"
+            cd /volume1/docker/ybot
             echo "Pulling images for tag ${{ steps.tag.outputs.tag }}..."
-            IMAGE_TAG=${{ steps.tag.outputs.tag }} \
-              docker compose -f docker-compose.yml \
-                             -f docker-compose.synology.yml \
-                             --env-file .env.production \
+            sudo IMAGE_TAG=${{ steps.tag.outputs.tag }} \
+              docker compose \
+                -f docker-compose.yml \
+                -f docker-compose.synology.yml \
+                --env-file .env.production \
               pull api web
-            echo "Running database migrations..."
-            IMAGE_TAG=${{ steps.tag.outputs.tag }} \
-              docker compose -f docker-compose.yml \
-                             -f docker-compose.synology.yml \
-                             --env-file .env.production \
-              run --rm api sh -c '
-                cd /app
-                SCHEMA="packages/db/prisma/schema.prisma"
-                node_modules/.bin/prisma migrate deploy --schema "$SCHEMA" 2>/dev/null \
-                  || node_modules/.bin/prisma db push --schema "$SCHEMA"
-              ' || true
             echo "Restarting services..."
-            IMAGE_TAG=${{ steps.tag.outputs.tag }} \
-              docker compose -f docker-compose.yml \
-                             -f docker-compose.synology.yml \
-                             --env-file .env.production \
-              up -d --remove-orphans
+            sudo IMAGE_TAG=${{ steps.tag.outputs.tag }} \
+              docker compose \
+                -f docker-compose.yml \
+                -f docker-compose.synology.yml \
+                --env-file .env.production \
+              up -d api web caddy
             echo "Deploy complete."
 
       # ── Notify: images published to GHCR ───────────────────────────────────

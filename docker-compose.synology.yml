@@ -1,9 +1,15 @@
 # ─────────────────────────────────────────────────────────────────────────────
 # docker-compose.synology.yml — Synology NAS (AVIORI) overrides
-# Usage:
-#   docker compose -f docker-compose.yml \
-#                  -f docker-compose.synology.yml \
-#                  --env-file .env.production up -d
+#
+# Project path on NAS: /volume1/docker/ybot
+#
+# Usage (must be run with sudo on Synology):
+#   cd /volume1/docker/ybot
+#   sudo docker compose \
+#     -f docker-compose.yml \
+#     -f docker-compose.synology.yml \
+#     --env-file .env.production \
+#     up -d
 # ─────────────────────────────────────────────────────────────────────────────
 version: "3.9"
 
@@ -28,9 +34,14 @@ services:
       # Set to a Slack incoming-webhook URL (or any HTTP endpoint) to receive
       # a "YBot API is live at vX.Y.Z" notification on every container start.
       DEPLOY_WEBHOOK_URL: ${DEPLOY_WEBHOOK_URL:-}
+    # Label lets Watchtower target this container by scope
+    labels:
+      - "com.centurylinklabs.watchtower.scope=ybot"
 
   web:
     image: ghcr.io/tigges/yai/ybot-web:${IMAGE_TAG:-latest}
+    labels:
+      - "com.centurylinklabs.watchtower.scope=ybot"
 
   caddy:
     volumes:
@@ -46,18 +57,19 @@ services:
       - "host.docker.internal:host-gateway"
 
   # ── Watchtower — automatic image updates ─────────────────────────────────
-  # Watchtower watches the ybot-api and ybot-web containers, checks GHCR for
-  # updated :latest images every 5 minutes, pulls them, and restarts the
-  # affected services.  It also sends a notification to DEPLOY_WEBHOOK_URL
-  # (Slack incoming webhook or any POST endpoint) whenever it updates.
+  # Watches ybot-api and ybot-web (via scope label), checks GHCR for updated
+  # :latest images every 5 minutes, pulls them, and restarts the containers.
+  # Sends a notification to DEPLOY_WEBHOOK_URL when it updates.
   #
-  # Required one-time setup on the NAS:
-  #   1. Log Docker into GHCR so Watchtower can pull private images:
-  #        docker login ghcr.io -u <github-username> -p <PAT-with-read:packages>
-  #      (this writes credentials to /root/.docker/config.json)
-  #   2. Set DEPLOY_WEBHOOK_URL in .env.production to a Slack webhook URL or
-  #      any POST endpoint — e.g.:
+  # One-time NAS setup (run once after first deploy):
+  #   1. Authenticate Docker to GHCR (stores creds in /root/.docker/config.json
+  #      because all docker commands on this NAS require sudo):
+  #        sudo docker login ghcr.io -u <github-username> -p <PAT-read:packages>
+  #   2. Add to /volume1/docker/ybot/.env.production:
   #        DEPLOY_WEBHOOK_URL=https://hooks.slack.com/services/T.../B.../xxx
+  #   3. Restart the stack:
+  #        sudo docker compose -f docker-compose.yml -f docker-compose.synology.yml \
+  #          --env-file .env.production up -d
   #
   watchtower:
     image: containrrr/watchtower:latest
@@ -68,22 +80,15 @@ services:
       options: { max-size: "5m", max-file: "2" }
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
-      # Mount Docker credential store so Watchtower can pull from GHCR
+      # On Synology, docker commands require sudo so credentials are stored
+      # under /root rather than the regular user's home directory.
       - /root/.docker/config.json:/config.json:ro
     environment:
-      # Poll every 5 minutes (300 s)
-      WATCHTOWER_POLL_INTERVAL: "300"
-      # Remove old images after updating
-      WATCHTOWER_CLEANUP: "true"
-      # Only watch containers listed by name below
-      WATCHTOWER_SCOPE: "ybot"
-      # Notify via generic webhook (Slack-compatible POST body)
+      WATCHTOWER_POLL_INTERVAL: "300"        # check every 5 minutes
+      WATCHTOWER_CLEANUP: "true"             # remove old images after update
+      WATCHTOWER_LABEL_ENABLE: "true"        # only update labelled containers
+      WATCHTOWER_SCOPE: "ybot"               # match the label above
       WATCHTOWER_NOTIFICATION_URL: ${DEPLOY_WEBHOOK_URL:-}
-      # Use shoutrrr generic webhook driver; Slack-compatible JSON body
       WATCHTOWER_NOTIFICATIONS: "shoutrrr"
-      WATCHTOWER_NOTIFICATION_TITLE_TAG: "YBot NAS Deploy"
-      # Timezone for log timestamps
       TZ: ${TZ:-UTC}
-    # Only watch these two containers
-    command: ybot-api ybot-web
     networks: [ybot-net]
