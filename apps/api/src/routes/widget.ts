@@ -60,6 +60,8 @@ const WIDGET_INLINE_JS = /* js */`
   var conversationId=null;
   var sessionId='ws_'+Date.now()+'_'+Math.random().toString(36).slice(2);
   var open=false,messages=[],loading=false;
+  // CSAT state: null = not shown, 'pending' = awaiting rating, 1/-1 = rated
+  var csatState=null;
   function css(el,s){Object.assign(el.style,s);}
   function mk(tag,a){var n=document.createElement(tag);for(var k in a)n.setAttribute(k,a[k]);return n;}
   var root=mk('div');css(root,{position:'fixed',bottom:'24px',right:'24px',zIndex:'2147483647',fontFamily:'system-ui,sans-serif'});
@@ -77,30 +79,46 @@ const WIDGET_INLINE_JS = /* js */`
   var ta=mk('textarea');ta.placeholder='Type a message\u2026';ta.rows=1;css(ta,{flex:'1',resize:'none',border:'1px solid #e5e7eb',borderRadius:'8px',padding:'8px 12px',fontSize:'14px',fontFamily:'inherit',outline:'none',lineHeight:'1.4'});
   var sendB=mk('button');sendB.textContent='\u2191';css(sendB,{background:ACCENT,color:'#fff',border:'none',borderRadius:'8px',width:'36px',height:'36px',cursor:'pointer',fontSize:'18px',fontWeight:'bold',flexShrink:'0',alignSelf:'flex-end'});
   inputRow.append(ta,sendB);panel.append(hdr,msgArea,inputRow);root.append(panel,bubble);document.body.appendChild(root);
+  function renderCsatCard(){
+    if(csatState===null)return;
+    var card=mk('div');css(card,{margin:'8px 0 4px',padding:'12px 14px',background:'#f9fafb',border:'1px solid #e5e7eb',borderRadius:'12px',textAlign:'center'});
+    if(csatState==='pending'){
+      var lbl=mk('p');lbl.textContent='Was this conversation helpful?';css(lbl,{margin:'0 0 10px',fontSize:'13px',color:'#374151',fontWeight:'500'});
+      var btns=mk('div');css(btns,{display:'flex',gap:'8px',justifyContent:'center'});
+      var up=mk('button');up.innerHTML='\uD83D\uDC4D Yes';
+      var dn=mk('button');dn.innerHTML='\uD83D\uDC4E No';
+      [up,dn].forEach(function(b){css(b,{background:'#fff',border:'1px solid #d1d5db',borderRadius:'8px',padding:'6px 16px',cursor:'pointer',fontSize:'13px',color:'#374151',transition:'background .15s'});});
+      up.onmouseover=function(){up.style.background='#dcfce7';};up.onmouseout=function(){up.style.background='#fff';};
+      dn.onmouseover=function(){dn.style.background='#fee2e2';};dn.onmouseout=function(){dn.style.background='#fff';};
+      up.onclick=function(){submitCsat(1);};dn.onclick=function(){submitCsat(-1);};
+      btns.append(up,dn);card.append(lbl,btns);
+    } else {
+      var thanks=mk('p');
+      thanks.textContent=csatState===1?'\uD83D\uDC4D Thanks for the positive feedback!':'\uD83D\uDC4E Thanks for letting us know!';
+      css(thanks,{margin:'0',fontSize:'13px',color:'#6b7280'});card.appendChild(thanks);
+    }
+    msgArea.appendChild(card);
+  }
   function render(){
     msgArea.innerHTML='';
     messages.forEach(function(m){
       var row=mk('div');css(row,{display:'flex',justifyContent:m.role==='user'?'flex-end':'flex-start'});
       var bub=mk('div');css(bub,{maxWidth:'80%',padding:'8px 12px',borderRadius:m.role==='user'?'14px 14px 2px 14px':'14px 14px 14px 2px',background:m.role==='user'?ACCENT:'#f3f4f6',color:m.role==='user'?'#fff':'#111',fontSize:'14px',lineHeight:'1.5',whiteSpace:'pre-wrap',wordBreak:'break-word'});
       bub.textContent=m.text+(m.streaming?'\u258b':'');
-      if(m.showCsat&&!m.csat){
-        var cr=mk('div');css(cr,{display:'flex',gap:'6px',marginTop:'6px'});
-        var up=mk('button');up.textContent='\uD83D\uDC4D';css(up,{background:'none',border:'1px solid #e5e7eb',borderRadius:'8px',padding:'2px 8px',cursor:'pointer',fontSize:'14px'});
-        var dn=mk('button');dn.textContent='\uD83D\uDC4E';css(dn,{background:'none',border:'1px solid #e5e7eb',borderRadius:'8px',padding:'2px 8px',cursor:'pointer',fontSize:'14px'});
-        var idx=messages.indexOf(m);
-        up.onclick=function(){submitCsat(1,idx);};dn.onclick=function(){submitCsat(-1,idx);};
-        cr.append(up,dn);bub.appendChild(cr);
-      }
-      if(m.csat){var c=mk('span');c.textContent=m.csat===1?' \uD83D\uDC4D Thanks!':' \uD83D\uDC4E Thanks for the feedback';css(c,{fontSize:'11px',color:'#6b7280'});bub.appendChild(c);}
       row.appendChild(bub);msgArea.appendChild(row);
     });
+    renderCsatCard();
     msgArea.scrollTop=msgArea.scrollHeight;
   }
   function addMsg(role,text,streaming){messages.push({role:role,text:text,streaming:streaming||false});render();return messages.length-1;}
-  function updMsg(i,text,streaming,showCsat){if(messages[i]){messages[i].text=text;messages[i].streaming=streaming||false;if(showCsat!==undefined)messages[i].showCsat=showCsat;}render();}
-  function submitCsat(rating,idx){
+  function updMsg(i,text,streaming,done){
+    if(messages[i]){messages[i].text=text;messages[i].streaming=streaming||false;}
+    if(done&&messages.filter(function(m){return m.role==='user';}).length>=1&&csatState===null){csatState='pending';}
+    render();
+  }
+  function submitCsat(rating){
     if(!conversationId)return;
-    if(messages[idx])messages[idx].csat=rating;render();
+    csatState=rating;render();
     fetch(API_BASE+'/public/csat/'+channelId,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({conversationId:conversationId,rating:rating})}).catch(function(){});
   }
   async function send(){
