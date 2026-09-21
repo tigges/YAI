@@ -61,15 +61,28 @@ services:
   # :latest images every 5 minutes, pulls them, and restarts the containers.
   # Sends a notification to DEPLOY_WEBHOOK_URL when it updates.
   #
-  # One-time NAS setup (run once after first deploy):
-  #   1. Authenticate Docker to GHCR (stores creds in /root/.docker/config.json
-  #      because all docker commands on this NAS require sudo):
-  #        sudo docker login ghcr.io -u <github-username> -p <PAT-read:packages>
-  #   2. Add to /volume1/docker/ybot/.env.production:
-  #        DEPLOY_WEBHOOK_URL=https://hooks.slack.com/services/T.../B.../xxx
-  #   3. Restart the stack:
-  #        sudo docker compose -f docker-compose.yml -f docker-compose.synology.yml \
-  #          --env-file .env.production up -d
+  # WHY PLAINTEXT CREDENTIALS:
+  #   Synology DSM stores docker-login credentials via a credential helper
+  #   binary (e.g. dsm_store, pass). That binary does not exist inside the
+  #   Watchtower container, so Watchtower silently fails to authenticate every
+  #   poll cycle. The fix is a standalone config.json with base64-encoded
+  #   credentials that Watchtower can read without any helper.
+  #
+  # ONE-TIME NAS SETUP — run once via SSH (replace YOUR_GITHUB_PAT):
+  #
+  #   GITHUB_USER=tigges
+  #   GITHUB_PAT=YOUR_GITHUB_PAT        # needs read:packages scope
+  #
+  #   sudo mkdir -p /volume1/docker/ybot/watchtower
+  #   printf '{"auths":{"ghcr.io":{"auth":"%s"}}}' \
+  #     "$(printf '%s:%s' "$GITHUB_USER" "$GITHUB_PAT" | base64 -w0)" \
+  #     | sudo tee /volume1/docker/ybot/watchtower/config.json
+  #
+  #   sudo docker compose \
+  #     -f docker-compose.yml -f docker-compose.synology.yml \
+  #     --env-file .env.production up -d watchtower
+  #
+  # After that, every push to main auto-deploys within 5 minutes.
   #
   watchtower:
     image: containrrr/watchtower:latest
@@ -80,10 +93,10 @@ services:
       options: { max-size: "5m", max-file: "2" }
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
-      # On Synology, docker commands require sudo so credentials are stored
-      # under /root. Mount to the same path inside the container so Watchtower
-      # finds them at the standard Docker config location for the root user.
-      - /root/.docker/config.json:/root/.docker/config.json:ro
+      # Standalone plaintext credentials file — see setup instructions above.
+      # Synology credential helpers are not available inside the container;
+      # this file provides ghcr.io auth without requiring any helper binary.
+      - /volume1/docker/ybot/watchtower/config.json:/root/.docker/config.json:ro
     environment:
       WATCHTOWER_POLL_INTERVAL: "300"        # check every 5 minutes
       WATCHTOWER_CLEANUP: "true"             # remove old images after update
