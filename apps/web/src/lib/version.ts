@@ -17,16 +17,15 @@ export const buildInfo: AppBuildInfo = {
   buildDate:   __BUILD_DATE__,
 }
 
-/** Short label for compact display: "v1.1.0 · #42" */
+/** Short label for compact display: "v1.1.26" (patch = build number) */
 export function shortVersion(): string {
-  const build = buildInfo.buildNumber !== 'local' ? ` · #${buildInfo.buildNumber}` : ' · dev'
-  return `v${buildInfo.version}${build}`
+  const suffix = buildInfo.buildNumber === 'local' ? '-dev' : ''
+  return `v${buildInfo.version}${suffix}`
 }
 
-/** Full label for tooltip: "v1.1.0 · build #42 · abc1234 · 2026-09-21" */
+/** Full label for tooltip: "v1.1.26 · abc1234 · 2026-09-21" */
 export function fullVersion(): string {
   const date = buildInfo.buildDate ? new Date(buildInfo.buildDate).toLocaleDateString() : ''
   const sha  = buildInfo.gitSha !== 'dev' ? ` · ${buildInfo.gitSha.slice(0, 7)}` : ''
-  const num  = buildInfo.buildNumber !== 'local' ? ` · build #${buildInfo.buildNumber}` : ''
-  return `v${buildInfo.version}${num}${sha}${date ? ' · ' + date : ''}`
+  return `v${buildInfo.version}${sha}${date ? ' · ' + date : ''}`
 }

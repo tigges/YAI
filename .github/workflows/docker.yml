@@ -59,7 +59,7 @@ jobs:
             ${{ env.API_IMAGE }}:${{ steps.tag.outputs.tag }}
             ${{ env.API_IMAGE }}:latest
           build-args: |
-            APP_VERSION=1.1.0
+            APP_VERSION=1.1.${{ github.run_number }}
             APP_BUILD_NUMBER=${{ github.run_number }}
             APP_GIT_SHA=${{ github.sha }}
             APP_BUILD_DATE=${{ github.event.head_commit.timestamp }}
@@ -75,7 +75,7 @@ jobs:
           push: true
           build-args: |
             VITE_API_URL=/api/v1
-            VITE_APP_VERSION=1.1.0
+            VITE_APP_VERSION=1.1.${{ github.run_number }}
             VITE_BUILD_NUMBER=${{ github.run_number }}
             VITE_GIT_SHA=${{ github.sha }}
             VITE_BUILD_DATE=${{ github.event.head_commit.timestamp }}
