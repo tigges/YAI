@@ -1,11 +1,11 @@
 // BullMQ queue manager — dynamically loaded so the API starts without Redis
 // In production, call initQueues(REDIS_URL) on startup
 
-export const QUEUE_KNOWLEDGE_SYNC    = 'knowledge:sync'
-export const QUEUE_CAMPAIGN_SEND     = 'campaign:send'
-export const QUEUE_REPORT_GENERATE   = 'report:generate'
-export const QUEUE_WEBHOOK_DELIVER   = 'webhook:deliver'
-export const QUEUE_CONVO_ANALYSIS    = 'conversation:analysis'
+export const QUEUE_KNOWLEDGE_SYNC    = 'knowledge-sync'
+export const QUEUE_CAMPAIGN_SEND     = 'campaign-send'
+export const QUEUE_REPORT_GENERATE   = 'report-generate'
+export const QUEUE_WEBHOOK_DELIVER   = 'webhook-deliver'
+export const QUEUE_CONVO_ANALYSIS    = 'conversation-analysis'
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AnyQueue = { add(name: string, data: object, opts?: object): Promise<unknown> }

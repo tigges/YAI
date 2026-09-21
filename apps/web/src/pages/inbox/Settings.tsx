@@ -1,8 +1,8 @@
-import React, { useState } from 'react'
-import { Settings, Clock, Tag, MessageSquare, Users, Zap, Save, ToggleLeft, ToggleRight } from 'lucide-react'
-import { Badge, Button, Card } from '@ybot/ui'
+import React, { useState, useEffect } from 'react'
+import { Clock, Save, ToggleLeft, ToggleRight, Loader2, Users, Zap, MessageSquare } from 'lucide-react'
+import { Button, Card } from '@ybot/ui'
 import { SubNav } from '../../components/SubNav'
-import { cn } from '@ybot/ui'
+import { useInboxConfig, useSaveInboxConfig } from '../../lib/hooks'
 
 const SUBNAV = [
   { label: 'Chats', path: '/inbox/chats' },
@@ -26,26 +26,35 @@ function ToggleRow({ label, description, value, onChange }: ToggleRowProps) {
   )
 }
 
+const DEFAULTS = {
+  autoAssign: true, roundRobin: false, botHandoverOnIdle: true,
+  requireClosureNote: false, csatOnResolve: true, notifyOnEscalation: true,
+  showTypingIndicator: true, allowContactMerge: true,
+}
+
 export function InboxSettingsPage() {
-  const [settings, setSettings] = useState({
-    autoAssign: true,
-    roundRobin: false,
-    botHandoverOnIdle: true,
-    requireClosureNote: false,
-    csatOnResolve: true,
-    notifyOnEscalation: true,
-    showTypingIndicator: true,
-    allowContactMerge: true,
-  })
+  const { data: savedConfig, isLoading } = useInboxConfig()
+  const saveConfig = useSaveInboxConfig()
+  const [settings, setSettings] = useState(DEFAULTS)
   const [slaHours, setSlaHours] = useState({ first_response: '1', resolution: '24' })
   const [workingHours, setWorkingHours] = useState({ start: '09:00', end: '18:00', timezone: 'Europe/London' })
   const [saved, setSaved] = useState(false)
+
+  useEffect(() => {
+    if (!savedConfig) return
+    const cfg = savedConfig as Record<string, unknown>
+    if (cfg['toggles']) setSettings({ ...DEFAULTS, ...(cfg['toggles'] as typeof DEFAULTS) })
+    if (cfg['sla']) setSlaHours({ ...slaHours, ...(cfg['sla'] as typeof slaHours) })
+    if (cfg['workingHours']) setWorkingHours({ ...workingHours, ...(cfg['workingHours'] as typeof workingHours) })
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [savedConfig])
 
   function toggle(key: keyof typeof settings) {
     setSettings((prev) => ({ ...prev, [key]: !prev[key] }))
   }
 
-  function save() {
+  async function save() {
+    await saveConfig.mutateAsync({ toggles: settings, sla: slaHours, workingHours })
     setSaved(true)
     setTimeout(() => setSaved(false), 2000)
   }
@@ -55,8 +64,9 @@ export function InboxSettingsPage() {
       <div className="border-b border-[var(--border)] bg-[var(--bg-surface)] px-6 pt-4 pb-0 shrink-0">
         <div className="flex items-center justify-between pb-3">
           <h1 className="text-base font-semibold text-[var(--text-primary)]">Inbox</h1>
-          <Button size="sm" className="gap-1.5" onClick={save}>
-            <Save size={13} /> {saved ? 'Saved!' : 'Save changes'}
+          <Button size="sm" className="gap-1.5" onClick={save} disabled={saveConfig.isPending}>
+            {saveConfig.isPending ? <Loader2 size={13} className="animate-spin" /> : <Clock size={13} />}
+            {saved ? 'Saved!' : 'Save changes'}
           </Button>
         </div>
         <SubNav items={SUBNAV} />

@@ -3,6 +3,7 @@
  * Automatically falls back to demo data when the backend is unreachable.
  */
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import React from 'react'
 import * as api from './api'
 import * as demo from './demo-data'
 import { useAppStore } from '../store/app'
@@ -168,6 +169,15 @@ export function useSources() {
   })
 }
 
+export function useCreateSource() {
+  const qc = useQueryClient(); const bid = botId()
+  return useMutation({
+    mutationFn: (body: { name: string; kind: string; config: Record<string, unknown> }) =>
+      api.knowledge.sources.create(bid, body).then((r) => r.data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['sources', bid] }),
+  })
+}
+
 export function useSyncSource() {
   const qc = useQueryClient(); const bid = botId()
   return useMutation({
@@ -198,6 +208,23 @@ export function useSaveTraining() {
   return useMutation({
     mutationFn: (config: Partial<api.LlmConfig>) => api.knowledge.training.update(bid, config),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['training', bid] }),
+  })
+}
+
+export function useInboxConfig() {
+  const bid = botId()
+  return useQuery({
+    queryKey: ['inbox-config', bid],
+    queryFn: () => api.knowledge.inboxConfig.get(bid).then((r) => r.data),
+    enabled: !!bid && bid !== 'demo',
+  })
+}
+
+export function useSaveInboxConfig() {
+  const qc = useQueryClient(); const bid = botId()
+  return useMutation({
+    mutationFn: (config: Record<string, unknown>) => api.knowledge.inboxConfig.update(bid, config),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['inbox-config', bid] }),
   })
 }
 
@@ -519,5 +546,104 @@ export function useDismissOptimization(botId: string) {
   return useMutation({
     mutationFn: (id: string) => api.optimizations.dismiss(botId, id),
     onSuccess: () => { void qc.invalidateQueries({ queryKey: ['optimizations', botId] }) },
+  })
+}
+
+// ── Inbox WebSocket ───────────────────────────────────────────────────────────
+
+export type WsEvent =
+  | { event: 'message.created'; data: api.Message }
+  | { event: 'message.chunk'; data: { conversationId: string; chunk: string } }
+  | { event: 'conversation.created'; data: { id: string; [key: string]: unknown } }
+  | { event: 'conversation.updated'; data: { id: string; [key: string]: unknown } }
+
+/**
+ * Opens a single WebSocket connection to /ws for the current tenant.
+ * Calls onEvent for every broadcast event. Reconnects automatically on close.
+ * Returns a cleanup function.
+ */
+export function useInboxWS(onEvent: (e: WsEvent) => void, enabled = true) {
+  const token = useAppStore((s) => s.token)
+  const qc = useQueryClient()
+
+  React.useEffect(() => {
+    if (!enabled || !token || isDemoMode()) return
+    let ws: WebSocket | null = null
+    let dead = false
+    let retryMs = 1000
+
+    function connect() {
+      if (dead) return
+      try {
+        ws = new WebSocket(api.buildWsUrl(token!))
+        ws.onmessage = (ev) => {
+          try {
+            const parsed = JSON.parse(ev.data as string) as WsEvent & { type?: string }
+            if (parsed.event) {
+              onEvent(parsed)
+              // Invalidate relevant queries so UI refreshes automatically
+              if (parsed.event === 'message.created' || parsed.event === 'message.chunk') {
+                const cid = (parsed.data as { conversationId?: string }).conversationId ?? (parsed.data as api.Message).id
+                void qc.invalidateQueries({ queryKey: ['conversation', cid] })
+              }
+              if (parsed.event === 'conversation.created' || parsed.event === 'conversation.updated') {
+                void qc.invalidateQueries({ queryKey: ['conversations'] })
+              }
+            }
+          } catch { /* ignore parse errors */ }
+        }
+        ws.onopen = () => { retryMs = 1000 }
+        ws.onclose = () => { if (!dead) { setTimeout(connect, retryMs); retryMs = Math.min(retryMs * 2, 30000) } }
+        ws.onerror = () => { ws?.close() }
+      } catch { /* ws unavailable in SSR or test env */ }
+    }
+
+    connect()
+    return () => { dead = true; ws?.close() }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [token, enabled])
+}
+
+// ── Tickets ───────────────────────────────────────────────────────────────────
+
+export function useTickets(params?: Record<string, string>) {
+  return useQuery({
+    queryKey: ['tickets', params],
+    queryFn: () => api.tickets.list(params).then((r) => r.data),
+  })
+}
+
+export function useCreateTicket() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (body: { subject: string; priority: string; conversationId?: string; assignedTo?: string }) =>
+      api.tickets.create(body).then((r) => r.data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['tickets'] }),
+  })
+}
+
+export function useUpdateTicket() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, ...data }: { id: string; status?: string; priority?: string; assignedTo?: string | null }) =>
+      api.tickets.update(id, data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['tickets'] }),
+  })
+}
+
+// ── Agent status ──────────────────────────────────────────────────────────────
+
+export function useAgentStatus() {
+  return useQuery({
+    queryKey: ['me'],
+    queryFn: () => api.me.get().then((r) => r.data.status ?? 'offline'),
+  })
+}
+
+export function useUpdateAgentStatus() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (status: 'online' | 'away' | 'offline') => api.me.update({ status }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['me'] }),
   })
 }

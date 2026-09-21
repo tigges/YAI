@@ -12,6 +12,8 @@ import {
   DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator,
 } from '@ybot/ui'
 import { SubNav } from '../../components/SubNav'
+import { useTickets, useCreateTicket, useUpdateTicket } from '../../lib/hooks'
+import * as api from '../../lib/api'
 import { cn } from '@ybot/ui'
 
 const SUBNAV = [
@@ -126,34 +128,47 @@ function TicketCard({ ticket, onMove }: { ticket: Ticket; onMove: (id: string, s
 }
 
 export function TicketsPage() {
-  const [tickets, setTickets] = useState<Ticket[]>(MOCK_TICKETS)
+  const { data: apiTickets = [], isLoading } = useTickets()
+  const createTicket = useCreateTicket()
+  const updateTicket = useUpdateTicket()
   const [showNew, setShowNew] = useState(false)
   const [newTitle, setNewTitle] = useState('')
+  const [newPriority, setNewPriority] = useState<Priority>('normal')
   const [view, setView] = useState<'kanban' | 'list'>('kanban')
   const [search, setSearch] = useState('')
+
+  // Map API tickets to local format, falling back to mock data when no real tickets
+  const tickets: Ticket[] = (apiTickets.length > 0 ? apiTickets : MOCK_TICKETS).map((t) => {
+    if ('subject' in t) {
+      return {
+        id: t.id,
+        title: (t as api.Ticket).subject,
+        priority: ((t as api.Ticket).priority as Priority) ?? 'normal',
+        status: ((t as api.Ticket).status as TicketStatus) ?? 'open',
+        assignee: (t as api.Ticket).assignedTo ?? null,
+        contact: (t as api.Ticket).conversation?.contact?.displayName ?? 'Unknown',
+        channel: 'web',
+        createdAt: new Date((t as api.Ticket).createdAt).toLocaleDateString(),
+        messages: 0,
+        labels: (t as api.Ticket).tags ?? [],
+      } as Ticket
+    }
+    return t as Ticket
+  })
 
   const filtered = tickets.filter((t) => !search || t.title.toLowerCase().includes(search.toLowerCase()) || t.id.includes(search))
 
   function moveTicket(id: string, status: TicketStatus) {
-    setTickets((prev) => prev.map((t) => t.id === id ? { ...t, status } : t))
+    updateTicket.mutate({ id, status })
   }
 
-  function createTicket() {
+  async function handleCreateTicket() {
     if (!newTitle.trim()) return
-    const t: Ticket = {
-      id: `T-${String(tickets.length + 1).padStart(3, '0')}`,
-      title: newTitle,
-      priority: 'normal',
-      status: 'open',
-      assignee: null,
-      contact: 'Unknown',
-      channel: 'web',
-      createdAt: 'Just now',
-      messages: 0,
-    }
-    setTickets((prev) => [...prev, t])
-    setNewTitle('')
-    setShowNew(false)
+    try {
+      await createTicket.mutateAsync({ subject: newTitle.trim(), priority: newPriority })
+      setNewTitle('')
+      setShowNew(false)
+    } catch { /* ignore */ }
   }
 
   return (
@@ -292,7 +307,7 @@ export function TicketsPage() {
                 placeholder="Describe the issue…"
                 value={newTitle}
                 onChange={(e) => setNewTitle(e.target.value)}
-                onKeyDown={(e) => { if (e.key === 'Enter') createTicket() }}
+                onKeyDown={(e) => { if (e.key === 'Enter') void handleCreateTicket() }}
               />
             </div>
             <div className="grid grid-cols-2 gap-3">
@@ -320,7 +335,7 @@ export function TicketsPage() {
           </DialogBody>
           <DialogFooter>
             <Button variant="ghost" onClick={() => setShowNew(false)}>Cancel</Button>
-            <Button disabled={!newTitle.trim()} onClick={createTicket}>Create ticket</Button>
+            <Button disabled={!newTitle.trim() || createTicket.isPending} onClick={() => void handleCreateTicket()}>Create ticket</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
