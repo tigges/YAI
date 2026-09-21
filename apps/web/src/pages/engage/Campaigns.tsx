@@ -2,7 +2,7 @@ import React, { useState } from 'react'
 import {
   Plus, Search, Filter, MoreHorizontal, Megaphone,
   Calendar, Users, BarChart2, Play, Pause, CheckCircle2,
-  Clock, AlertCircle, Send, ChevronRight,
+  Clock, AlertCircle, Send, Loader2,
 } from 'lucide-react'
 import { Avatar, Badge, Button, Input } from '@ybot/ui'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogBody, DialogFooter } from '@ybot/ui'
@@ -12,7 +12,7 @@ import {
 } from '@ybot/ui'
 import { SubNav } from '../../components/SubNav'
 import { cn } from '@ybot/ui'
-import { useCampaigns, useLaunchCampaign, usePauseCampaign, useDeleteCampaign } from '../../lib/hooks'
+import { useCampaigns, useCreateCampaign, useLaunchCampaign, usePauseCampaign, useDeleteCampaign } from '../../lib/hooks'
 
 const SUBNAV = [
   { label: 'Campaigns', path: '/engage/campaigns' },
@@ -62,12 +62,39 @@ function pct(a?: number, b?: number): string {
 
 export function CampaignsPage() {
   const { data: rawCampaigns = [], isLoading } = useCampaigns()
+  const createCampaign = useCreateCampaign()
   const launchCampaign = useLaunchCampaign()
   const pauseCampaign = usePauseCampaign()
   const deleteCampaign = useDeleteCampaign()
   const [search, setSearch] = useState('')
   const [showNew, setShowNew] = useState(false)
   const [newName, setNewName] = useState('')
+  const [newChannel, setNewChannel] = useState('email')
+  const [newTemplate, setNewTemplate] = useState('')
+  const [newSchedule, setNewSchedule] = useState('immediate')
+  const [formError, setFormError] = useState('')
+
+  function resetForm() {
+    setNewName(''); setNewChannel('email'); setNewTemplate(''); setNewSchedule('immediate'); setFormError('')
+  }
+
+  async function handleSaveDraft() {
+    if (!newName.trim()) return
+    setFormError('')
+    try {
+      await createCampaign.mutateAsync({ name: newName.trim(), channel: newChannel, status: 'draft' })
+      setShowNew(false); resetForm()
+    } catch (e) { setFormError(e instanceof Error ? e.message : 'Failed to save') }
+  }
+
+  async function handleLaunch() {
+    if (!newName.trim()) return
+    setFormError('')
+    try {
+      await createCampaign.mutateAsync({ name: newName.trim(), channel: newChannel, status: 'running' })
+      setShowNew(false); resetForm()
+    } catch (e) { setFormError(e instanceof Error ? e.message : 'Failed to launch') }
+  }
 
   const campaigns = (rawCampaigns as unknown as Campaign[])
   const filtered = campaigns.filter((c) => !search || c.name.toLowerCase().includes(search.toLowerCase()))
@@ -197,7 +224,7 @@ export function CampaignsPage() {
       </div>
 
       {/* New campaign dialog */}
-      <Dialog open={showNew} onOpenChange={setShowNew}>
+      <Dialog open={showNew} onOpenChange={(o) => { setShowNew(o); if (!o) resetForm() }}>
         <DialogContent size="md">
           <DialogHeader>
             <DialogTitle>New campaign</DialogTitle>
@@ -211,22 +238,35 @@ export function CampaignsPage() {
                 placeholder="e.g. Black Friday 2026 — Email"
                 value={newName}
                 onChange={(e) => setNewName(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') handleSaveDraft() }}
               />
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="text-xs font-medium text-[var(--text-muted)] mb-1.5 block">Channel</label>
-                <select className="w-full rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--bg-overlay)] px-3 py-2 text-sm text-[var(--text-primary)] focus:outline-none">
-                  <option>Email</option><option>WhatsApp</option><option>SMS</option><option>Web</option>
+                <select
+                  value={newChannel}
+                  onChange={(e) => setNewChannel(e.target.value)}
+                  className="w-full rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--bg-overlay)] px-3 py-2 text-sm text-[var(--text-primary)] focus:outline-none"
+                >
+                  <option value="email">Email</option>
+                  <option value="whatsapp">WhatsApp</option>
+                  <option value="sms">SMS</option>
+                  <option value="web">Web</option>
                 </select>
               </div>
               <div>
                 <label className="text-xs font-medium text-[var(--text-muted)] mb-1.5 block">Template</label>
-                <select className="w-full rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--bg-overlay)] px-3 py-2 text-sm text-[var(--text-primary)] focus:outline-none">
-                  <option>Select template…</option>
-                  <option>Black Friday Sale</option>
-                  <option>Cart Recovery</option>
-                  <option>Re-engagement Nudge</option>
+                <select
+                  value={newTemplate}
+                  onChange={(e) => setNewTemplate(e.target.value)}
+                  className="w-full rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--bg-overlay)] px-3 py-2 text-sm text-[var(--text-primary)] focus:outline-none"
+                >
+                  <option value="">Select template…</option>
+                  <option value="black-friday">Black Friday Sale</option>
+                  <option value="cart-recovery">Cart Recovery</option>
+                  <option value="re-engagement">Re-engagement Nudge</option>
+                  <option value="onboarding">Onboarding Welcome</option>
                 </select>
               </div>
             </div>
@@ -235,24 +275,42 @@ export function CampaignsPage() {
               <select className="w-full rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--bg-overlay)] px-3 py-2 text-sm text-[var(--text-primary)] focus:outline-none">
                 <option>All contacts</option>
                 <option>Active last 30 days</option>
-                <option>Inactive 30-90 days</option>
+                <option>Inactive 30–90 days</option>
                 <option>VIP customers</option>
               </select>
             </div>
             <div>
               <label className="text-xs font-medium text-[var(--text-muted)] mb-1.5 block">Schedule</label>
-              <div className="flex gap-2">
-                <select className="rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--bg-overlay)] px-3 py-2 text-sm text-[var(--text-primary)] focus:outline-none">
-                  <option>Send immediately</option>
-                  <option>Schedule for later</option>
-                </select>
-              </div>
+              <select
+                value={newSchedule}
+                onChange={(e) => setNewSchedule(e.target.value)}
+                className="rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--bg-overlay)] px-3 py-2 text-sm text-[var(--text-primary)] focus:outline-none"
+              >
+                <option value="immediate">Send immediately</option>
+                <option value="later">Schedule for later</option>
+              </select>
             </div>
+            {formError && (
+              <p className="text-xs text-[var(--danger)] bg-[var(--danger)]/10 rounded-[var(--radius-md)] px-3 py-2">{formError}</p>
+            )}
           </DialogBody>
           <DialogFooter>
-            <Button variant="ghost" onClick={() => setShowNew(false)}>Cancel</Button>
-            <Button variant="secondary" disabled={!newName.trim()}>Save as draft</Button>
-            <Button disabled={!newName.trim()} onClick={() => setShowNew(false)}>Launch campaign</Button>
+            <Button variant="ghost" onClick={() => { setShowNew(false); resetForm() }}>Cancel</Button>
+            <Button
+              variant="secondary"
+              disabled={!newName.trim() || createCampaign.isPending}
+              onClick={handleSaveDraft}
+            >
+              {createCampaign.isPending ? <Loader2 size={13} className="animate-spin mr-1" /> : null}
+              Save as draft
+            </Button>
+            <Button
+              disabled={!newName.trim() || createCampaign.isPending}
+              onClick={handleLaunch}
+            >
+              {createCampaign.isPending ? <Loader2 size={13} className="animate-spin mr-1" /> : null}
+              Launch campaign
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

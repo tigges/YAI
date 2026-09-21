@@ -150,7 +150,7 @@ export const contacts = {
 // ── Campaigns + Templates ──────────────────────────────────────────────────────
 export const campaigns = {
   list: (botId: string) => apiFetch<{ data: Campaign[] }>(`/bots/${botId}/campaigns`),
-  create: (botId: string, body: { name: string; direction?: string; scheduledAt?: string }) =>
+  create: (botId: string, body: { name: string; direction?: string; channel?: string; status?: 'draft' | 'running'; scheduledAt?: string }) =>
     apiFetch<{ data: Campaign }>(`/bots/${botId}/campaigns`, { method: 'POST', body: JSON.stringify(body) }),
   launch: (botId: string, id: string) =>
     apiFetch<{ data: { ok: boolean; status: string } }>(`/bots/${botId}/campaigns/${id}/launch`, { method: 'POST' }),
