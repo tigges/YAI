@@ -142,6 +142,7 @@ model Bot {
   config       BotConfig?
   conversationTemplates ConversationTemplate[]
   templateOptimizations TemplateOptimization[]
+  automationRules AutomationRule[]
 
   @@map("bots")
 }
@@ -702,4 +703,28 @@ model TemplateOptimization {
   template ConversationTemplate? @relation(fields: [templateId], references: [id])
 
   @@map("template_optimizations")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// AUTOMATION WORKFLOWS
+// ─────────────────────────────────────────────────────────────────────────────
+
+model AutomationRule {
+  id          String   @id @default(cuid())
+  tenantId    String
+  botId       String
+  name        String
+  description String?
+  trigger     String   // conversation.resolved | message.received | contact.created | ticket.created | schedule | intent_matched
+  conditions  String   @default("")
+  actions     Json     @default("[]")  // array of action strings
+  status      String   @default("draft") // active | paused | draft
+  runCount    Int      @default(0)
+  lastRunAt   DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  bot Bot @relation(fields: [botId], references: [id], onDelete: Cascade)
+
+  @@map("automation_rules")
 }
