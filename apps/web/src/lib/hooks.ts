@@ -325,6 +325,16 @@ export function usePauseCampaign() {
   })
 }
 
+export function useUpdateCampaign() {
+  const qc = useQueryClient()
+  const bid = botId()
+  return useMutation({
+    mutationFn: ({ id, ...body }: { id: string; name?: string; channel?: string; status?: string; scheduledAt?: string }) =>
+      api.campaigns.update(bid, id, body).then((r) => r.data),
+    onSuccess: () => { void qc.invalidateQueries({ queryKey: ['campaigns', bid] }) },
+  })
+}
+
 export function useDeleteCampaign() {
   const qc = useQueryClient()
   const bid = botId()
