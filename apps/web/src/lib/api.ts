@@ -182,6 +182,10 @@ export const templates = {
   list: (botId: string, params?: Record<string, string>) => apiFetch<{ data: Template[] }>(`/bots/${botId}/templates?${new URLSearchParams(params ?? {})}`),
   create: (botId: string, body: { name: string; channel: string; content: Record<string, unknown>; variables?: string[]; submitForReview?: boolean }) =>
     apiFetch<{ data: Template }>(`/bots/${botId}/templates`, { method: 'POST', body: JSON.stringify(body) }),
+  update: (botId: string, id: string, body: Partial<{ name: string; channel: string; content: Record<string, unknown>; variables: string[]; approvalStatus: string }>) =>
+    apiFetch<{ data: unknown }>(`/bots/${botId}/templates/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
+  delete: (botId: string, id: string) =>
+    apiFetch<void>(`/bots/${botId}/templates/${id}`, { method: 'DELETE' }),
 }
 
 // ── Config ────────────────────────────────────────────────────────────────────
@@ -257,6 +261,30 @@ export const system = {
   status: () => apiFetch<{ data: SystemStatus }>('/system/status'),
   config: () => apiFetch<{ data: SystemConfig }>('/system/config'),
 }
+
+export const workflows = {
+  list: (botId: string, params?: Record<string, string>) =>
+    apiFetch<{ data: AutomationRule[] }>(`/bots/${botId}/workflows?${new URLSearchParams(params ?? {})}`),
+  create: (botId: string, body: { name: string; description?: string; trigger: string; conditions?: string; actions?: string[]; status?: string }) =>
+    apiFetch<{ data: AutomationRule }>(`/bots/${botId}/workflows`, { method: 'POST', body: JSON.stringify(body) }),
+  update: (botId: string, id: string, body: Partial<{ name: string; description: string; trigger: string; conditions: string; actions: string[]; status: string }>) =>
+    apiFetch<{ data: unknown }>(`/bots/${botId}/workflows/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
+  toggle: (botId: string, id: string) =>
+    apiFetch<{ data: { status: string } }>(`/bots/${botId}/workflows/${id}/toggle`, { method: 'POST' }),
+  delete: (botId: string, id: string) =>
+    apiFetch<void>(`/bots/${botId}/workflows/${id}`, { method: 'DELETE' }),
+}
+
+export const dashboards = {
+  list: (botId: string) =>
+    apiFetch<{ data: Dashboard[] }>(`/bots/${botId}/dashboards`),
+  create: (botId: string, body: { name: string; layout?: unknown[] }) =>
+    apiFetch<{ data: Dashboard }>(`/bots/${botId}/dashboards`, { method: 'POST', body: JSON.stringify(body) }),
+  update: (botId: string, id: string, body: Partial<{ name: string; layout: unknown[] }>) =>
+    apiFetch<{ data: unknown }>(`/bots/${botId}/dashboards/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
+  delete: (botId: string, id: string) =>
+    apiFetch<void>(`/bots/${botId}/dashboards/${id}`, { method: 'DELETE' }),
+}
 // ── Types ─────────────────────────────────────────────────────────────────────
 export interface BotSummary { id: string; name: string; description?: string; status: string; environments: Array<{ id: string; kind: string; name: string }> }
 export interface Flow { id: string; name: string; description?: string; kind: string; tags: string[]; updatedAt: string; versions: FlowVersion[] }
@@ -324,4 +352,31 @@ export interface TemplateOptimization {
   appliedAt?: string | null
   createdAt: string
   updatedAt: string
+}
+
+export interface AutomationRule {
+  id: string
+  tenantId: string
+  botId: string
+  name: string
+  description?: string
+  trigger: string
+  conditions: string
+  actions: string[]
+  status: 'active' | 'paused' | 'draft'
+  runCount: number
+  lastRunAt?: string | null
+  createdAt: string
+  updatedAt: string
+}
+
+export interface Dashboard {
+  id: string
+  tenantId: string
+  botId: string
+  name: string
+  layout: unknown[]
+  createdAt: string
+  updatedAt: string
+  widgets?: Array<{ id: string; kind: string; title: string; config: Record<string, unknown> }>
 }

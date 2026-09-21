@@ -435,6 +435,35 @@ export function useTemplates(channel?: string) {
   })
 }
 
+export function useCreateTemplate() {
+  const qc = useQueryClient()
+  const bid = botId()
+  return useMutation({
+    mutationFn: (body: { name: string; channel: string; content: Record<string, unknown>; variables?: string[]; submitForReview?: boolean }) =>
+      api.templates.create(bid, body).then((r) => r.data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['templates', bid] }),
+  })
+}
+
+export function useDeleteTemplate() {
+  const qc = useQueryClient()
+  const bid = botId()
+  return useMutation({
+    mutationFn: (id: string) => api.templates.delete(bid, id),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['templates', bid] }),
+  })
+}
+
+export function useUpdateTemplate() {
+  const qc = useQueryClient()
+  const bid = botId()
+  return useMutation({
+    mutationFn: ({ id, ...body }: { id: string; name?: string; channel?: string; content?: Record<string, unknown>; approvalStatus?: string }) =>
+      api.templates.update(bid, id, body),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['templates', bid] }),
+  })
+}
+
 // ── Webhooks ──────────────────────────────────────────────────────────────────
 export function useWebhooks() {
   return useQuery({
@@ -696,5 +725,84 @@ export function useUpdateAgentStatus() {
   return useMutation({
     mutationFn: (status: 'online' | 'away' | 'offline') => api.me.update({ status }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['me'] }),
+  })
+}
+
+// ── Workflows ─────────────────────────────────────────────────────────────────
+
+export function useWorkflows(status?: string) {
+  const bid = botId()
+  return useQuery({
+    queryKey: ['workflows', bid, status],
+    queryFn: () => api.workflows.list(bid, status ? { status } : undefined).then((r) => r.data),
+    enabled: !!bid && bid !== 'demo',
+  })
+}
+
+export function useCreateWorkflow() {
+  const qc = useQueryClient()
+  const bid = botId()
+  return useMutation({
+    mutationFn: (body: { name: string; description?: string; trigger: string; conditions?: string; actions?: string[]; status?: string }) =>
+      api.workflows.create(bid, body).then((r) => r.data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['workflows', bid] }),
+  })
+}
+
+export function useUpdateWorkflow() {
+  const qc = useQueryClient()
+  const bid = botId()
+  return useMutation({
+    mutationFn: ({ id, ...body }: { id: string; name?: string; description?: string; trigger?: string; conditions?: string; actions?: string[]; status?: string }) =>
+      api.workflows.update(bid, id, body),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['workflows', bid] }),
+  })
+}
+
+export function useToggleWorkflow() {
+  const qc = useQueryClient()
+  const bid = botId()
+  return useMutation({
+    mutationFn: (id: string) => api.workflows.toggle(bid, id).then((r) => r.data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['workflows', bid] }),
+  })
+}
+
+export function useDeleteWorkflow() {
+  const qc = useQueryClient()
+  const bid = botId()
+  return useMutation({
+    mutationFn: (id: string) => api.workflows.delete(bid, id),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['workflows', bid] }),
+  })
+}
+
+// ── Dashboards ────────────────────────────────────────────────────────────────
+
+export function useDashboards() {
+  const bid = botId()
+  return useQuery({
+    queryKey: ['dashboards', bid],
+    queryFn: () => api.dashboards.list(bid).then((r) => r.data),
+    enabled: !!bid && bid !== 'demo',
+  })
+}
+
+export function useCreateDashboard() {
+  const qc = useQueryClient()
+  const bid = botId()
+  return useMutation({
+    mutationFn: (body: { name: string; layout?: unknown[] }) =>
+      api.dashboards.create(bid, body).then((r) => r.data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['dashboards', bid] }),
+  })
+}
+
+export function useDeleteDashboard() {
+  const qc = useQueryClient()
+  const bid = botId()
+  return useMutation({
+    mutationFn: (id: string) => api.dashboards.delete(bid, id),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['dashboards', bid] }),
   })
 }

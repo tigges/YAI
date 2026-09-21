@@ -1,15 +1,17 @@
 import React, { useState } from 'react'
 import {
-  LayoutDashboard, Plus, MoreHorizontal, Pin, Pencil, Trash2,
-  BarChart3, MessageSquare, UserCheck, ThumbsUp, Globe, Star,
+  LayoutDashboard, Plus, MoreHorizontal, Pin, Trash2,
+  BarChart3, MessageSquare, UserCheck, ThumbsUp,
   FileText, Clock, Download, Mail, CalendarDays, RefreshCw,
-  ChevronRight, Copy,
+  Pencil, Copy, Loader2,
 } from 'lucide-react'
 import { Button, Badge } from '@ybot/ui'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogBody, DialogFooter } from '@ybot/ui'
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator } from '@ybot/ui'
 import { SubNav } from '../../components/SubNav'
 import { cn } from '@ybot/ui'
+import { useDashboards, useCreateDashboard, useDeleteDashboard } from '../../lib/hooks'
+import type { Dashboard } from '../../lib/api'
 
 const SUBNAV = [
   { label: 'Overview', path: '/analytics' },
@@ -17,106 +19,84 @@ const SUBNAV = [
   { label: 'Reports', path: '/analytics/reports' },
 ]
 
-// ── Dashboards ──────────────────────────────────────────────────────────────
-interface Dashboard {
-  id: string
-  name: string
-  description: string
-  icon: React.ReactNode
-  metrics: number
-  updatedAt: string
-  pinned: boolean
-  author: string
-  tags: string[]
+const DASHBOARD_ICONS: Record<string, React.ReactNode> = {
+  bot:   <BarChart3 size={20} />,
+  agent: <UserCheck size={20} />,
+  csat:  <ThumbsUp size={20} />,
+  inbox: <MessageSquare size={20} />,
 }
 
-const MOCK_DASHBOARDS: Dashboard[] = [
-  {
-    id: 'bot-perf', name: 'Bot Performance', description: 'Conversation volume, resolution rate, top intents, flow completion rates',
-    icon: <BarChart3 size={20} />, metrics: 8, updatedAt: '1h ago', pinned: true, author: 'Charles', tags: ['bot', 'conversations'],
-  },
-  {
-    id: 'agent-eff', name: 'Agent Efficiency', description: 'Handle time, CSAT scores, queue depth, SLA compliance per agent',
-    icon: <UserCheck size={20} />, metrics: 6, updatedAt: '3h ago', pinned: true, author: 'Charles', tags: ['agents', 'sla'],
-  },
-  {
-    id: 'csat', name: 'CSAT Analysis', description: 'Customer satisfaction trends, response breakdowns, NPS over time',
-    icon: <ThumbsUp size={20} />, metrics: 5, updatedAt: '1d ago', pinned: false, author: 'Sarah K', tags: ['csat', 'nps'],
-  },
-  {
-    id: 'channels', name: 'Channel Overview', description: 'Volume and resolution by channel: Web, WhatsApp, SMS, Email',
-    icon: <Globe size={20} />, metrics: 7, updatedAt: '2d ago', pinned: false, author: 'Charles', tags: ['channels'],
-  },
-  {
-    id: 'inbox', name: 'Inbox Metrics', description: 'First response time, queue wait, conversation assignment and escalation',
-    icon: <MessageSquare size={20} />, metrics: 9, updatedAt: '3d ago', pinned: false, author: 'Mike R', tags: ['inbox'],
-  },
-  {
-    id: 'campaigns', name: 'Campaign Performance', description: 'Open rates, click rates, delivery success across all active campaigns',
-    icon: <Star size={20} />, metrics: 6, updatedAt: '1w ago', pinned: false, author: 'Charles', tags: ['campaigns', 'engage'],
-  },
-]
-
-function DashboardCard({ dash, onPin }: { dash: Dashboard; onPin: (id: string) => void }) {
+function DashboardCard({
+  dash,
+  onDelete,
+}: {
+  dash: Dashboard
+  onDelete: (id: string) => void
+}) {
+  const icon = DASHBOARD_ICONS['bot'] ?? <LayoutDashboard size={20} />
+  const widgetCount = dash.widgets?.length ?? 0
+  const relativeTime = (iso: string) => {
+    const diff = Date.now() - new Date(iso).getTime()
+    const m = Math.floor(diff / 60_000)
+    if (m < 2) return 'just now'
+    if (m < 60) return `${m}m ago`
+    const h = Math.floor(m / 60)
+    if (h < 24) return `${h}h ago`
+    return `${Math.floor(h / 24)}d ago`
+  }
   return (
     <div className={cn(
       'group rounded-[var(--radius-lg)] border bg-[var(--bg-surface)] p-5 cursor-pointer transition-all hover:border-[var(--accent)]/40 hover:shadow-[var(--shadow-md)]',
-      dash.pinned ? 'border-[var(--accent)]/30 bg-[var(--accent-muted)]/10' : 'border-[var(--border)]'
+      'border-[var(--border)]'
     )}>
       <div className="flex items-start justify-between mb-3">
-        <div className={cn('p-2.5 rounded-[var(--radius-md)]', dash.pinned ? 'bg-[var(--accent)] text-white' : 'bg-[var(--bg-overlay)] text-[var(--text-muted)]')}>
-          {dash.icon}
+        <div className={cn('p-2.5 rounded-[var(--radius-md)] bg-[var(--bg-overlay)] text-[var(--text-muted)]')}>
+          {icon}
         </div>
-        <div className="flex items-center gap-1">
-          {dash.pinned && <Badge variant="info" className="text-[10px]">Pinned</Badge>}
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
-              <button className="opacity-0 group-hover:opacity-100 p-1 rounded hover:bg-[var(--bg-hover)] text-[var(--text-muted)] transition-all">
-                <MoreHorizontal size={14} />
-              </button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onPin(dash.id) }}>
-                <Pin size={13} /> {dash.pinned ? 'Unpin' : 'Pin to top'}
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={(e) => e.stopPropagation()}><Pencil size={13} /> Edit</DropdownMenuItem>
-              <DropdownMenuItem onClick={(e) => e.stopPropagation()}><Copy size={13} /> Duplicate</DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem destructive onClick={(e) => e.stopPropagation()}><Trash2 size={13} /> Delete</DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
+            <button className="opacity-0 group-hover:opacity-100 p-1 rounded hover:bg-[var(--bg-hover)] text-[var(--text-muted)] transition-all">
+              <MoreHorizontal size={14} />
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuSeparator />
+            <DropdownMenuItem destructive onClick={(e) => { e.stopPropagation(); onDelete(dash.id) }}><Trash2 size={13} /> Delete</DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
 
       <h3 className="font-semibold text-[var(--text-primary)] mb-1">{dash.name}</h3>
-      <p className="text-xs text-[var(--text-muted)] leading-relaxed line-clamp-2 mb-3">{dash.description}</p>
-
-      <div className="flex flex-wrap gap-1 mb-3">
-        {dash.tags.map((t) => (
-          <span key={t} className="text-[10px] px-1.5 py-0.5 rounded-full bg-[var(--bg-overlay)] text-[var(--text-muted)] border border-[var(--border)]">{t}</span>
-        ))}
-      </div>
 
       <div className="flex items-center justify-between text-[11px] text-[var(--text-muted)] pt-3 border-t border-[var(--border)]">
-        <span>{dash.metrics} widgets</span>
-        <span>{dash.author} · {dash.updatedAt}</span>
+        <span>{widgetCount} widget{widgetCount !== 1 ? 's' : ''}</span>
+        <span>{relativeTime(dash.updatedAt)}</span>
       </div>
     </div>
   )
 }
 
 export function DashboardsPage() {
-  const [dashboards, setDashboards] = useState<Dashboard[]>(MOCK_DASHBOARDS)
+  const { data: dashboards = [], isLoading } = useDashboards()
+  const createDashboard = useCreateDashboard()
+  const deleteDashboard = useDeleteDashboard()
   const [showNew, setShowNew] = useState(false)
   const [newName, setNewName] = useState('')
   const [newTemplate, setNewTemplate] = useState('blank')
+  const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null)
 
-  function togglePin(id: string) {
-    setDashboards((prev) => prev.map((d) => d.id === id ? { ...d, pinned: !d.pinned } : d))
+  async function handleCreate() {
+    if (!newName.trim()) return
+    await createDashboard.mutateAsync({ name: newName.trim() })
+    setShowNew(false)
+    setNewName('')
   }
 
-  const pinned = dashboards.filter((d) => d.pinned)
-  const rest = dashboards.filter((d) => !d.pinned)
+  async function handleDelete() {
+    if (!deleteConfirm) return
+    await deleteDashboard.mutateAsync(deleteConfirm)
+    setDeleteConfirm(null)
+  }
 
   return (
     <div className="flex flex-col h-full">
@@ -130,26 +110,43 @@ export function DashboardsPage() {
         <SubNav items={SUBNAV} />
       </div>
 
-      <div className="flex-1 overflow-auto p-6 space-y-8">
-        {pinned.length > 0 && (
+      <div className="flex-1 overflow-auto p-6">
+        {isLoading && (
+          <div className="flex items-center justify-center py-20 text-[var(--text-muted)]">
+            <Loader2 size={20} className="animate-spin mr-2" /> Loading dashboards…
+          </div>
+        )}
+
+        {!isLoading && dashboards.length === 0 && (
+          <div className="flex flex-col items-center justify-center py-20 text-center">
+            <LayoutDashboard size={32} className="text-[var(--text-muted)] mb-3" />
+            <p className="text-sm font-medium text-[var(--text-primary)]">No dashboards yet</p>
+            <p className="text-xs text-[var(--text-muted)] mt-1 mb-4">
+              Create your first dashboard to visualise key metrics.
+            </p>
+            <Button size="sm" className="gap-1.5" onClick={() => setShowNew(true)}>
+              <Plus size={14} /> New Dashboard
+            </Button>
+          </div>
+        )}
+
+        {dashboards.length > 0 && (
           <section>
-            <h2 className="text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wider mb-3 flex items-center gap-2">
-              <Pin size={11} /> Pinned
-            </h2>
+            <h2 className="text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wider mb-3">All dashboards ({dashboards.length})</h2>
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-              {pinned.map((d) => <DashboardCard key={d.id} dash={d} onPin={togglePin} />)}
+              {dashboards.map((d) => (
+                <DashboardCard
+                  key={d.id}
+                  dash={d}
+                  onDelete={(id) => setDeleteConfirm(id)}
+                />
+              ))}
             </div>
           </section>
         )}
-        <section>
-          <h2 className="text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wider mb-3">All dashboards</h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-            {rest.map((d) => <DashboardCard key={d.id} dash={d} onPin={togglePin} />)}
-          </div>
-        </section>
       </div>
 
-      <Dialog open={showNew} onOpenChange={setShowNew}>
+      <Dialog open={showNew} onOpenChange={(o) => { if (!o) { setShowNew(false); setNewName('') } }}>
         <DialogContent size="sm">
           <DialogHeader><DialogTitle>New dashboard</DialogTitle></DialogHeader>
           <DialogBody className="space-y-4">
@@ -187,16 +184,41 @@ export function DashboardsPage() {
                 ))}
               </div>
             </div>
+            {createDashboard.isError && (
+              <p className="text-xs text-[var(--danger)]">Failed to create dashboard. Please try again.</p>
+            )}
           </DialogBody>
           <DialogFooter>
-            <Button variant="ghost" onClick={() => setShowNew(false)}>Cancel</Button>
-            <Button disabled={!newName.trim()} onClick={() => setShowNew(false)}>Create dashboard</Button>
+            <Button variant="ghost" onClick={() => { setShowNew(false); setNewName('') }}>Cancel</Button>
+            <Button disabled={!newName.trim() || createDashboard.isPending} onClick={handleCreate}>
+              {createDashboard.isPending && <Loader2 size={13} className="animate-spin" />}
+              Create dashboard
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!deleteConfirm} onOpenChange={(o) => { if (!o) setDeleteConfirm(null) }}>
+        <DialogContent size="sm">
+          <DialogHeader><DialogTitle>Delete dashboard?</DialogTitle></DialogHeader>
+          <DialogBody>
+            <p className="text-sm text-[var(--text-secondary)]">
+              This will permanently delete the dashboard and all its widgets. This action cannot be undone.
+            </p>
+          </DialogBody>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setDeleteConfirm(null)}>Cancel</Button>
+            <Button variant="destructive" disabled={deleteDashboard.isPending} onClick={handleDelete}>
+              {deleteDashboard.isPending ? <Loader2 size={13} className="animate-spin" /> : <Trash2 size={13} />}
+              Delete
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>
   )
 }
+
 
 // ── Reports ─────────────────────────────────────────────────────────────────
 type ReportFrequency = 'daily' | 'weekly' | 'monthly' | 'one-time'
