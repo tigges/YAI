@@ -47,8 +47,20 @@ export async function campaignsRoutes(app: FastifyInstance) {
   app.patch('/:botId/campaigns/:id', async (request, reply) => {
     const { tenantId } = request.user as JWT
     const { botId, id } = request.params as { botId: string; id: string }
-    const body = z.object({ name: z.string().optional(), status: z.string().optional(), scheduledAt: z.string().optional() }).parse(request.body)
-    return { data: await prisma.campaign.updateMany({ where: { id, botId, tenantId }, data: { ...body, scheduledAt: body.scheduledAt ? new Date(body.scheduledAt) : undefined } }) }
+    const body = z.object({
+      name: z.string().optional(),
+      channel: z.string().optional(),
+      status: z.string().optional(),
+      subject: z.string().optional(),
+      body: z.string().optional(),
+      scheduledAt: z.string().optional(),
+    }).safeParse(request.body)
+    if (!body.success) return reply.status(400).send({ error: { code: 'VALIDATION' } })
+    const updated = await prisma.campaign.updateMany({
+      where: { id, botId, tenantId },
+      data: { ...body.data, ...(body.data.scheduledAt ? { scheduledAt: new Date(body.data.scheduledAt) } : {}) },
+    })
+    return { data: updated }
   })
 
   // POST /:botId/campaigns/:id/launch — transition to running/scheduled + enqueue
@@ -98,26 +110,6 @@ export async function campaignsRoutes(app: FastifyInstance) {
       take: 200,
     })
     return { data: deliveries }
-  })
-
-  // PATCH /:botId/campaigns/:id
-  app.patch('/:botId/campaigns/:id', async (request, reply) => {
-    const { tenantId } = request.user as JWT
-    const { botId, id } = request.params as { botId: string; id: string }
-    const body = z.object({
-      name: z.string().optional(),
-      channel: z.string().optional(),
-      status: z.string().optional(),
-      subject: z.string().optional(),
-      body: z.string().optional(),
-      scheduledAt: z.string().optional(),
-    }).safeParse(request.body)
-    if (!body.success) return reply.status(400).send({ error: { code: 'VALIDATION' } })
-    const updated = await prisma.campaign.updateMany({
-      where: { id, botId, tenantId },
-      data: { ...body.data, ...(body.data.scheduledAt ? { scheduledAt: new Date(body.data.scheduledAt) } : {}) },
-    })
-    return { data: updated }
   })
 }
 
