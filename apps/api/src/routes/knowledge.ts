@@ -2,9 +2,37 @@ import type { FastifyInstance } from 'fastify'
 import { PrismaClient } from '@ybot/db'
 import { z } from 'zod'
 import { enqueueKnowledgeSync } from '../queues.js'
+import { Buffer } from 'node:buffer'
 
 const prisma = new PrismaClient()
 type JWT = { sub: string; tenantId: string; role: string }
+
+// ── Text extraction helpers ────────────────────────────────────────────────────
+async function extractTextFromBuffer(buffer: Buffer, mimetype: string, filename: string): Promise<string> {
+  const ext = filename.split('.').pop()?.toLowerCase() ?? ''
+
+  // PDF
+  if (mimetype === 'application/pdf' || ext === 'pdf') {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const pdfParse = (await import('pdf-parse') as any).default ?? (await import('pdf-parse') as any)
+    const result = await (pdfParse as (buf: Buffer) => Promise<{ text: string }>)(buffer)
+    return result.text
+  }
+
+  // DOCX / DOC
+  if (
+    mimetype === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' ||
+    mimetype === 'application/msword' ||
+    ext === 'docx' || ext === 'doc'
+  ) {
+    const mammoth = await import('mammoth')
+    const result = await mammoth.extractRawText({ buffer })
+    return result.value
+  }
+
+  // Plain text / Markdown / CSV
+  return buffer.toString('utf-8')
+}
 
 export async function knowledgeRoutes(app: FastifyInstance) {
   app.addHook('preHandler', app.authenticate)
@@ -113,6 +141,53 @@ export async function knowledgeRoutes(app: FastifyInstance) {
     const body = z.object({ name: z.string().min(1), kind: z.enum(['website', 'file', 'url', 'text']), config: z.record(z.any()).default({}) }).safeParse(request.body)
     if (!body.success) return reply.status(400).send({ error: { code: 'VALIDATION', details: body.error.flatten() } })
     return reply.status(201).send({ data: await prisma.knowledgeSource.create({ data: { ...body.data, tenantId, botId } }) })
+  })
+
+  // POST /bots/:botId/sources/upload — multipart file upload (PDF / DOCX / TXT)
+  app.post('/:botId/sources/upload', async (request, reply) => {
+    const { tenantId } = request.user as JWT
+    const { botId } = request.params as { botId: string }
+
+    const data = await request.file()
+    if (!data) return reply.status(400).send({ error: { code: 'NO_FILE', message: 'No file provided' } })
+
+    const buf = await data.toBuffer()
+    const filename = data.filename ?? 'upload'
+    const mimetype = data.mimetype ?? 'text/plain'
+
+    let name = filename.replace(/\.[^.]+$/, '').replace(/[-_]/g, ' ')
+
+    let extractedText = ''
+    try {
+      extractedText = await extractTextFromBuffer(buf, mimetype, filename)
+    } catch (err) {
+      return reply.status(422).send({ error: { code: 'PARSE_ERROR', message: `Could not extract text: ${err instanceof Error ? err.message : 'Unknown error'}` } })
+    }
+
+    if (!extractedText.trim()) {
+      return reply.status(422).send({ error: { code: 'EMPTY_FILE', message: 'No text could be extracted from this file' } })
+    }
+
+    const source = await prisma.knowledgeSource.create({
+      data: {
+        tenantId,
+        botId,
+        name,
+        kind: 'file',
+        config: { text: extractedText, filename, sizeBytes: buf.length } as never,
+      },
+    })
+
+    // Enqueue indexing job (chunks + embeddings)
+    await enqueueKnowledgeSync({
+      tenantId,
+      sourceId: source.id,
+      botId,
+      kind: 'file',
+      config: { text: extractedText, filename },
+    }).catch(() => {/* queues offline in dev — will be indexed next sync */})
+
+    return reply.status(201).send({ data: source })
   })
 
   app.delete('/:botId/sources/:id', async (request, reply) => {
