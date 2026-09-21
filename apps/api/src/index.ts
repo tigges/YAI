@@ -88,7 +88,32 @@ try {
   startWebhookWorker().catch(() => {})
   startConversationAnalysisWorker().catch(() => {})
   initQueues(process.env['REDIS_URL'] ?? 'redis://localhost:6379').catch(() => {})
+  notifyDeployWebhook().catch(() => {})
 } catch (err) {
   app.log.error(err)
   process.exit(1)
+}
+
+/**
+ * If DEPLOY_WEBHOOK_URL is set, POST a "YBot is live" notification once the
+ * server has started.  Compatible with Slack incoming webhooks and any generic
+ * JSON POST endpoint.  Failures are silently swallowed so they never affect
+ * the running server.
+ */
+async function notifyDeployWebhook(): Promise<void> {
+  const url = process.env['DEPLOY_WEBHOOK_URL']
+  if (!url) return
+
+  const version     = process.env['APP_VERSION']     ?? 'dev'
+  const buildNumber = process.env['APP_BUILD_NUMBER'] ?? 'local'
+  const gitSha      = process.env['APP_GIT_SHA']      ?? 'dev'
+  const buildDate   = process.env['APP_BUILD_DATE']   ?? new Date().toISOString()
+
+  const text = `✅ *YBot API is live* — v${version} · build #${buildNumber} · \`${gitSha.slice(0, 7)}\` — ${new Date(buildDate).toUTCString()}`
+
+  await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ text }),
+  })
 }

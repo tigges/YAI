@@ -128,3 +128,23 @@ jobs:
                              --env-file .env.production \
               up -d --remove-orphans
             echo "Deploy complete."
+
+      # ── Notify: images published to GHCR ───────────────────────────────────
+      # Fires every time images are successfully pushed, regardless of whether
+      # the AVIORI SSH deploy ran.  Requires the SLACK_DEPLOY_WEBHOOK secret to
+      # be set in Settings → Secrets → Actions (Slack incoming-webhook URL or
+      # any generic POST endpoint).  Step is a no-op when the secret is absent.
+      - name: Notify images published
+        if: success()
+        continue-on-error: true
+        env:
+          HOOK_URL: ${{ secrets.SLACK_DEPLOY_WEBHOOK }}
+          IMAGE_TAG: ${{ steps.tag.outputs.tag }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          [ -z "$HOOK_URL" ] && exit 0
+          SHORT_SHA="${{ github.sha }}"
+          SHORT_SHA="${SHORT_SHA:0:7}"
+          curl -s -o /dev/null -X POST "$HOOK_URL" \
+            -H "Content-Type: application/json" \
+            -d "{\"text\":\"📦 *YBot images pushed to GHCR* — tag \`${IMAGE_TAG}\` · build #${{ github.run_number }} · \`${SHORT_SHA}\`\n• API: \`${{ env.API_IMAGE }}:${IMAGE_TAG}\`\n• Web: \`${{ env.WEB_IMAGE }}:${IMAGE_TAG}\`\n• <${RUN_URL}|View CI run> — Watchtower will deploy to AVIORI within 5 min\"}"

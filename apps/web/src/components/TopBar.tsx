@@ -10,6 +10,7 @@ import {
   Settings,
   Beaker,
   Rocket,
+  Loader2,
 } from 'lucide-react'
 import {
   Avatar,
@@ -32,7 +33,7 @@ interface TopBarProps {
 
 export function TopBar({ darkMode, onToggleDark }: TopBarProps) {
   const navigate = useNavigate()
-  const { user, bots, selectedBotId, selectedEnv, selectBot, setEnv, clearAuth } = useAppStore()
+  const { user, bots, botsLoading, selectedBotId, selectedEnv, selectBot, setEnv, clearAuth } = useAppStore()
 
   const selectedBot = bots.find((b) => b.id === selectedBotId)
 
@@ -51,31 +52,44 @@ export function TopBar({ darkMode, onToggleDark }: TopBarProps) {
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <button className="flex items-center gap-2 rounded-[var(--radius)] px-2 py-1 text-sm hover:bg-[var(--bg-hover)] transition-colors">
-              <div className="flex h-6 w-6 items-center justify-center rounded bg-[var(--accent-muted)] text-[var(--accent)] text-xs font-bold">
-                {selectedBot?.name?.[0] ?? 'B'}
-              </div>
+              {botsLoading ? (
+                <Loader2 size={16} className="animate-spin text-[var(--text-muted)]" />
+              ) : (
+                <div className="flex h-6 w-6 items-center justify-center rounded bg-[var(--accent-muted)] text-[var(--accent)] text-xs font-bold">
+                  {selectedBot?.name?.[0] ?? 'B'}
+                </div>
+              )}
               <span className="font-medium text-[var(--text-primary)] max-w-[140px] truncate">
-                {selectedBot?.name ?? 'Select Bot'}
+                {botsLoading ? 'Loading…' : (selectedBot?.name ?? 'Select Bot')}
               </span>
               <ChevronDown size={13} className="text-[var(--text-muted)]" />
             </button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="start">
             <DropdownMenuLabel>Switch Bot</DropdownMenuLabel>
-            {bots.map((bot) => (
-              <DropdownMenuItem
-                key={bot.id}
-                onClick={() => selectBot(bot.id)}
-              >
-                <div className="flex h-5 w-5 items-center justify-center rounded bg-[var(--accent-muted)] text-[var(--accent)] text-[10px] font-bold">
-                  {bot.name[0]}
-                </div>
-                <span>{bot.name}</span>
-                {bot.id === selectedBotId && (
-                  <span className="ml-auto text-[var(--accent)] text-xs">✓</span>
-                )}
-              </DropdownMenuItem>
-            ))}
+            {botsLoading ? (
+              <div className="flex items-center gap-2 px-2 py-1.5 text-sm text-[var(--text-muted)]">
+                <Loader2 size={13} className="animate-spin" />
+                Loading bots…
+              </div>
+            ) : bots.length === 0 ? (
+              <div className="px-2 py-1.5 text-sm text-[var(--text-muted)]">No bots yet</div>
+            ) : (
+              bots.map((bot) => (
+                <DropdownMenuItem
+                  key={bot.id}
+                  onClick={() => selectBot(bot.id)}
+                >
+                  <div className="flex h-5 w-5 items-center justify-center rounded bg-[var(--accent-muted)] text-[var(--accent)] text-[10px] font-bold">
+                    {bot.name[0]}
+                  </div>
+                  <span>{bot.name}</span>
+                  {bot.id === selectedBotId && (
+                    <span className="ml-auto text-[var(--accent)] text-xs">✓</span>
+                  )}
+                </DropdownMenuItem>
+              ))
+            )}
             <DropdownMenuSeparator />
             <DropdownMenuItem onClick={() => navigate({ to: '/bots/new' })}>
               <Plus size={14} />
