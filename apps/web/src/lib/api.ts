@@ -44,8 +44,8 @@ export const auth = {
 
 // ── Me ────────────────────────────────────────────────────────────────────────
 export const me = {
-  get: () => apiFetch<{ data: { id: string; email: string; displayName: string } }>('/me'),
-  update: (body: { displayName?: string; email?: string }) =>
+  get: () => apiFetch<{ data: { id: string; email: string; displayName: string; status?: string } }>('/me'),
+  update: (body: { displayName?: string; email?: string; status?: string }) =>
     apiFetch<{ data: unknown }>('/me', { method: 'PATCH', body: JSON.stringify(body) }),
   changePassword: (currentPassword: string, newPassword: string) =>
     apiFetch<{ data: unknown }>('/me/password', { method: 'POST', body: JSON.stringify({ currentPassword, newPassword }) }),
@@ -108,6 +108,10 @@ export const knowledge = {
     get: (botId: string) => apiFetch<{ data: LlmConfig }>(`/bots/${botId}/training`),
     update: (botId: string, config: Partial<LlmConfig>) => apiFetch<{ data: LlmConfig }>(`/bots/${botId}/training`, { method: 'PUT', body: JSON.stringify(config) }),
   },
+  inboxConfig: {
+    get: (botId: string) => apiFetch<{ data: Record<string, unknown> }>(`/bots/${botId}/inbox-config`),
+    update: (botId: string, config: Record<string, unknown>) => apiFetch<{ data: Record<string, unknown> }>(`/bots/${botId}/inbox-config`, { method: 'PATCH', body: JSON.stringify(config) }),
+  },
 }
 
 // ── Conversations ─────────────────────────────────────────────────────────────
@@ -132,7 +136,7 @@ export const conversations = {
 // ── Tickets ───────────────────────────────────────────────────────────────────
 export const tickets = {
   list: (params?: Record<string, string>) => apiFetch<{ data: Ticket[] }>(`/tickets?${new URLSearchParams(params ?? {})}`),
-  create: (body: { conversationId: string; subject: string; priority?: string; assignedTo?: string; tags?: string[] }) =>
+  create: (body: { conversationId?: string; subject: string; priority?: string; assignedTo?: string; tags?: string[] }) =>
     apiFetch<{ data: Ticket }>('/tickets', { method: 'POST', body: JSON.stringify(body) }),
   update: (id: string, body: Partial<{ status: string; priority: string; assignedTo: string | null; tags: string[] }>) =>
     apiFetch<{ data: unknown }>(`/tickets/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),

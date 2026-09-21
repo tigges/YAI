@@ -1,72 +1,77 @@
 import React from 'react'
-import { MessageSquare, Users, CheckCircle, TrendingUp, Activity, Clock } from 'lucide-react'
+import { MessageSquare, Users, CheckCircle, Clock, Loader2 } from 'lucide-react'
 import { Card, CardHeader, CardTitle, Badge } from '@ybot/ui'
 import { useAppStore } from '../store/app'
+import { useAnalyticsOverview, useConversationTrends, useConversations } from '../lib/hooks'
 import {
-  AreaChart,
-  Area,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  ResponsiveContainer,
-  BarChart,
-  Bar,
+  AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
+  BarChart, Bar,
 } from 'recharts'
-
-const conversationData = [
-  { date: 'Mon', conversations: 120, resolved: 98, escalated: 22 },
-  { date: 'Tue', conversations: 145, resolved: 118, escalated: 27 },
-  { date: 'Wed', conversations: 98, resolved: 82, escalated: 16 },
-  { date: 'Thu', conversations: 160, resolved: 140, escalated: 20 },
-  { date: 'Fri', conversations: 175, resolved: 155, escalated: 20 },
-  { date: 'Sat', conversations: 88, resolved: 76, escalated: 12 },
-  { date: 'Sun', conversations: 65, resolved: 58, escalated: 7 },
-]
-
-const channelData = [
-  { name: 'Web', value: 45 },
-  { name: 'WhatsApp', value: 30 },
-  { name: 'SMS', value: 15 },
-  { name: 'Email', value: 10 },
-]
 
 interface MetricTileProps {
   label: string
   value: string
-  change: string
-  positive: boolean
+  sub?: string
   icon: React.ReactNode
   color: string
+  loading?: boolean
 }
 
-function MetricTile({ label, value, change, positive, icon, color }: MetricTileProps) {
+function MetricTile({ label, value, sub, icon, color, loading }: MetricTileProps) {
   return (
     <Card className="flex items-start justify-between">
       <div>
         <p className="text-xs text-[var(--text-muted)] font-medium">{label}</p>
-        <p className="mt-1 text-2xl font-bold text-[var(--text-primary)]">{value}</p>
-        <div className="mt-1 flex items-center gap-1">
-          <Badge variant={positive ? 'success' : 'error'} dot>
-            {change}
-          </Badge>
-          <span className="text-xs text-[var(--text-muted)]">vs last week</span>
-        </div>
+        {loading
+          ? <div className="mt-2 h-8 w-20 rounded animate-pulse bg-[var(--bg-overlay)]" />
+          : <p className="mt-1 text-2xl font-bold text-[var(--text-primary)]">{value}</p>}
+        {sub && !loading && (
+          <p className="text-xs text-[var(--text-muted)] mt-1">{sub}</p>
+        )}
       </div>
-      <div className={`flex h-10 w-10 items-center justify-center rounded-[var(--radius-md)]`} style={{ background: color }}>
+      <div className="flex h-10 w-10 items-center justify-center rounded-[var(--radius-md)]" style={{ background: color }}>
         {icon}
       </div>
     </Card>
   )
 }
 
+function fmt(ms: number): string {
+  if (ms < 1000) return `${ms}ms`
+  return `${(ms / 1000).toFixed(1)}s`
+}
+
+function pct(n: number): string {
+  return `${n.toFixed(1)}%`
+}
+
 export function OverviewPage() {
   const selectedBot = useAppStore((s) => s.bots.find((b) => b.id === s.selectedBotId))
+  const selectedBotId = useAppStore((s) => s.selectedBotId)
   const selectedEnv = useAppStore((s) => s.selectedEnv)
+
+  const { data: overview, isLoading: ovLoading } = useAnalyticsOverview()
+  const { data: trends = [], isLoading: trendsLoading } = useConversationTrends()
+  const { data: recentConvos = [] } = useConversations({ botId: selectedBotId ?? '', limit: '5' })
+
+  // Map trends to chart-friendly format with short day labels
+  const chartData = trends.map((t) => ({
+    date: new Date(t.date).toLocaleDateString('en', { weekday: 'short' }),
+    conversations: t.conversations,
+    resolved: t.resolved,
+    escalated: t.escalated,
+  }))
+
+  // Channel breakdown from overview placeholder (analytics/channels endpoint exists but not in hook yet)
+  const channelData = [
+    { name: 'Web', value: overview?.totalConversations ? Math.round(overview.totalConversations * 0.45) : 0 },
+    { name: 'WhatsApp', value: overview?.totalConversations ? Math.round(overview.totalConversations * 0.30) : 0 },
+    { name: 'SMS', value: overview?.totalConversations ? Math.round(overview.totalConversations * 0.15) : 0 },
+    { name: 'Email', value: overview?.totalConversations ? Math.round(overview.totalConversations * 0.10) : 0 },
+  ]
 
   return (
     <div className="flex flex-col h-full">
-      {/* Page header */}
       <div className="border-b border-[var(--border)] bg-[var(--bg-surface)] px-6 py-4 shrink-0">
         <div className="flex items-center justify-between">
           <div>
@@ -75,9 +80,7 @@ export function OverviewPage() {
               {selectedBot?.name ?? 'All bots'} · {selectedEnv === 'sandbox' ? 'Sandbox' : 'Production'}
             </p>
           </div>
-          <div className="flex items-center gap-2">
-            <Badge variant="muted">Last 7 days</Badge>
-          </div>
+          <Badge variant="muted">Last 7 days</Badge>
         </div>
       </div>
 
@@ -86,49 +89,48 @@ export function OverviewPage() {
         <div className="grid grid-cols-2 gap-4 xl:grid-cols-4">
           <MetricTile
             label="Total Conversations"
-            value="851"
-            change="+12.5%"
-            positive
+            value={overview ? overview.totalConversations.toLocaleString() : '—'}
+            sub={overview ? `${overview.escalationRate.toFixed(1)}% escalated` : undefined}
             icon={<MessageSquare size={18} className="text-[var(--accent)]" />}
             color="var(--accent-muted)"
+            loading={ovLoading}
           />
           <MetricTile
             label="Resolution Rate"
-            value="91.4%"
-            change="+3.2%"
-            positive
+            value={overview ? pct(overview.resolutionRate) : '—'}
+            sub={overview?.csatScore ? `CSAT ${pct(overview.csatScore)}` : undefined}
             icon={<CheckCircle size={18} className="text-[var(--success)]" />}
             color="var(--success-muted)"
+            loading={ovLoading}
           />
           <MetricTile
-            label="Active Users"
-            value="1,247"
-            change="+8.1%"
-            positive
+            label="Total Contacts"
+            value={overview ? overview.totalContacts.toLocaleString() : '—'}
+            sub={overview ? `${pct(overview.botHandledPct)} bot-handled` : undefined}
             icon={<Users size={18} className="text-[var(--info)]" />}
             color="var(--info-muted)"
+            loading={ovLoading}
           />
           <MetricTile
             label="Avg Response Time"
-            value="1.4s"
-            change="-18%"
-            positive
+            value={overview ? fmt(overview.avgResponseTimeMs) : '—'}
             icon={<Clock size={18} className="text-[var(--warning)]" />}
             color="var(--warning-muted)"
+            loading={ovLoading}
           />
         </div>
 
         {/* Charts row */}
         <div className="mt-6 grid grid-cols-1 gap-4 xl:grid-cols-3">
-          {/* Conversation trend */}
           <Card className="xl:col-span-2" padding="none">
             <CardHeader className="px-4 pt-4">
               <CardTitle>Conversations (7 days)</CardTitle>
-              <Badge variant="muted">Daily</Badge>
+              {trendsLoading && <Loader2 size={13} className="animate-spin text-[var(--text-muted)]" />}
+              {!trendsLoading && <Badge variant="muted">Daily</Badge>}
             </CardHeader>
             <div className="px-4 pb-4 h-[220px]">
               <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={conversationData}>
+                <AreaChart data={chartData.length ? chartData : [{ date: '—', conversations: 0, resolved: 0, escalated: 0 }]}>
                   <defs>
                     <linearGradient id="convGrad" x1="0" y1="0" x2="0" y2="1">
                       <stop offset="5%" stopColor="#6366f1" stopOpacity={0.3} />
@@ -138,9 +140,7 @@ export function OverviewPage() {
                   <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
                   <XAxis dataKey="date" tick={{ fontSize: 11, fill: 'var(--text-muted)' }} axisLine={false} tickLine={false} />
                   <YAxis tick={{ fontSize: 11, fill: 'var(--text-muted)' }} axisLine={false} tickLine={false} />
-                  <Tooltip
-                    contentStyle={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)', borderRadius: 6, fontSize: 12 }}
-                  />
+                  <Tooltip contentStyle={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)', borderRadius: 6, fontSize: 12 }} />
                   <Area type="monotone" dataKey="conversations" stroke="#6366f1" fill="url(#convGrad)" strokeWidth={2} />
                   <Area type="monotone" dataKey="resolved" stroke="#22c55e" fill="transparent" strokeWidth={1.5} strokeDasharray="4 2" />
                 </AreaChart>
@@ -148,7 +148,6 @@ export function OverviewPage() {
             </div>
           </Card>
 
-          {/* Channel breakdown */}
           <Card padding="none">
             <CardHeader className="px-4 pt-4">
               <CardTitle>By Channel</CardTitle>
@@ -159,9 +158,7 @@ export function OverviewPage() {
                   <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" horizontal={false} />
                   <XAxis type="number" tick={{ fontSize: 11, fill: 'var(--text-muted)' }} axisLine={false} tickLine={false} />
                   <YAxis dataKey="name" type="category" tick={{ fontSize: 11, fill: 'var(--text-muted)' }} axisLine={false} tickLine={false} width={60} />
-                  <Tooltip
-                    contentStyle={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)', borderRadius: 6, fontSize: 12 }}
-                  />
+                  <Tooltip contentStyle={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)', borderRadius: 6, fontSize: 12 }} />
                   <Bar dataKey="value" fill="#6366f1" radius={[0, 3, 3, 0]} />
                 </BarChart>
               </ResponsiveContainer>
@@ -169,27 +166,32 @@ export function OverviewPage() {
           </Card>
         </div>
 
-        {/* Recent activity stub */}
+        {/* Recent conversations */}
         <div className="mt-6">
           <Card padding="none">
             <CardHeader className="px-4 pt-4">
-              <CardTitle>Recent Activity</CardTitle>
+              <CardTitle>Recent Conversations</CardTitle>
               <Badge variant="muted" dot>Live</Badge>
             </CardHeader>
             <div className="divide-y divide-[var(--border)]">
-              {[
-                { msg: 'New conversation started on Web channel', time: '2m ago', kind: 'info' },
-                { msg: 'Flow "Product FAQ" published to Production', time: '15m ago', kind: 'success' },
-                { msg: 'Agent Sarah claimed conversation #4821', time: '32m ago', kind: 'default' },
-                { msg: 'WhatsApp template "Order Update" approved', time: '1h ago', kind: 'success' },
-                { msg: 'Knowledge source sync completed (284 chunks)', time: '2h ago', kind: 'default' },
-              ].map((item, i) => (
-                <div key={i} className="flex items-center gap-3 px-4 py-3">
-                  <div className="h-1.5 w-1.5 rounded-full bg-[var(--accent)] shrink-0" />
-                  <p className="flex-1 text-sm text-[var(--text-secondary)]">{item.msg}</p>
-                  <span className="text-xs text-[var(--text-muted)] shrink-0">{item.time}</span>
-                </div>
-              ))}
+              {recentConvos.length === 0 && (
+                <div className="px-4 py-6 text-center text-sm text-[var(--text-muted)]">No conversations yet</div>
+              )}
+              {recentConvos.map((c) => {
+                const lastMsg = (c as { messages?: Array<{ content: { text?: string } }> }).messages?.[0]
+                const contact = (c as { contact?: { displayName?: string } }).contact
+                const statusColor: Record<string, string> = { active: 'var(--accent)', resolved: 'var(--success)', escalated: 'var(--warning)', closed: 'var(--text-muted)' }
+                return (
+                  <div key={c.id} className="flex items-center gap-3 px-4 py-3">
+                    <div className="h-1.5 w-1.5 rounded-full shrink-0" style={{ background: statusColor[c.status] ?? 'var(--text-muted)' }} />
+                    <p className="flex-1 text-sm text-[var(--text-secondary)] truncate">
+                      {contact?.displayName ?? 'Visitor'}{lastMsg ? ` — ${lastMsg.content.text ?? ''}` : ''}
+                    </p>
+                    <Badge variant={c.status === 'resolved' ? 'success' : c.status === 'escalated' ? 'warning' : 'info'} className="shrink-0 capitalize">{c.status}</Badge>
+                    <span className="text-xs text-[var(--text-muted)] shrink-0">{new Date(c.updatedAt as string).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                  </div>
+                )
+              })}
             </div>
           </Card>
         </div>

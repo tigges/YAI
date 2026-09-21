@@ -154,6 +154,7 @@ model BotConfig {
   temperature  Float    @default(0.3)
   maxTokens    Int      @default(2048)
   systemPrompt String   @default("You are a helpful assistant.")
+  inboxConfig  Json     @default("{}")
   updatedAt    DateTime @updatedAt
 
   bot Bot @relation(fields: [botId], references: [id], onDelete: Cascade)
