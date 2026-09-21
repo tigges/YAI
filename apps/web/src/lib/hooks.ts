@@ -471,3 +471,32 @@ export function useSystemConfig() {
     staleTime: 60_000,
   })
 }
+
+// ── Optimizations ─────────────────────────────────────────────────────────────
+export function useOptimizations(botId: string, status?: string) {
+  return useQuery({
+    queryKey: ['optimizations', botId, status],
+    queryFn: () => api.optimizations.list(botId, status).then((r) => r.data),
+    enabled: !!botId,
+    staleTime: 30_000,
+  })
+}
+
+export function useApplyOptimization(botId: string) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (id: string) => api.optimizations.apply(botId, id),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['optimizations', botId] })
+      void qc.invalidateQueries({ queryKey: ['llm-config', botId] })
+    },
+  })
+}
+
+export function useDismissOptimization(botId: string) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (id: string) => api.optimizations.dismiss(botId, id),
+    onSuccess: () => { void qc.invalidateQueries({ queryKey: ['optimizations', botId] }) },
+  })
+}

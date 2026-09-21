@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify'
 import { PrismaClient } from '@ybot/db'
 import { z } from 'zod'
 import { processInboundMessage } from '../runtime-bridge.js'
+import { enqueueConversationAnalysis } from '../queues.js'
 
 const prisma = new PrismaClient()
 type JWT = { sub: string; tenantId: string; role: string }
@@ -112,6 +113,15 @@ export async function conversationsRoutes(app: FastifyInstance) {
     }).safeParse(request.body)
     if (!body.success) return reply.status(400).send({ error: { code: 'VALIDATION', details: body.error.flatten() } })
     const convo = await prisma.conversation.updateMany({ where: { id, tenantId }, data: { ...body.data, ...(body.data.status === 'resolved' ? { resolvedAt: new Date() } : {}) } })
+
+    // Trigger quality analysis for resolved conversations
+    if (body.data.status === 'resolved') {
+      const full = await prisma.conversation.findFirst({ where: { id, tenantId } })
+      if (full) {
+        enqueueConversationAnalysis({ conversationId: id, tenantId, botId: full.botId }).catch(() => {})
+      }
+    }
+
     return { data: convo }
   })
 

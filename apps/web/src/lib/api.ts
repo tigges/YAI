@@ -208,6 +208,17 @@ export const audit = {
   list: (params?: Record<string, string>) => apiFetch<{ data: AuditEvent[] }>(`/audit?${new URLSearchParams(params ?? {})}`),
 }
 
+export const optimizations = {
+  list: (botId: string, status?: string) =>
+    apiFetch<{ data: TemplateOptimization[] }>(`/bots/${botId}/optimizations${status ? `?status=${status}` : ''}`),
+  get: (botId: string, id: string) =>
+    apiFetch<{ data: TemplateOptimization }>(`/bots/${botId}/optimizations/${id}`),
+  apply: (botId: string, id: string) =>
+    apiFetch<{ data: TemplateOptimization }>(`/bots/${botId}/optimizations/${id}/apply`, { method: 'POST' }),
+  dismiss: (botId: string, id: string) =>
+    apiFetch<{ data: TemplateOptimization }>(`/bots/${botId}/optimizations/${id}/dismiss`, { method: 'POST' }),
+}
+
 export const preview = {
   knowledgeStats: (botId: string) =>
     apiFetch<{ data: { chunkCount: number; sourceCount: number } }>(`/bots/${botId}/preview/knowledge-stats`),
@@ -287,4 +298,22 @@ export interface SystemConfig {
   storage: { S3_ENDPOINT: ConfigEntry; S3_BUCKET: ConfigEntry; S3_REGION: ConfigEntry }
   llm: { OPENAI_API_KEY: ConfigEntry; ANTHROPIC_API_KEY: ConfigEntry; GROQ_API_KEY: ConfigEntry; OLLAMA_BASE_URL: ConfigEntry }
   app: { NODE_ENV: ConfigEntry; FRONTEND_URL: ConfigEntry }
+}
+
+export interface TemplateOptimization {
+  id: string
+  tenantId: string
+  botId: string
+  templateId?: string | null
+  kind: string
+  title: string
+  description: string
+  currentValue?: string | null
+  proposedValue: string
+  evidenceCount: number
+  avgQualityScore: number
+  status: 'pending' | 'applied' | 'dismissed'
+  appliedAt?: string | null
+  createdAt: string
+  updatedAt: string
 }

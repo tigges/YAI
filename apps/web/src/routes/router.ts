@@ -31,6 +31,7 @@ import { AnalyticsOverviewPage } from '../pages/analytics/Overview'
 import { DashboardsPage } from '../pages/analytics/Dashboards'
 import { ReportsPage } from '../pages/analytics/Reports'
 import { ChannelsPage } from '../pages/configure/Channels'
+import { OptimizationsPage } from '../pages/configure/Optimizations'
 import { IntegrationsPage } from '../pages/configure/Integrations'
 import { DatabasePage } from '../pages/configure/Database'
 import { WebhooksPage } from '../pages/configure/Webhooks'
@@ -124,6 +125,7 @@ const reportsRoute = createRoute({ getParentRoute: () => appRoute, path: '/analy
 
 // ── Configure ─────────────────────────────────────────────────────────────────
 const channelsRoute = createRoute({ getParentRoute: () => appRoute, path: '/configure/channels', component: ChannelsPage })
+const optimizationsRoute = createRoute({ getParentRoute: () => appRoute, path: '/configure/optimizations', component: OptimizationsPage })
 const integrationsRoute = createRoute({ getParentRoute: () => appRoute, path: '/configure/integrations', component: IntegrationsPage })
 const databaseRoute = createRoute({ getParentRoute: () => appRoute, path: '/configure/database', component: DatabasePage })
 const webhooksRoute = createRoute({ getParentRoute: () => appRoute, path: '/configure/webhooks', component: WebhooksPage })
@@ -165,6 +167,7 @@ const routeTree = rootRoute.addChildren([
     dashboardsRoute,
     reportsRoute,
     channelsRoute,
+    optimizationsRoute,
     integrationsRoute,
     databaseRoute,
     webhooksRoute,
