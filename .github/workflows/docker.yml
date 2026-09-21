@@ -58,6 +58,11 @@ jobs:
           tags: |
             ${{ env.API_IMAGE }}:${{ steps.tag.outputs.tag }}
             ${{ env.API_IMAGE }}:latest
+          build-args: |
+            APP_VERSION=1.1.0
+            APP_BUILD_NUMBER=${{ github.run_number }}
+            APP_GIT_SHA=${{ github.sha }}
+            APP_BUILD_DATE=${{ github.event.head_commit.timestamp }}
           cache-from: type=gha,scope=api
           cache-to: type=gha,mode=max,scope=api
 
@@ -70,6 +75,10 @@ jobs:
           push: true
           build-args: |
             VITE_API_URL=/api/v1
+            VITE_APP_VERSION=1.1.0
+            VITE_BUILD_NUMBER=${{ github.run_number }}
+            VITE_GIT_SHA=${{ github.sha }}
+            VITE_BUILD_DATE=${{ github.event.head_commit.timestamp }}
           tags: |
             ${{ env.WEB_IMAGE }}:${{ steps.tag.outputs.tag }}
             ${{ env.WEB_IMAGE }}:latest

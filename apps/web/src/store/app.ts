@@ -27,12 +27,14 @@ interface AppStore {
   user: CurrentUser | null
   token: string | null
   bots: Bot[]
+  botsLoading: boolean
   selectedBotId: string | null
   selectedEnv: 'sandbox' | 'production'
 
   setAuth: (user: CurrentUser, token: string) => void
   clearAuth: () => void
   setBots: (bots: Bot[]) => void
+  setBotsLoading: (loading: boolean) => void
   selectBot: (botId: string) => void
   setEnv: (env: 'sandbox' | 'production') => void
 }
@@ -43,16 +45,19 @@ export const useAppStore = create<AppStore>()(
       user: null,
       token: null,
       bots: [],
+      botsLoading: false,
       selectedBotId: null,
       selectedEnv: 'sandbox',
 
       setAuth: (user, token) => set({ user, token }),
-      clearAuth: () => set({ user: null, token: null, bots: [], selectedBotId: null }),
+      clearAuth: () => set({ user: null, token: null, bots: [], botsLoading: false, selectedBotId: null }),
       setBots: (bots) =>
         set((state) => ({
           bots,
+          botsLoading: false,
           selectedBotId: state.selectedBotId ?? bots[0]?.id ?? null,
         })),
+      setBotsLoading: (loading) => set({ botsLoading: loading }),
       selectBot: (botId) => set({ selectedBotId: botId }),
       setEnv: (env) => set({ selectedEnv: env }),
     }),

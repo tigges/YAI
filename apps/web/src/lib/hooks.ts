@@ -296,6 +296,17 @@ export function useCampaigns() {
   })
 }
 
+export function useCreateCampaign() {
+  const bid = botId()
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (body: { name: string; channel?: string; status?: 'draft' | 'running'; scheduledAt?: string }) =>
+      api.campaigns.create(bid, body).then((r) => r.data),
+    onSuccess: () => { void qc.invalidateQueries({ queryKey: ['campaigns', bid] }) },
+  })
+}
+
+
 export function useLaunchCampaign() {
   const qc = useQueryClient()
   const bid = botId()

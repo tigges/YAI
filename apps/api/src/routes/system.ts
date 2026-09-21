@@ -50,6 +50,20 @@ async function pingRedis() {
 }
 
 export async function systemRoutes(app: FastifyInstance) {
+  // ── GET /version — PUBLIC, no auth ────────────────────────────────────────
+  app.get('/version', async () => {
+    const e = process.env
+    return {
+      data: {
+        version:     e['APP_VERSION']      ?? '1.1.0',
+        buildNumber: e['APP_BUILD_NUMBER'] ?? 'local',
+        gitSha:      e['APP_GIT_SHA']      ?? 'dev',
+        buildDate:   e['APP_BUILD_DATE']   ?? new Date().toISOString(),
+        environment: e['NODE_ENV']         ?? 'development',
+      },
+    }
+  })
+
   app.addHook('preHandler', app.authenticate)
 
   app.get('/status', async () => {
@@ -100,6 +114,12 @@ export async function systemRoutes(app: FastifyInstance) {
           usedMemPct: Math.round((1 - os.freemem() / os.totalmem()) * 100),
         },
         ts: new Date().toISOString(),
+        version: {
+          version:     process.env['APP_VERSION']      ?? '1.1.0',
+          buildNumber: process.env['APP_BUILD_NUMBER'] ?? 'local',
+          gitSha:      process.env['APP_GIT_SHA']      ?? 'dev',
+          buildDate:   process.env['APP_BUILD_DATE']   ?? new Date().toISOString(),
+        },
       },
     }
   })

@@ -1,0 +1,32 @@
+/**
+ * Build-time version constants injected by vite.config.ts.
+ * At runtime these are replaced with literal strings — zero runtime cost.
+ */
+
+export interface AppBuildInfo {
+  version:     string   // semver from package.json, e.g. "1.1.0"
+  buildNumber: string   // CI run number, e.g. "42"; "local" in dev
+  gitSha:      string   // short git SHA, e.g. "abc1234"; "dev" in local
+  buildDate:   string   // ISO-8601 date, e.g. "2026-09-21T06:39:00Z"
+}
+
+export const buildInfo: AppBuildInfo = {
+  version:     __APP_VERSION__,
+  buildNumber: __BUILD_NUMBER__,
+  gitSha:      __GIT_SHA__,
+  buildDate:   __BUILD_DATE__,
+}
+
+/** Short label for compact display: "v1.1.0 · #42" */
+export function shortVersion(): string {
+  const build = buildInfo.buildNumber !== 'local' ? ` · #${buildInfo.buildNumber}` : ' · dev'
+  return `v${buildInfo.version}${build}`
+}
+
+/** Full label for tooltip: "v1.1.0 · build #42 · abc1234 · 2026-09-21" */
+export function fullVersion(): string {
+  const date = buildInfo.buildDate ? new Date(buildInfo.buildDate).toLocaleDateString() : ''
+  const sha  = buildInfo.gitSha !== 'dev' ? ` · ${buildInfo.gitSha.slice(0, 7)}` : ''
+  const num  = buildInfo.buildNumber !== 'local' ? ` · build #${buildInfo.buildNumber}` : ''
+  return `v${buildInfo.version}${num}${sha}${date ? ' · ' + date : ''}`
+}
