@@ -3,6 +3,7 @@ import { Link, useLocation } from '@tanstack/react-router'
 import { ChevronLeft, ChevronRight, Bot } from 'lucide-react'
 import { cn } from '@ybot/ui'
 import { NAV_GROUPS } from './nav-config'
+import { shortVersion, fullVersion } from '../lib/version'
 
 interface NavRailProps {
   collapsed?: boolean
@@ -76,12 +77,20 @@ export function NavRail({ collapsed = false, onToggleCollapse }: NavRailProps) {
         ))}
       </div>
 
-      {/* Collapse toggle */}
-      <div className="border-t border-[var(--nav-border)] p-2">
+      {/* Version + Collapse toggle */}
+      <div className="border-t border-[var(--nav-border)] p-2 flex flex-col gap-1">
+        {!collapsed && (
+          <div
+            title={fullVersion()}
+            className="px-2 py-1 text-[10px] text-[var(--text-muted)] font-mono select-none cursor-default"
+          >
+            {shortVersion()}
+          </div>
+        )}
         <button
           onClick={onToggleCollapse}
           className="flex w-full h-8 items-center justify-center rounded-[var(--radius)] text-[var(--text-muted)] hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)] transition-colors"
-          title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+          title={collapsed ? `Expand sidebar (${shortVersion()})` : 'Collapse sidebar'}
         >
           {collapsed ? <ChevronRight size={14} /> : <ChevronLeft size={14} />}
         </button>

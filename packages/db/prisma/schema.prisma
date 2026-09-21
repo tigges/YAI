@@ -140,6 +140,8 @@ model Bot {
   dashboards   Dashboard[]
   reports      Report[]
   config       BotConfig?
+  conversationTemplates ConversationTemplate[]
+  templateOptimizations TemplateOptimization[]
 
   @@map("bots")
 }
@@ -370,6 +372,7 @@ model Conversation {
   tickets     Ticket[]
   stepLogs    StepLog[]
   labels      ConversationLabel[]
+  csatResponses CsatResponse[]
 
   @@map("conversations")
 }
@@ -615,4 +618,65 @@ model Activity {
   user User? @relation(fields: [userId], references: [id])
 
   @@map("activities")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// CSAT & CONVERSATION OPTIMISATION
+// ─────────────────────────────────────────────────────────────────────────────
+
+model CsatResponse {
+  id             String   @id @default(cuid())
+  tenantId       String
+  conversationId String
+  messageId      String?
+  rating         Int      // 1 = positive, -1 = negative
+  comment        String?
+  createdAt      DateTime @default(now())
+
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@map("csat_responses")
+}
+
+model ConversationTemplate {
+  id                     String   @id @default(cuid())
+  tenantId               String
+  botId                  String
+  name                   String
+  description            String?
+  sampleConversationId   String?
+  clusterKeywords        String[]
+  avgQualityScore        Float    @default(0)
+  useCount               Int      @default(0)
+  status                 String   @default("active")
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+
+  bot           Bot                    @relation(fields: [botId], references: [id], onDelete: Cascade)
+  optimizations TemplateOptimization[]
+
+  @@map("conversation_templates")
+}
+
+model TemplateOptimization {
+  id              String    @id @default(cuid())
+  tenantId        String
+  botId           String
+  templateId      String?
+  kind            String    // system_prompt | knowledge_boost | flow_hint
+  title           String
+  description     String
+  currentValue    String?
+  proposedValue   String
+  evidenceCount   Int       @default(1)
+  avgQualityScore Float     @default(0)
+  status          String    @default("pending") // pending | applied | dismissed
+  appliedAt       DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  bot      Bot                   @relation(fields: [botId], references: [id], onDelete: Cascade)
+  template ConversationTemplate? @relation(fields: [templateId], references: [id])
+
+  @@map("template_optimizations")
 }
