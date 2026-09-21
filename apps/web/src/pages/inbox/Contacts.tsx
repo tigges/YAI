@@ -14,7 +14,7 @@ import {
 } from '@ybot/ui'
 import { SubNav } from '../../components/SubNav'
 import { cn } from '@ybot/ui'
-import { useContacts, useCreateContact } from '../../lib/hooks'
+import { useContacts, useCreateContact, useUpdateContact, useDeleteContact, useContactConversations } from '../../lib/hooks'
 
 const SUBNAV = [
   { label: 'Chats', path: '/inbox/chats' },
@@ -72,6 +72,7 @@ interface ContactDetailProps {
 }
 
 function ContactDetail({ contact, onClose }: ContactDetailProps) {
+  const { data: convos = [] } = useContactConversations(contact.id)
   return (
     <DialogContent size="lg">
       <DialogHeader>
@@ -119,12 +120,17 @@ function ContactDetail({ contact, onClose }: ContactDetailProps) {
         <div className="mt-6 border-t border-[var(--border)] pt-4">
           <p className="text-xs font-semibold text-[var(--text-muted)] uppercase mb-3">Recent conversations</p>
           <div className="space-y-2">
-            {Array.from({ length: Math.min(contact.conversations, 3) }, (_, i) => (
-              <div key={i} className="flex items-center gap-3 p-2.5 rounded-[var(--radius-md)] border border-[var(--border)] hover:bg-[var(--bg-hover)] transition-colors cursor-pointer">
-                <CheckCircle2 size={14} className="text-[var(--success)] shrink-0" />
+            {convos.length === 0 && (
+              <p className="text-xs text-[var(--text-muted)]">No conversations yet</p>
+            )}
+            {convos.slice(0, 5).map((c) => (
+              <div key={c.id} className="flex items-center gap-3 p-2.5 rounded-[var(--radius-md)] border border-[var(--border)] hover:bg-[var(--bg-hover)] transition-colors cursor-pointer">
+                <CheckCircle2 size={14} className={c.status === 'resolved' ? 'text-[var(--success)]' : 'text-[var(--accent)]'} />
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm text-[var(--text-primary)] truncate">Conversation #{1000 + i} — {['Order support', 'Billing enquiry', 'Account access'][i % 3]}</p>
-                  <p className="text-xs text-[var(--text-muted)]">{i + 1}d ago · Resolved</p>
+                  <p className="text-sm text-[var(--text-primary)] truncate">
+                    {(c as { messages?: Array<{ content: { text?: string } }> }).messages?.[0]?.content?.text ?? 'Conversation'}
+                  </p>
+                  <p className="text-xs text-[var(--text-muted)] capitalize">{c.status} · {new Date(c.updatedAt as string).toLocaleDateString()}</p>
                 </div>
               </div>
             ))}
@@ -143,10 +149,13 @@ export function ContactsPage() {
   const [search, setSearch] = useState('')
   const { data: rawContacts = [], isLoading } = useContacts(search || undefined)
   const createContact = useCreateContact()
+  const deleteContact = useDeleteContact()
   const [selected, setSelected] = useState<Contact | null>(null)
   const [showNew, setShowNew] = useState(false)
   const [newName, setNewName] = useState('')
   const [newEmail, setNewEmail] = useState('')
+  const [newPhone, setNewPhone] = useState('')
+  const [createError, setCreateError] = useState('')
 
   // Map API contact shape to local Contact shape
   const filtered: Contact[] = rawContacts.map((c) => ({
@@ -154,13 +163,27 @@ export function ContactsPage() {
     name: c.displayName ?? c.email ?? 'Unknown',
     email: c.email,
     phone: c.phone,
-    company: c.metadata?.company as string | undefined,
-    tags: [c.metadata?.vip ? 'vip' : null, c.metadata?.plan as string | null].filter(Boolean) as string[],
+    company: (c.metadata as Record<string, string> | null)?.company,
+    tags: [(c.metadata as Record<string, string> | null)?.vip ? 'vip' : null, (c.metadata as Record<string, string> | null)?.plan].filter(Boolean) as string[],
     status: 'active' as Contact['status'],
     channel: 'web' as Contact['channel'],
-    lastSeen: formatRelativeContact(c.createdAt),
-    conversations: 0,
+    lastSeen: formatRelativeContact((c as { createdAt?: string }).createdAt),
+    conversations: (c as { _count?: { conversations: number } })._count?.conversations ?? 0,
   }))
+
+  async function handleCreate() {
+    if (!newName.trim()) return
+    setCreateError('')
+    try {
+      await createContact.mutateAsync({ displayName: newName.trim(), email: newEmail.trim() || undefined, phone: newPhone.trim() || undefined })
+      setShowNew(false); setNewName(''); setNewEmail(''); setNewPhone('')
+    } catch (e) { setCreateError(e instanceof Error ? e.message : 'Failed') }
+  }
+
+  function handleDelete(id: string) {
+    deleteContact.mutate(id)
+    if (selected?.id === id) setSelected(null)
+  }
 
   return (
     <div className="flex flex-col h-full">
@@ -257,12 +280,12 @@ export function ContactsPage() {
                         <MoreHorizontal size={14} />
                       </button>
                     </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
+                      <DropdownMenuContent align="end">
                       <DropdownMenuItem onClick={() => setSelected(c)}>View profile</DropdownMenuItem>
                       <DropdownMenuItem>Start conversation</DropdownMenuItem>
                       <DropdownMenuItem>Create ticket</DropdownMenuItem>
                       <DropdownMenuSeparator />
-                      <DropdownMenuItem destructive>Delete contact</DropdownMenuItem>
+                      <DropdownMenuItem destructive onClick={() => handleDelete(c.id)}>Delete contact</DropdownMenuItem>
                     </DropdownMenuContent>
                   </DropdownMenu>
                 </td>
@@ -308,12 +331,17 @@ export function ContactsPage() {
               <input
                 className="w-full rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--bg-overlay)] px-3 py-2 text-sm text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--accent)]/40"
                 placeholder="+1 555 0000"
+                value={newPhone}
+                onChange={(e) => setNewPhone(e.target.value)}
               />
             </div>
+            {createError && <p className="text-xs text-[var(--danger)]">{createError}</p>}
           </DialogBody>
           <DialogFooter>
             <Button variant="ghost" onClick={() => setShowNew(false)}>Cancel</Button>
-            <Button disabled={!newName.trim()} onClick={() => setShowNew(false)}>Create contact</Button>
+            <Button disabled={!newName.trim() || createContact.isPending} onClick={() => void handleCreate()}>
+              {createContact.isPending ? 'Creating…' : 'Create contact'}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

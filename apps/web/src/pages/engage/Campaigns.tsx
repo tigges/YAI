@@ -12,7 +12,7 @@ import {
 } from '@ybot/ui'
 import { SubNav } from '../../components/SubNav'
 import { cn } from '@ybot/ui'
-import { useCampaigns, useCreateCampaign, useUpdateCampaign, useLaunchCampaign, usePauseCampaign, useDeleteCampaign } from '../../lib/hooks'
+import { useCampaigns, useCreateCampaign, useUpdateCampaign, useLaunchCampaign, usePauseCampaign, useDeleteCampaign, useCampaignDeliveries } from '../../lib/hooks'
 
 const SUBNAV = [
   { label: 'Campaigns', path: '/engage/campaigns' },
@@ -71,9 +71,12 @@ export function CampaignsPage() {
   const [showNew, setShowNew] = useState(false)
   const [newName, setNewName] = useState('')
   const [newChannel, setNewChannel] = useState('email')
+  const [newSubject, setNewSubject] = useState('')
+  const [newBody, setNewBody] = useState('')
   const [newTemplate, setNewTemplate] = useState('')
   const [newSchedule, setNewSchedule] = useState('immediate')
   const [formError, setFormError] = useState('')
+  const [viewDeliveries, setViewDeliveries] = useState<string | null>(null)
 
   // Edit state
   const [editCampaign, setEditCampaign] = useState<Campaign | null>(null)
@@ -112,7 +115,7 @@ export function CampaignsPage() {
     if (!newName.trim()) return
     setFormError('')
     try {
-      await createCampaign.mutateAsync({ name: newName.trim(), channel: newChannel, status: 'draft' })
+      await createCampaign.mutateAsync({ name: newName.trim(), channel: newChannel, subject: newSubject.trim() || undefined, body: newBody.trim() || undefined, status: 'draft' })
       setShowNew(false); resetForm()
     } catch (e) { setFormError(e instanceof Error ? e.message : 'Failed to save') }
   }
@@ -121,7 +124,7 @@ export function CampaignsPage() {
     if (!newName.trim()) return
     setFormError('')
     try {
-      await createCampaign.mutateAsync({ name: newName.trim(), channel: newChannel, status: 'running' })
+      await createCampaign.mutateAsync({ name: newName.trim(), channel: newChannel, subject: newSubject.trim() || undefined, body: newBody.trim() || undefined, status: 'running' })
       setShowNew(false); resetForm()
     } catch (e) { setFormError(e instanceof Error ? e.message : 'Failed to launch') }
   }
@@ -230,7 +233,7 @@ export function CampaignsPage() {
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
                         <DropdownMenuItem onClick={() => openEdit(c)}>Edit</DropdownMenuItem>
-                        <DropdownMenuItem>View report</DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => setViewDeliveries(c.id)}>View deliveries</DropdownMenuItem>
                         <DropdownMenuItem>Duplicate</DropdownMenuItem>
                         {(c.status === 'draft' || c.status === 'paused') && (
                           <DropdownMenuItem onClick={() => launchCampaign.mutate(c.id)}>
@@ -321,6 +324,25 @@ export function CampaignsPage() {
                 <option value="later">Schedule for later</option>
               </select>
             </div>
+            <div>
+              <label className="text-xs font-medium text-[var(--text-muted)] mb-1.5 block">Email subject</label>
+              <input
+                className="w-full rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--bg-overlay)] px-3 py-2 text-sm text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--accent)]/40"
+                placeholder="Your subject line…"
+                value={newSubject}
+                onChange={(e) => setNewSubject(e.target.value)}
+              />
+            </div>
+            <div>
+              <label className="text-xs font-medium text-[var(--text-muted)] mb-1.5 block">Message body (HTML or plain text)</label>
+              <textarea
+                rows={3}
+                className="w-full rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--bg-overlay)] px-3 py-2 text-sm text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--accent)]/40 resize-none"
+                placeholder="Hi {{name}}, …"
+                value={newBody}
+                onChange={(e) => setNewBody(e.target.value)}
+              />
+            </div>
             {formError && (
               <p className="text-xs text-[var(--danger)] bg-[var(--danger)]/10 rounded-[var(--radius-md)] px-3 py-2">{formError}</p>
             )}
@@ -398,6 +420,52 @@ export function CampaignsPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Deliveries dialog */}
+      <DeliveriesDialog campaignId={viewDeliveries} onClose={() => setViewDeliveries(null)} />
     </div>
+  )
+}
+
+function DeliveriesDialog({ campaignId, onClose }: { campaignId: string | null; onClose: () => void }) {
+  const { data: deliveries = [] } = useCampaignDeliveries(campaignId ?? '')
+  const sent = deliveries.filter((d) => d.status === 'sent' || d.status === 'simulated').length
+  const failed = deliveries.filter((d) => d.status === 'failed').length
+  const pending = deliveries.filter((d) => d.status === 'pending').length
+  return (
+    <Dialog open={!!campaignId} onOpenChange={(o) => { if (!o) onClose() }}>
+      <DialogContent size="lg">
+        <DialogHeader>
+          <DialogTitle>Delivery report</DialogTitle>
+        </DialogHeader>
+        <DialogBody>
+          <div className="grid grid-cols-3 gap-3 mb-4">
+            {[
+              { label: 'Sent', value: sent, color: 'text-[var(--success)]' },
+              { label: 'Pending', value: pending, color: 'text-[var(--warning)]' },
+              { label: 'Failed', value: failed, color: 'text-[var(--danger)]' },
+            ].map((s) => (
+              <div key={s.label} className="rounded-[var(--radius-md)] border border-[var(--border)] p-3 text-center">
+                <p className={`text-2xl font-bold ${s.color}`}>{s.value}</p>
+                <p className="text-xs text-[var(--text-muted)] mt-0.5">{s.label}</p>
+              </div>
+            ))}
+          </div>
+          <div className="max-h-72 overflow-y-auto divide-y divide-[var(--border)] text-sm">
+            {deliveries.length === 0 && <p className="text-center py-6 text-[var(--text-muted)] text-sm">No deliveries yet</p>}
+            {deliveries.slice(0, 100).map((d) => (
+              <div key={d.id} className="flex items-center gap-3 py-2 px-1">
+                <span className={`text-xs font-medium w-20 shrink-0 capitalize ${d.status === 'sent' || d.status === 'simulated' ? 'text-[var(--success)]' : d.status === 'failed' ? 'text-[var(--danger)]' : 'text-[var(--text-muted)]'}`}>{d.status}</span>
+                <span className="text-[var(--text-secondary)] truncate">{d.email ?? d.contactId}</span>
+                {d.sentAt && <span className="text-xs text-[var(--text-muted)] shrink-0 ml-auto">{new Date(d.sentAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>}
+              </div>
+            ))}
+          </div>
+        </DialogBody>
+        <DialogFooter>
+          <Button variant="secondary" onClick={onClose}>Close</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   )
 }
