@@ -1,10 +1,11 @@
 // BullMQ queue manager — dynamically loaded so the API starts without Redis
 // In production, call initQueues(REDIS_URL) on startup
 
-export const QUEUE_KNOWLEDGE_SYNC  = 'knowledge:sync'
-export const QUEUE_CAMPAIGN_SEND   = 'campaign:send'
-export const QUEUE_REPORT_GENERATE = 'report:generate'
-export const QUEUE_WEBHOOK_DELIVER = 'webhook:deliver'
+export const QUEUE_KNOWLEDGE_SYNC    = 'knowledge:sync'
+export const QUEUE_CAMPAIGN_SEND     = 'campaign:send'
+export const QUEUE_REPORT_GENERATE   = 'report:generate'
+export const QUEUE_WEBHOOK_DELIVER   = 'webhook:deliver'
+export const QUEUE_CONVO_ANALYSIS    = 'conversation:analysis'
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AnyQueue = { add(name: string, data: object, opts?: object): Promise<unknown> }
@@ -12,6 +13,7 @@ type AnyQueue = { add(name: string, data: object, opts?: object): Promise<unknow
 let knowledgeSyncQueue: AnyQueue | null = null
 let webhookQueue: AnyQueue | null = null
 let campaignQueue: AnyQueue | null = null
+let convoAnalysisQueue: AnyQueue | null = null
 
 export async function initQueues(redisUrl: string) {
   try {
@@ -20,6 +22,7 @@ export async function initQueues(redisUrl: string) {
     knowledgeSyncQueue = new Queue(QUEUE_KNOWLEDGE_SYNC,  { connection })
     webhookQueue       = new Queue(QUEUE_WEBHOOK_DELIVER,  { connection })
     campaignQueue      = new Queue(QUEUE_CAMPAIGN_SEND,    { connection })
+    convoAnalysisQueue = new Queue(QUEUE_CONVO_ANALYSIS,   { connection })
     console.log('✅ BullMQ queues initialised')
   } catch {
     console.warn('⚠️  BullMQ init skipped (Redis unavailable or bullmq not installed)')
@@ -36,6 +39,15 @@ export async function enqueueWebhookDelivery(payload: { url: string; secret?: st
 
 export async function enqueueCampaignSend(payload: { tenantId: string; botId: string; campaignId: string }) {
   await campaignQueue?.add('send', payload, { attempts: 2, backoff: { type: 'exponential', delay: 10000 } })
+}
+
+export async function enqueueConversationAnalysis(payload: { conversationId: string; tenantId: string; botId: string }) {
+  // Delay 30 s to allow any last CSAT rating to arrive before analysis
+  await convoAnalysisQueue?.add('analyse', payload, {
+    attempts: 2,
+    backoff: { type: 'fixed', delay: 30_000 },
+    delay: 30_000,
+  })
 }
 
 /** Fan out a platform event to all matching webhooks for a tenant. */

@@ -2,7 +2,7 @@ import React, { useState } from 'react'
 import {
   Globe, MessageSquare, Phone, Mail, Facebook,
   Send, CheckCircle2, Circle, Pencil, Trash2, Plus, Code2,
-  Copy, ToggleLeft, ToggleRight, ExternalLink, AlertCircle, Loader2,
+  Copy, Loader2, FlaskConical,
 } from 'lucide-react'
 import { Badge, Button } from '@ybot/ui'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogBody, DialogFooter } from '@ybot/ui'
@@ -14,10 +14,11 @@ import type { Channel } from '../../lib/api'
 import { useAppStore } from '../../store/app'
 
 const SUBNAV = [
-  { label: 'Channels', path: '/configure/channels' },
-  { label: 'Integrations', path: '/configure/integrations' },
-  { label: 'Database', path: '/configure/database' },
-  { label: 'Webhooks', path: '/configure/webhooks' },
+  { label: 'Channels',      path: '/configure/channels' },
+  { label: 'Optimizations', path: '/configure/optimizations' },
+  { label: 'Integrations',  path: '/configure/integrations' },
+  { label: 'Database',      path: '/configure/database' },
+  { label: 'Webhooks',      path: '/configure/webhooks' },
 ]
 
 const KIND_META: Record<string, { label: string; description: string; icon: React.ReactNode; docsUrl?: string }> = {
@@ -41,6 +42,11 @@ function getEmbedCode(channelId: string): string {
   window.YBotTitle = 'Chat with us';
   window.YBotAccentColor = '#6366f1';
 </script>`
+}
+
+function getTestUrl(channelId: string): string {
+  const base = typeof window !== 'undefined' ? window.location.origin : ''
+  return `${base}/api/v1/widget-test/${channelId}`
 }
 
 export function ChannelsPage() {
@@ -139,13 +145,22 @@ export function ChannelsPage() {
                   </div>
                   <div className="flex items-center gap-1">
                     {ch.kind === 'web' && (
-                      <button
-                        title="View embed code"
-                        onClick={(e) => { e.stopPropagation(); setShowEmbed(ch) }}
-                        className="opacity-0 group-hover:opacity-100 p-1.5 rounded hover:bg-[var(--bg-overlay)] text-[var(--text-muted)] hover:text-[var(--accent)] transition-all"
-                      >
-                        <Code2 size={14} />
-                      </button>
+                      <>
+                        <button
+                          title="Test widget in new tab"
+                          onClick={(e) => { e.stopPropagation(); window.open(getTestUrl(ch.id), '_blank') }}
+                          className="opacity-0 group-hover:opacity-100 p-1.5 rounded hover:bg-[var(--bg-overlay)] text-[var(--text-muted)] hover:text-[var(--accent)] transition-all"
+                        >
+                          <FlaskConical size={14} />
+                        </button>
+                        <button
+                          title="View embed code"
+                          onClick={(e) => { e.stopPropagation(); setShowEmbed(ch) }}
+                          className="opacity-0 group-hover:opacity-100 p-1.5 rounded hover:bg-[var(--bg-overlay)] text-[var(--text-muted)] hover:text-[var(--accent)] transition-all"
+                        >
+                          <Code2 size={14} />
+                        </button>
+                      </>
                     )}
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
@@ -158,6 +173,7 @@ export function ChannelsPage() {
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
                         <DropdownMenuItem onClick={() => setSelected(ch)}><Pencil size={13} /> Settings</DropdownMenuItem>
+                        {ch.kind === 'web' && <DropdownMenuItem onClick={() => window.open(getTestUrl(ch.id), '_blank')}><FlaskConical size={13} /> Test widget</DropdownMenuItem>}
                         {ch.kind === 'web' && <DropdownMenuItem onClick={() => setShowEmbed(ch)}><Code2 size={13} /> Embed code</DropdownMenuItem>}
                         <DropdownMenuSeparator />
                         <DropdownMenuItem destructive onClick={() => deleteChannel.mutate(ch.id)}><Trash2 size={13} /> Delete</DropdownMenuItem>
@@ -220,6 +236,11 @@ export function ChannelsPage() {
               </DialogBody>
               <DialogFooter>
                 <Button variant="ghost" onClick={() => setSelected(null)}>Close</Button>
+                {selected.kind === 'web' && (
+                  <Button variant="ghost" className="gap-1.5" onClick={() => { setSelected(null); window.open(getTestUrl(selected.id), '_blank') }}>
+                    <FlaskConical size={14} /> Test Widget
+                  </Button>
+                )}
               </DialogFooter>
             </DialogContent>
           )
