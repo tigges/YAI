@@ -18,6 +18,7 @@ import { optimizationRoutes } from './routes/optimizations.js'
 import { startKnowledgeSyncWorker } from './workers/knowledge-sync.js'
 import { startWebhookWorker } from './workers/webhook-deliver.js'
 import { startConversationAnalysisWorker } from './workers/conversation-analysis.js'
+import { startCampaignWorker } from './workers/campaign-send.js'
 import { systemRoutes } from './routes/system.js'
 import { authMiddleware } from './middleware/auth.js'
 import { wsRoutes, broadcastToTenant } from './ws.js'
@@ -87,6 +88,7 @@ try {
   startKnowledgeSyncWorker().catch(() => {})
   startWebhookWorker().catch(() => {})
   startConversationAnalysisWorker().catch(() => {})
+  startCampaignWorker().catch(() => {})
   initQueues(process.env['REDIS_URL'] ?? 'redis://localhost:6379').catch(() => {})
   notifyDeployWebhook().catch(() => {})
 } catch (err) {

@@ -154,16 +154,18 @@ export const contacts = {
 // ── Campaigns + Templates ──────────────────────────────────────────────────────
 export const campaigns = {
   list: (botId: string) => apiFetch<{ data: Campaign[] }>(`/bots/${botId}/campaigns`),
-  create: (botId: string, body: { name: string; direction?: string; channel?: string; status?: 'draft' | 'running'; scheduledAt?: string }) =>
+  create: (botId: string, body: { name: string; direction?: string; channel?: string; status?: 'draft' | 'running'; scheduledAt?: string; subject?: string; body?: string }) =>
     apiFetch<{ data: Campaign }>(`/bots/${botId}/campaigns`, { method: 'POST', body: JSON.stringify(body) }),
   launch: (botId: string, id: string) =>
     apiFetch<{ data: { ok: boolean; status: string } }>(`/bots/${botId}/campaigns/${id}/launch`, { method: 'POST' }),
   pause: (botId: string, id: string) =>
     apiFetch<{ data: { ok: boolean; status: string } }>(`/bots/${botId}/campaigns/${id}/pause`, { method: 'POST' }),
-  update: (botId: string, id: string, body: Partial<{ name: string; status: string; scheduledAt: string }>) =>
+  update: (botId: string, id: string, body: Partial<{ name: string; status: string; scheduledAt: string; subject: string; body: string }>) =>
     apiFetch<{ data: unknown }>(`/bots/${botId}/campaigns/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
   delete: (botId: string, id: string) =>
     apiFetch<void>(`/bots/${botId}/campaigns/${id}`, { method: 'DELETE' }),
+  deliveries: (botId: string, id: string) =>
+    apiFetch<{ data: CampaignDelivery[] }>(`/bots/${botId}/campaigns/${id}/deliveries`),
 }
 
 // ── Channels ─────────────────────────────────────────────────────────────────
@@ -271,7 +273,8 @@ export interface Conversation { id: string; status: string; assignedTo?: string;
 export interface Message { id: string; direction: string; authorKind: string; content: { text: string }; createdAt: string }
 export interface Ticket { id: string; subject: string; status: string; priority: string; assignedTo?: string; tags: string[]; createdAt: string; conversation?: { contact?: Contact } }
 export interface Contact { id: string; displayName?: string; email?: string; phone?: string; metadata: Record<string, unknown>; createdAt: string }
-export interface Campaign { id: string; name: string; status: string; direction: string; scheduledAt?: string; sentAt?: string }
+export interface Campaign { id: string; name: string; channel: string; status: string; direction: string; subject?: string; body?: string; scheduledAt?: string; sentAt?: string; sent?: number; delivered?: number }
+export interface CampaignDelivery { id: string; contactId: string; email?: string; status: string; sentAt?: string; error?: string }
 export interface Template { id: string; name: string; channel: string; approvalStatus: string; content: Record<string, unknown>; variables: string[] }
 export interface Channel { id: string; name: string; kind: string; config: Record<string, unknown>; isActive: boolean; botId: string; createdAt: string }
 export interface Webhook { id: string; url: string; events: string[]; isActive: boolean; createdAt: string }

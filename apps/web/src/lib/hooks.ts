@@ -314,6 +314,31 @@ export function useCreateContact() {
   })
 }
 
+export function useUpdateContact() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, ...body }: { id: string; displayName?: string; email?: string; phone?: string }) =>
+      api.contacts.update(id, body),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['contacts'] }),
+  })
+}
+
+export function useDeleteContact() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (id: string) => api.contacts.delete(id),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['contacts'] }),
+  })
+}
+
+export function useContactConversations(contactId: string) {
+  return useQuery({
+    queryKey: ['contact-conversations', contactId],
+    queryFn: () => api.conversations.list({ contactId }).then((r) => r.data),
+    enabled: !!contactId,
+  })
+}
+
 // ── Campaigns & Templates ─────────────────────────────────────────────────────
 export function useCampaigns() {
   const bid = botId()
@@ -327,7 +352,7 @@ export function useCreateCampaign() {
   const bid = botId()
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: (body: { name: string; channel?: string; status?: 'draft' | 'running'; scheduledAt?: string }) =>
+    mutationFn: (body: { name: string; channel?: string; status?: 'draft' | 'running'; subject?: string; body?: string; scheduledAt?: string }) =>
       api.campaigns.create(bid, body).then((r) => r.data),
     onSuccess: () => { void qc.invalidateQueries({ queryKey: ['campaigns', bid] }) },
   })
@@ -485,12 +510,38 @@ export function useAnalyticsOverview() {
   })
 }
 
-export function useConversationTrends() {
+export function useConversationTrends(days = 7) {
   const bid = botId()
   return useQuery({
-    queryKey: ['analytics-trends', bid],
-    queryFn: withDemoFallback(() => api.analytics.conversations({ botId: bid }).then((r) => r.data), demo.DEMO_CONVERSATION_TRENDS),
+    queryKey: ['analytics-trends', bid, days],
+    queryFn: withDemoFallback(() => api.analytics.conversations({ botId: bid, days: String(days) }).then((r) => r.data), demo.DEMO_CONVERSATION_TRENDS),
     staleTime: 60_000,
+  })
+}
+
+export function useAnalyticsAgents(days = 30) {
+  return useQuery({
+    queryKey: ['analytics-agents', days],
+    queryFn: () => api.analytics.agents({ days: String(days) }).then((r) => r.data),
+    staleTime: 60_000,
+  })
+}
+
+export function useAnalyticsChannels() {
+  return useQuery({
+    queryKey: ['analytics-channels'],
+    queryFn: () => api.analytics.channels().then((r) => r.data),
+    staleTime: 60_000,
+  })
+}
+
+export function useCampaignDeliveries(campaignId: string) {
+  const bid = botId()
+  return useQuery({
+    queryKey: ['campaign-deliveries', campaignId],
+    queryFn: () => api.campaigns.deliveries(bid, campaignId).then((r) => r.data),
+    enabled: !!campaignId,
+    refetchInterval: 5000,
   })
 }
 
