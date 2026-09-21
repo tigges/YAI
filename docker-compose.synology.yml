@@ -108,3 +108,26 @@ services:
       WATCHTOWER_NOTIFICATIONS: "shoutrrr"
       TZ: ${TZ:-UTC}
     networks: [ybot-net]
+
+  # ── Cloudflare Tunnel — public HTTPS access without port forwarding ────────
+  # One-time setup:
+  #   1. dash.cloudflare.com → Zero Trust → Networks → Tunnels → Create tunnel
+  #   2. Name it "ybot", choose Docker, copy the token
+  #   3. Add CLOUDFLARE_TUNNEL_TOKEN=<token> to your .env.production on the NAS
+  #   4. In the Cloudflare dashboard "Route tunnel" step:
+  #      Subdomain: ybot (or anything you like)
+  #      Domain: your domain (or use a free .trycloudflare.com URL)
+  #      Service: http://caddy:80
+  #   5. Run: sudo docker compose -f docker-compose.yml -f docker-compose.synology.yml \
+  #             --env-file .env.production up -d cloudflared
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    container_name: ybot-cloudflared
+    restart: unless-stopped
+    command: tunnel --no-autoupdate run
+    environment:
+      TUNNEL_TOKEN: ${CLOUDFLARE_TUNNEL_TOKEN}
+    logging:
+      driver: "json-file"
+      options: { max-size: "5m", max-file: "2" }
+    networks: [ybot-net]
