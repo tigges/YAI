@@ -114,6 +114,8 @@ export const knowledge = {
 export const conversations = {
   list: (params?: Record<string, string>) => apiFetch<{ data: Conversation[] }>(`/conversations?${new URLSearchParams(params ?? {})}`),
   get: (id: string) => apiFetch<{ data: Conversation }>(`/conversations/${id}`),
+  create: (body: { botId: string; channelId?: string; contactId?: string; message?: string }) =>
+    apiFetch<{ data: Conversation }>('/conversations', { method: 'POST', body: JSON.stringify(body) }),
   update: (id: string, body: { status?: string; assignedTo?: string | null }) =>
     apiFetch<{ data: unknown }>(`/conversations/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
   messages: {
@@ -150,6 +152,25 @@ export const campaigns = {
   list: (botId: string) => apiFetch<{ data: Campaign[] }>(`/bots/${botId}/campaigns`),
   create: (botId: string, body: { name: string; direction?: string; scheduledAt?: string }) =>
     apiFetch<{ data: Campaign }>(`/bots/${botId}/campaigns`, { method: 'POST', body: JSON.stringify(body) }),
+  launch: (botId: string, id: string) =>
+    apiFetch<{ data: { ok: boolean; status: string } }>(`/bots/${botId}/campaigns/${id}/launch`, { method: 'POST' }),
+  pause: (botId: string, id: string) =>
+    apiFetch<{ data: { ok: boolean; status: string } }>(`/bots/${botId}/campaigns/${id}/pause`, { method: 'POST' }),
+  update: (botId: string, id: string, body: Partial<{ name: string; status: string; scheduledAt: string }>) =>
+    apiFetch<{ data: unknown }>(`/bots/${botId}/campaigns/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
+  delete: (botId: string, id: string) =>
+    apiFetch<void>(`/bots/${botId}/campaigns/${id}`, { method: 'DELETE' }),
+}
+
+// ── Channels ─────────────────────────────────────────────────────────────────
+export const channels = {
+  list: (botId: string) => apiFetch<{ data: Channel[] }>(`/bots/${botId}/channels`),
+  create: (botId: string, body: { name: string; kind: string; environmentId: string; config?: Record<string, unknown> }) =>
+    apiFetch<{ data: Channel }>(`/bots/${botId}/channels`, { method: 'POST', body: JSON.stringify(body) }),
+  update: (botId: string, id: string, body: Partial<{ name: string; config: Record<string, unknown>; isActive: boolean }>) =>
+    apiFetch<{ data: unknown }>(`/bots/${botId}/channels/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
+  delete: (botId: string, id: string) =>
+    apiFetch<void>(`/bots/${botId}/channels/${id}`, { method: 'DELETE' }),
 }
 export const templates = {
   list: (botId: string, params?: Record<string, string>) => apiFetch<{ data: Template[] }>(`/bots/${botId}/templates?${new URLSearchParams(params ?? {})}`),
@@ -179,10 +200,23 @@ export const team = {
 export const analytics = {
   overview: (botId?: string) => apiFetch<{ data: AnalyticsOverview }>(`/analytics/overview${botId ? `?botId=${botId}` : ''}`),
   conversations: (params?: Record<string, string>) => apiFetch<{ data: ConversationTrend[] }>(`/analytics/conversations?${new URLSearchParams(params ?? {})}`),
+  agents: (params?: Record<string, string>) => apiFetch<{ data: AgentStat[] }>(`/analytics/agents?${new URLSearchParams(params ?? {})}`),
+  channels: () => apiFetch<{ data: ChannelStat[] }>('/analytics/channels'),
 }
 
 export const audit = {
   list: (params?: Record<string, string>) => apiFetch<{ data: AuditEvent[] }>(`/audit?${new URLSearchParams(params ?? {})}`),
+}
+
+export const optimizations = {
+  list: (botId: string, status?: string) =>
+    apiFetch<{ data: TemplateOptimization[] }>(`/bots/${botId}/optimizations${status ? `?status=${status}` : ''}`),
+  get: (botId: string, id: string) =>
+    apiFetch<{ data: TemplateOptimization }>(`/bots/${botId}/optimizations/${id}`),
+  apply: (botId: string, id: string) =>
+    apiFetch<{ data: TemplateOptimization }>(`/bots/${botId}/optimizations/${id}/apply`, { method: 'POST' }),
+  dismiss: (botId: string, id: string) =>
+    apiFetch<{ data: TemplateOptimization }>(`/bots/${botId}/optimizations/${id}/dismiss`, { method: 'POST' }),
 }
 
 export const preview = {
@@ -235,11 +269,14 @@ export interface Ticket { id: string; subject: string; status: string; priority:
 export interface Contact { id: string; displayName?: string; email?: string; phone?: string; metadata: Record<string, unknown>; createdAt: string }
 export interface Campaign { id: string; name: string; status: string; direction: string; scheduledAt?: string; sentAt?: string }
 export interface Template { id: string; name: string; channel: string; approvalStatus: string; content: Record<string, unknown>; variables: string[] }
+export interface Channel { id: string; name: string; kind: string; config: Record<string, unknown>; isActive: boolean; botId: string; createdAt: string }
 export interface Webhook { id: string; url: string; events: string[]; isActive: boolean; createdAt: string }
 export interface Label { id: string; name: string; color: string }
 export interface TeamMember { id: string; displayName: string; email: string; memberships: Array<{ role: string }>; agentProfile?: { status: string } }
 export interface AnalyticsOverview { totalConversations: number; resolvedConversations: number; resolutionRate: number; escalationRate: number; totalContacts: number; csatScore: number; avgResponseTimeMs: number; botHandledPct: number }
 export interface ConversationTrend { date: string; conversations: number; resolved: number; escalated: number }
+export interface AgentStat { agentId: string; name: string; total: number; resolved: number; escalated: number; resolutionRate: number }
+export interface ChannelStat { channelId: string; name: string; total: number }
 export interface AuditEvent { id: string; action: string; resource?: string; metadata: Record<string, unknown>; createdAt: string; user?: { displayName: string; email: string } }
 
 export interface DockerContainer { id: string; name: string; image: string; state: string; status: string; created?: number }
@@ -261,4 +298,22 @@ export interface SystemConfig {
   storage: { S3_ENDPOINT: ConfigEntry; S3_BUCKET: ConfigEntry; S3_REGION: ConfigEntry }
   llm: { OPENAI_API_KEY: ConfigEntry; ANTHROPIC_API_KEY: ConfigEntry; GROQ_API_KEY: ConfigEntry; OLLAMA_BASE_URL: ConfigEntry }
   app: { NODE_ENV: ConfigEntry; FRONTEND_URL: ConfigEntry }
+}
+
+export interface TemplateOptimization {
+  id: string
+  tenantId: string
+  botId: string
+  templateId?: string | null
+  kind: string
+  title: string
+  description: string
+  currentValue?: string | null
+  proposedValue: string
+  evidenceCount: number
+  avgQualityScore: number
+  status: 'pending' | 'applied' | 'dismissed'
+  appliedAt?: string | null
+  createdAt: string
+  updatedAt: string
 }

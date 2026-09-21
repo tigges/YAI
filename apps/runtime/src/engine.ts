@@ -48,7 +48,7 @@ export class SessionMachine {
   }
 
   // Run the flow graph from a given node, continuing until waiting_input, handover, or end
-  async run(session: Session, graph: FlowGraph, incomingText?: string): Promise<{
+  async run(session: Session, graph: FlowGraph, incomingText?: string, streamChunk?: (chunk: string) => void): Promise<{
     session: Session
     newMessages: Array<{ direction: 'outbound'; content: { text: string } }>
     waitForInput?: Session['waitingFor']
@@ -94,6 +94,7 @@ export class SessionMachine {
         config: node.data.config ?? {},
         input: session.variables.flow,
         services: this.services,
+        streamChunk: node.data.kind === 'llm_generate' ? streamChunk : undefined,
       }
 
       const result = await executor(ctx)

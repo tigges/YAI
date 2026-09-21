@@ -2,12 +2,68 @@ import type { FastifyInstance } from 'fastify'
 import { PrismaClient } from '@ybot/db'
 import { z } from 'zod'
 import { processInboundMessage } from '../runtime-bridge.js'
+import { enqueueConversationAnalysis } from '../queues.js'
 
 const prisma = new PrismaClient()
 type JWT = { sub: string; tenantId: string; role: string }
 
 export async function conversationsRoutes(app: FastifyInstance) {
   app.addHook('preHandler', app.authenticate)
+
+  // POST /conversations — create a new conversation (agent-initiated or test)
+  app.post('/', async (request, reply) => {
+    const { tenantId, sub: userId } = request.user as JWT
+    const body = z.object({
+      botId: z.string().min(1),
+      channelId: z.string().optional(),
+      contactId: z.string().optional(),
+      message: z.string().min(1).optional(),
+    }).safeParse(request.body)
+    if (!body.success) return reply.status(400).send({ error: { code: 'VALIDATION', details: body.error.flatten() } })
+
+    const bot = await prisma.bot.findFirst({ where: { id: body.data.botId, tenantId } })
+    if (!bot) return reply.status(404).send({ error: { code: 'NOT_FOUND', message: 'Bot not found' } })
+
+    const env = await prisma.environment.findFirst({ where: { botId: body.data.botId } })
+    if (!env) return reply.status(422).send({ error: { code: 'NO_ENVIRONMENT', message: 'Bot has no environment' } })
+
+    const convo = await prisma.conversation.create({
+      data: {
+        tenantId,
+        botId: body.data.botId,
+        environmentId: env.id,
+        channelId: body.data.channelId,
+        contactId: body.data.contactId,
+        assignedTo: userId,
+        status: 'active',
+      },
+      include: {
+        contact: true,
+        channel: { select: { id: true, name: true, kind: true } },
+        messages: { orderBy: { createdAt: 'desc' }, take: 1 },
+        labels: { include: { label: true } },
+        _count: { select: { messages: true } },
+      },
+    })
+
+    if (body.data.message) {
+      await prisma.message.create({
+        data: {
+          tenantId,
+          conversationId: convo.id,
+          direction: 'inbound',
+          authorKind: 'agent',
+          authorId: userId,
+          content: { text: body.data.message },
+        },
+      })
+    }
+
+    // Broadcast WS event so Inbox updates in real-time
+    try { (app as unknown as { broadcastToTenant(tid: string, e: object): void }).broadcastToTenant(tenantId, { event: 'conversation.created', data: convo }) } catch { /* ignore */ }
+
+    return reply.status(201).send({ data: convo })
+  })
 
   // GET /conversations  (with filters)
   app.get('/', async (request) => {
@@ -57,6 +113,15 @@ export async function conversationsRoutes(app: FastifyInstance) {
     }).safeParse(request.body)
     if (!body.success) return reply.status(400).send({ error: { code: 'VALIDATION', details: body.error.flatten() } })
     const convo = await prisma.conversation.updateMany({ where: { id, tenantId }, data: { ...body.data, ...(body.data.status === 'resolved' ? { resolvedAt: new Date() } : {}) } })
+
+    // Trigger quality analysis for resolved conversations
+    if (body.data.status === 'resolved') {
+      const full = await prisma.conversation.findFirst({ where: { id, tenantId } })
+      if (full) {
+        enqueueConversationAnalysis({ conversationId: id, tenantId, botId: full.botId }).catch(() => {})
+      }
+    }
+
     return { data: convo }
   })
 

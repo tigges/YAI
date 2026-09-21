@@ -13,10 +13,15 @@ import { conversationsRoutes, ticketsRoutes, contactsRoutes } from './routes/inb
 import { campaignsRoutes, templatesRoutes } from './routes/engage.js'
 import { channelsRoutes, webhooksRoutes, teamRoutes, analyticsRoutes, auditRoutes } from './routes/config.js'
 import { previewRoutes } from './routes/preview.js'
+import { widgetRoutes } from './routes/widget.js'
+import { optimizationRoutes } from './routes/optimizations.js'
 import { startKnowledgeSyncWorker } from './workers/knowledge-sync.js'
+import { startWebhookWorker } from './workers/webhook-deliver.js'
+import { startConversationAnalysisWorker } from './workers/conversation-analysis.js'
 import { systemRoutes } from './routes/system.js'
 import { authMiddleware } from './middleware/auth.js'
 import { wsRoutes, broadcastToTenant } from './ws.js'
+import { initQueues } from './queues.js'
 
 const PORT = parseInt(process.env['PORT'] ?? '3001', 10)
 const HOST = process.env['HOST'] ?? '0.0.0.0'
@@ -72,12 +77,17 @@ await app.register(teamRoutes, { prefix: '/api/v1/team' })
 await app.register(analyticsRoutes, { prefix: '/api/v1/analytics' })
 await app.register(auditRoutes, { prefix: '/api/v1/audit' })
 await app.register(previewRoutes, { prefix: '/api/v1/bots' })
+await app.register(widgetRoutes, { prefix: '/api/v1' })
+await app.register(optimizationRoutes, { prefix: '/api/v1/bots' })
 await app.register(systemRoutes, { prefix: '/api/v1/system' })
 
 try {
   await app.listen({ port: PORT, host: HOST })
   console.log(`API running on http://${HOST}:${PORT}`)
   startKnowledgeSyncWorker().catch(() => {})
+  startWebhookWorker().catch(() => {})
+  startConversationAnalysisWorker().catch(() => {})
+  initQueues(process.env['REDIS_URL'] ?? 'redis://localhost:6379').catch(() => {})
 } catch (err) {
   app.log.error(err)
   process.exit(1)

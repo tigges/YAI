@@ -2,18 +2,12 @@
  * Runtime bridge: handles inbound messages and runs the SessionMachine OR
  * falls back to a direct RAG → Claude path when no published flow exists.
  *
- * Flow (with published flow):
- *  1. Inbound user message arrives at POST /conversations/:id/messages
- *  2. Load/create a Session in Redis (Valkey)
- *  3. Run SessionMachine against the flow graph
- *  4. Persist bot reply messages, broadcast over WS
- *
- * Flow (no published flow / direct LLM mode):
- *  1. Embed user message via OpenAI text-embedding-3-small
- *  2. pgvector cosine search over DocumentChunk for top-5 context chunks
- *  3. Stream Anthropic Claude ragComplete() — each chunk is broadcast
- *     as { event: 'message.chunk', data: { conversationId, chunk } }
- *  4. When stream completes, save full bot message, broadcast message.created
+ * Direct LLM mode (no published flow):
+ *  1. Load per-bot LLM config (model, temperature, systemPrompt) from BotConfig
+ *  2. Load last 10 messages for multi-turn conversation memory
+ *  3. Embed user message → pgvector cosine search for RAG context
+ *  4. Stream ragComplete() — each chunk broadcast as message.chunk over WS
+ *  5. Save complete message → broadcast message.created
  */
 
 import type { FastifyInstance } from 'fastify'
@@ -21,6 +15,7 @@ import { PrismaClient } from '@ybot/db'
 import { SessionMachine } from '@ybot/runtime'
 import type { Session, ExecutionServices } from '@ybot/runtime'
 import { createLlmAdapter, createEmbeddingAdapter } from '@ybot/llm'
+import type { LlmMessage } from '@ybot/llm'
 
 const prisma = new PrismaClient()
 const llm = createLlmAdapter()
@@ -68,6 +63,49 @@ function buildServices(): ExecutionServices {
   return { llm, db: prisma, httpFetch: fetch }
 }
 
+// ── Per-bot LLM config ────────────────────────────────────────────────────────
+interface BotLlmConfig {
+  model: string
+  temperature: number
+  maxTokens: number
+  systemPrompt: string
+}
+
+async function loadBotConfig(botId: string, botName: string): Promise<BotLlmConfig> {
+  try {
+    const cfg = await prisma.botConfig.findUnique({ where: { botId } })
+    if (cfg) return { model: cfg.model, temperature: cfg.temperature, maxTokens: cfg.maxTokens, systemPrompt: cfg.systemPrompt }
+  } catch { /* table may not exist yet before migration */ }
+  return {
+    model: 'claude-sonnet-4-5',
+    temperature: 0.3,
+    maxTokens: 2048,
+    systemPrompt: `You are a helpful assistant for ${botName}. Answer using the provided knowledge base context. Be concise and professional. If the answer is not in the context, say so.`,
+  }
+}
+
+// ── Conversation history (multi-turn memory) ──────────────────────────────────
+async function loadHistory(conversationId: string, limit = 10): Promise<LlmMessage[]> {
+  try {
+    const messages = await prisma.message.findMany({
+      where: { conversationId },
+      orderBy: { createdAt: 'desc' },
+      take: limit * 2, // over-fetch so we can pick full pairs
+    })
+    // Reverse to chronological order, map to LlmMessage roles
+    return messages
+      .reverse()
+      .map((m: { direction: string; content: unknown }) => ({
+        role: (m.direction === 'inbound' ? 'user' : 'assistant') as 'user' | 'assistant',
+        content: (m.content as { text?: string })?.text ?? '',
+      }))
+      .filter((m: { content: string }) => m.content.trim().length > 0)
+      .slice(-limit)
+  } catch {
+    return []
+  }
+}
+
 // ── RAG search ────────────────────────────────────────────────────────────────
 async function searchRag(query: string, tenantId: string, botId: string, topK = 5): Promise<string[]> {
   try {
@@ -75,8 +113,8 @@ async function searchRag(query: string, tenantId: string, botId: string, topK = 
     const embedding = embedResult.embeddings[0]
     if (!embedding || embedding.length === 0) return []
 
-    const rows = await (prisma.$queryRawUnsafe as (sql: string, ...params: unknown[]) => Promise<Array<{ content: string; similarity: number }>>)(
-      `SELECT dc.content, 1 - (dc.embedding <=> $1::vector) AS similarity
+    const rows = await (prisma.$queryRawUnsafe as (sql: string, ...params: unknown[]) => Promise<Array<{ content: string }>>)(
+      `SELECT dc.content
        FROM "document_chunks" dc
        JOIN "documents" d ON dc."documentId" = d.id
        JOIN "knowledge_sources" ks ON d."knowledgeSourceId" = ks.id
@@ -102,25 +140,39 @@ async function handleDirectLlm(
   conversationId: string,
   tenantId: string,
   botId: string,
+  botName: string,
   incomingText: string,
-  systemPrompt: string,
 ): Promise<void> {
-  const context = await searchRag(incomingText, tenantId, botId)
+  const [config, context, history] = await Promise.all([
+    loadBotConfig(botId, botName),
+    searchRag(incomingText, tenantId, botId),
+    loadHistory(conversationId),
+  ])
 
-  // Accumulate streamed chunks; broadcast each one over WS
+  // Build context block
+  const contextBlock = context.length > 0
+    ? `\n\n--- KNOWLEDGE BASE ---\n${context.map((c, i) => `[${i + 1}] ${c}`).join('\n\n')}\n--- END KNOWLEDGE BASE ---\n\nUse only the above context to answer. If the answer isn't there, say you don't know.`
+    : ''
+
+  // Compose messages: history (excluding the new message, which is already last) + current
+  // loadHistory returns messages up to but not including the current one, since it was just saved
+  const messages: LlmMessage[] = [
+    ...history,
+    { role: 'user', content: incomingText },
+  ]
+
   let fullContent = ''
   const onChunk = (chunk: string) => {
     fullContent += chunk
-    app.broadcastToTenant(tenantId, {
-      event: 'message.chunk',
-      data: { conversationId, chunk },
-    })
+    app.broadcastToTenant(tenantId, { event: 'message.chunk', data: { conversationId, chunk } })
   }
 
-  await llm.ragComplete({
-    question: incomingText,
-    context,
-    systemPrompt,
+  await llm.stream({
+    messages,
+    systemPrompt: config.systemPrompt + contextBlock,
+    model: config.model,
+    temperature: config.temperature,
+    maxTokens: config.maxTokens,
     onChunk,
   })
 
@@ -132,7 +184,6 @@ async function handleDirectLlm(
     data: { tenantId, conversationId, direction: 'outbound', authorKind: 'bot', content: { text: fullContent } },
   })
   await prisma.conversation.update({ where: { id: conversationId }, data: { updatedAt: new Date() } })
-
   app.broadcastToTenant(tenantId, { event: 'message.created', data: saved })
 }
 
@@ -161,17 +212,11 @@ export async function processInboundMessage(
 
     const flow = convo.bot.flows?.[0]
     const version = flow?.versions?.[0]
+    const botId = convo.botId ?? convo.bot.id
 
-    // ── No published flow → use direct RAG + LLM path ──────────────────────
+    // ── No published flow → direct RAG + LLM path ──────────────────────────
     if (!flow || !version?.graph) {
-      await handleDirectLlm(
-        app,
-        conversationId,
-        tenantId,
-        convo.botId ?? convo.bot.id,
-        incomingText,
-        `You are a helpful assistant for ${convo.bot.name}. Answer using only the provided knowledge base context. If you don't know, say so politely.`,
-      )
+      await handleDirectLlm(app, conversationId, tenantId, botId, convo.bot.name, incomingText)
       return
     }
 
@@ -186,7 +231,7 @@ export async function processInboundMessage(
       session = {
         id: `s_${Date.now()}`,
         conversationId,
-        botId: convo.botId ?? convo.bot.id,
+        botId,
         tenantId,
         flowId: flow.id,
         flowVersionId: version.id,
@@ -201,7 +246,11 @@ export async function processInboundMessage(
     }
 
     const machine = new SessionMachine(buildServices())
-    const result = await machine.run(session, graph, incomingText)
+    // Pass a streamChunk callback so llm_generate nodes emit real-time WS events
+    const flowStreamChunk = (chunk: string) => {
+      app.broadcastToTenant(tenantId, { event: 'message.chunk', data: { conversationId, chunk } })
+    }
+    const result = await machine.run(session, graph, incomingText, flowStreamChunk)
 
     for (const msg of result.newMessages) {
       const saved = await prisma.message.create({

@@ -31,6 +31,8 @@ export interface NodeContext {
   config: Record<string, unknown>
   input: Record<string, unknown>
   services: ExecutionServices
+  /** Optional callback invoked with each streamed token for llm_generate nodes */
+  streamChunk?: (chunk: string) => void
 }
 
 // What a node returns

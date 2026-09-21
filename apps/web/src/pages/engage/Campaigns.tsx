@@ -12,7 +12,7 @@ import {
 } from '@ybot/ui'
 import { SubNav } from '../../components/SubNav'
 import { cn } from '@ybot/ui'
-import { useCampaigns } from '../../lib/hooks'
+import { useCampaigns, useLaunchCampaign, usePauseCampaign, useDeleteCampaign } from '../../lib/hooks'
 
 const SUBNAV = [
   { label: 'Campaigns', path: '/engage/campaigns' },
@@ -62,11 +62,13 @@ function pct(a?: number, b?: number): string {
 
 export function CampaignsPage() {
   const { data: rawCampaigns = [], isLoading } = useCampaigns()
+  const launchCampaign = useLaunchCampaign()
+  const pauseCampaign = usePauseCampaign()
+  const deleteCampaign = useDeleteCampaign()
   const [search, setSearch] = useState('')
   const [showNew, setShowNew] = useState(false)
   const [newName, setNewName] = useState('')
 
-  // Merge API data with local mock defaults for display fields
   const campaigns = (rawCampaigns as unknown as Campaign[])
   const filtered = campaigns.filter((c) => !search || c.name.toLowerCase().includes(search.toLowerCase()))
 
@@ -172,10 +174,18 @@ export function CampaignsPage() {
                       <DropdownMenuContent align="end">
                         <DropdownMenuItem>View report</DropdownMenuItem>
                         <DropdownMenuItem>Duplicate</DropdownMenuItem>
-                        {c.status === 'running' && <DropdownMenuItem>Pause</DropdownMenuItem>}
-                        {c.status === 'paused' && <DropdownMenuItem>Resume</DropdownMenuItem>}
+                        {(c.status === 'draft' || c.status === 'paused') && (
+                          <DropdownMenuItem onClick={() => launchCampaign.mutate(c.id)}>
+                            <Play size={13} /> {c.status === 'paused' ? 'Resume' : 'Launch'}
+                          </DropdownMenuItem>
+                        )}
+                        {(c.status === 'running' || c.status === 'scheduled') && (
+                          <DropdownMenuItem onClick={() => pauseCampaign.mutate(c.id)}>
+                            <Pause size={13} /> Pause
+                          </DropdownMenuItem>
+                        )}
                         <DropdownMenuSeparator />
-                        <DropdownMenuItem destructive>Delete</DropdownMenuItem>
+                        <DropdownMenuItem destructive onClick={() => deleteCampaign.mutate(c.id)}>Delete</DropdownMenuItem>
                       </DropdownMenuContent>
                     </DropdownMenu>
                   </td>

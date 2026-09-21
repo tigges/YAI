@@ -14,6 +14,7 @@ import {
   FileText,
   Repeat2,
   Server,
+  Sparkles,
   type LucideIcon,
 } from 'lucide-react'
 
@@ -125,6 +126,13 @@ export const NAV_GROUPS: NavGroup[] = [
         label: 'Channels',
         icon: Globe,
         path: '/configure/channels',
+      },
+      {
+        id: 'optimizations',
+        label: 'Optimizations',
+        icon: Sparkles,
+        path: '/configure/optimizations',
+        badge: 'AI',
       },
       {
         id: 'integrations',
