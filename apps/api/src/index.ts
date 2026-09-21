@@ -15,6 +15,8 @@ import { channelsRoutes, webhooksRoutes, teamRoutes, analyticsRoutes, auditRoute
 import { previewRoutes } from './routes/preview.js'
 import { widgetRoutes } from './routes/widget.js'
 import { optimizationRoutes } from './routes/optimizations.js'
+import { workflowsRoutes } from './routes/workflows.js'
+import { dashboardsRoutes } from './routes/dashboards.js'
 import { startKnowledgeSyncWorker } from './workers/knowledge-sync.js'
 import { startWebhookWorker } from './workers/webhook-deliver.js'
 import { startConversationAnalysisWorker } from './workers/conversation-analysis.js'
@@ -80,6 +82,8 @@ await app.register(auditRoutes, { prefix: '/api/v1/audit' })
 await app.register(previewRoutes, { prefix: '/api/v1/bots' })
 await app.register(widgetRoutes, { prefix: '/api/v1' })
 await app.register(optimizationRoutes, { prefix: '/api/v1/bots' })
+await app.register(workflowsRoutes, { prefix: '/api/v1/bots' })
+await app.register(dashboardsRoutes, { prefix: '/api/v1/bots' })
 await app.register(systemRoutes, { prefix: '/api/v1/system' })
 
 try {
