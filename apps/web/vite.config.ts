@@ -1,6 +1,15 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
+
+// Read the root package.json version at config time so it's always up to date
+const rootPkg = JSON.parse(readFileSync(resolve(__dirname, '../../package.json'), 'utf-8')) as { version: string }
+const appVersion = process.env['VITE_APP_VERSION'] ?? rootPkg.version
+const buildNumber = process.env['VITE_BUILD_NUMBER'] ?? 'local'
+const gitSha     = process.env['VITE_GIT_SHA']     ?? 'dev'
+const buildDate  = process.env['VITE_BUILD_DATE']  ?? new Date().toISOString()
 
 export default defineConfig({
   // GitHub Pages serves from /YAI/; Docker/self-hosted serves from /.
@@ -10,6 +19,12 @@ export default defineConfig({
     react(),
     tailwindcss(),
   ],
+  define: {
+    __APP_VERSION__:  JSON.stringify(appVersion),
+    __BUILD_NUMBER__: JSON.stringify(buildNumber),
+    __GIT_SHA__:      JSON.stringify(gitSha),
+    __BUILD_DATE__:   JSON.stringify(buildDate),
+  },
   server: {
     port: 5173,
     proxy: {

@@ -287,6 +287,7 @@ export interface SystemStatus {
   containers: DockerContainer[]
   rag: { sources: number; documents: number; chunks: number; sourceList: RagSourceEntry[] }
   system: { platform: string; uptime: number; nodeVersion: string; cpuCount: number; totalMemMb: number; freeMemMb: number; usedMemPct: number }
+  version?: { version: string; buildNumber: string; gitSha: string; buildDate: string }
   ts: string
 }
 
