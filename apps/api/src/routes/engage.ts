@@ -18,9 +18,27 @@ export async function campaignsRoutes(app: FastifyInstance) {
   app.post('/:botId/campaigns', async (request, reply) => {
     const { tenantId } = request.user as JWT
     const { botId } = request.params as { botId: string }
-    const body = z.object({ name: z.string().min(1), direction: z.string().default('outbound'), scheduledAt: z.string().optional() }).safeParse(request.body)
+    const body = z.object({
+      name:        z.string().min(1),
+      direction:   z.string().default('outbound'),
+      channel:     z.string().optional(),
+      status:      z.enum(['draft', 'scheduled', 'running']).default('draft'),
+      scheduledAt: z.string().optional(),
+    }).safeParse(request.body)
     if (!body.success) return reply.status(400).send({ error: { code: 'VALIDATION', details: body.error.flatten() } })
-    return reply.status(201).send({ data: await prisma.campaign.create({ data: { ...body.data, tenantId, botId, scheduledAt: body.data.scheduledAt ? new Date(body.data.scheduledAt) : undefined } }) })
+    const campaign = await prisma.campaign.create({
+      data: {
+        ...body.data,
+        tenantId,
+        botId,
+        scheduledAt: body.data.scheduledAt ? new Date(body.data.scheduledAt) : undefined,
+      },
+    })
+    // If created with status 'running', treat as immediate launch
+    if (body.data.status === 'running') {
+      await enqueueCampaignSend({ tenantId, botId, campaignId: campaign.id }).catch(() => {})
+    }
+    return reply.status(201).send({ data: campaign })
   })
 
   app.patch('/:botId/campaigns/:id', async (request, reply) => {
