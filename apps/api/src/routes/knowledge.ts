@@ -169,4 +169,25 @@ export async function knowledgeRoutes(app: FastifyInstance) {
     await prisma.activity.create({ data: { tenantId, userId: (request.user as JWT).sub, action: 'training.updated', resource: 'bot', resourceId: botId } })
     return { data: cfg }
   })
+
+  // GET/PATCH /:botId/inbox-config — inbox operational settings
+  app.get('/:botId/inbox-config', async (request) => {
+    const { tenantId } = request.user as JWT
+    const { botId } = request.params as { botId: string }
+    const cfg = await prisma.botConfig.findUnique({ where: { botId } })
+    return { data: (cfg?.inboxConfig as object) ?? {} }
+  })
+
+  app.patch('/:botId/inbox-config', async (request, reply) => {
+    const { tenantId } = request.user as JWT
+    const { botId } = request.params as { botId: string }
+    const body = z.record(z.any()).safeParse(request.body)
+    if (!body.success) return reply.status(400).send({ error: { code: 'VALIDATION' } })
+    const cfg = await prisma.botConfig.upsert({
+      where: { botId },
+      create: { tenantId, botId, model: 'claude-sonnet-4-5', temperature: 0.3, maxTokens: 2048, systemPrompt: 'You are a helpful assistant.', inboxConfig: body.data },
+      update: { inboxConfig: body.data },
+    })
+    return { data: cfg.inboxConfig }
+  })
 }

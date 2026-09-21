@@ -1,5 +1,6 @@
 import type { FastifyInstance } from 'fastify'
 import { PrismaClient } from '@ybot/db'
+import { z } from 'zod'
 
 const prisma = new PrismaClient()
 
@@ -17,7 +18,7 @@ export async function meRoutes(app: FastifyInstance) {
 
     const user = await prisma.user.findUnique({
       where: { id: userId },
-      include: { memberships: true },
+      include: { memberships: true, agentProfile: true },
     })
 
     if (!user) {
@@ -32,7 +33,33 @@ export async function meRoutes(app: FastifyInstance) {
         avatarUrl: user.avatarUrl,
         tenantId,
         role: user.memberships[0]?.role ?? 'DEVELOPER',
+        status: user.agentProfile?.status ?? 'offline',
       },
     }
+  })
+
+  // PATCH /me — update current user's agent status
+  app.patch('/', async (request, reply) => {
+    const { sub: userId, tenantId } = request.user as JwtPayload
+    const body = z.object({
+      status: z.enum(['online', 'away', 'offline']).optional(),
+      displayName: z.string().min(1).optional(),
+    }).safeParse(request.body)
+    if (!body.success) return reply.status(400).send({ error: { code: 'VALIDATION', details: body.error.flatten() } })
+
+    const { status, displayName } = body.data
+
+    if (status !== undefined) {
+      await prisma.agentProfile.upsert({
+        where: { userId },
+        create: { tenantId, userId, displayName: displayName ?? 'Agent', status },
+        update: { status },
+      })
+    }
+    if (displayName !== undefined) {
+      await prisma.user.update({ where: { id: userId }, data: { displayName } })
+    }
+
+    return reply.send({ data: { ok: true } })
   })
 }

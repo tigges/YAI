@@ -1,7 +1,7 @@
 import React, { useState } from 'react'
 import {
   BookOpen, Plus, Globe, FileText, Link2, RefreshCw,
-  CheckCircle, AlertCircle, Clock, Trash2
+  CheckCircle, AlertCircle, Clock, Trash2, Loader2
 } from 'lucide-react'
 import { Button, Badge, EmptyState, Card } from '@ybot/ui'
 import { SubNav } from '../../../components/SubNav'
@@ -10,7 +10,7 @@ import {
   Input,
 } from '@ybot/ui'
 import { cn } from '@ybot/ui'
-import { useSources, useSyncSource, useDeleteSource } from '../../../lib/hooks'
+import { useSources, useCreateSource, useSyncSource, useDeleteSource } from '../../../lib/hooks'
 
 const SUBNAV = [
   { label: 'Intents', path: '/build/knowledge/intents' },
@@ -58,18 +58,29 @@ const STATUS_ICON: Record<Source['status'], React.ElementType> = {
 
 export function SourcesPage() {
   const { data: sources = [], isLoading } = useSources()
+  const createSource = useCreateSource()
   const syncSource = useSyncSource()
   const deleteSource = useDeleteSource()
   const [showAdd, setShowAdd] = useState(false)
   const [newUrl, setNewUrl] = useState('')
   const [newName, setNewName] = useState('')
   const [newKind, setNewKind] = useState<'website' | 'url' | 'file'>('url')
+  const [addError, setAddError] = useState('')
 
-  function addSource() {
-    // Real implementation would call api.knowledge.sources.create
-    setShowAdd(false)
-    setNewUrl('')
-    setNewName('')
+  async function addSource() {
+    if (!newName.trim()) return
+    setAddError('')
+    try {
+      await createSource.mutateAsync({
+        name: newName.trim(),
+        kind: newKind,
+        config: newKind !== 'file' ? { url: newUrl.trim() } : {},
+      })
+      setShowAdd(false)
+      setNewUrl('')
+      setNewName('')
+      setAddError('')
+    } catch (e) { setAddError(e instanceof Error ? e.message : 'Failed to add source') }
   }
 
   function handleDelete(id: string) {
@@ -205,11 +216,17 @@ export function SourcesPage() {
                   </div>
                 </div>
               )}
+              {addError && (
+                <p className="text-xs text-[var(--danger)] bg-[var(--danger)]/10 rounded px-3 py-2">{addError}</p>
+              )}
             </div>
           </DialogBody>
           <DialogFooter>
             <Button variant="secondary" onClick={() => setShowAdd(false)}>Cancel</Button>
-            <Button onClick={addSource} disabled={!newName.trim()}>Add Source</Button>
+            <Button onClick={addSource} disabled={!newName.trim() || createSource.isPending}>
+              {createSource.isPending ? <Loader2 size={13} className="animate-spin mr-1" /> : null}
+              Add Source
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

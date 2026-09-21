@@ -11,6 +11,7 @@ import {
   Beaker,
   Rocket,
   Loader2,
+  Circle,
 } from 'lucide-react'
 import {
   Avatar,
@@ -25,6 +26,7 @@ import {
 } from '@ybot/ui'
 import { useAppStore } from '../store/app'
 import { apiFetch } from '../lib/api'
+import { useAgentStatus, useUpdateAgentStatus } from '../lib/hooks'
 
 interface TopBarProps {
   darkMode: boolean
@@ -34,6 +36,12 @@ interface TopBarProps {
 export function TopBar({ darkMode, onToggleDark }: TopBarProps) {
   const navigate = useNavigate()
   const { user, bots, botsLoading, selectedBotId, selectedEnv, selectBot, setEnv, clearAuth } = useAppStore()
+  const { data: agentStatus = 'offline' } = useAgentStatus()
+  const updateStatus = useUpdateAgentStatus()
+
+  const STATUS_COLOR: Record<string, string> = {
+    online: 'var(--success)', away: 'var(--warning)', offline: 'var(--text-muted)',
+  }
 
   const selectedBot = bots.find((b) => b.id === selectedBotId)
 
@@ -139,7 +147,10 @@ export function TopBar({ darkMode, onToggleDark }: TopBarProps) {
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <button className="flex items-center gap-2 rounded-[var(--radius)] px-2 py-1 hover:bg-[var(--bg-hover)] transition-colors">
-              <Avatar name={user?.displayName} src={user?.avatarUrl ?? null} size="sm" />
+              <div className="relative">
+                <Avatar name={user?.displayName} src={user?.avatarUrl ?? null} size="sm" />
+                <span className="absolute bottom-0 right-0 h-2 w-2 rounded-full border-2 border-[var(--bg-surface)]" style={{ background: STATUS_COLOR[agentStatus] ?? STATUS_COLOR.offline }} />
+              </div>
               <span className="text-sm text-[var(--text-secondary)] hidden md:block">
                 {user?.displayName}
               </span>
@@ -147,6 +158,15 @@ export function TopBar({ darkMode, onToggleDark }: TopBarProps) {
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
             <DropdownMenuLabel>{user?.email}</DropdownMenuLabel>
+            <DropdownMenuSeparator />
+            <DropdownMenuLabel className="text-xs text-[var(--text-muted)] font-normal">Status</DropdownMenuLabel>
+            {(['online', 'away', 'offline'] as const).map((s) => (
+              <DropdownMenuItem key={s} onClick={() => updateStatus.mutate(s)}>
+                <Circle size={8} style={{ fill: STATUS_COLOR[s], color: STATUS_COLOR[s] }} />
+                <span className="capitalize">{s}</span>
+                {agentStatus === s && <span className="ml-auto text-xs text-[var(--accent)]">✓</span>}
+              </DropdownMenuItem>
+            ))}
             <DropdownMenuSeparator />
             <DropdownMenuItem onClick={() => navigate({ to: '/settings' })}>
               <Settings size={14} /> Settings
