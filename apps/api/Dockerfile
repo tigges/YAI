@@ -68,6 +68,8 @@ COPY --from=builder /app/apps/runtime/dist             apps/runtime/dist/
 COPY --from=builder /app/apps/runtime/package.json     apps/runtime/package.json
 COPY --from=builder /app/apps/api/dist                 apps/api/dist/
 COPY --from=builder /app/apps/api/package.json         apps/api/package.json
+COPY apps/api/docker-entrypoint.sh ./docker-entrypoint.sh
+RUN chmod +x docker-entrypoint.sh
 
 EXPOSE 3001
-CMD ["node", "apps/api/dist/index.js"]
+CMD ["sh", "docker-entrypoint.sh"]

@@ -28,7 +28,10 @@ export async function campaignsRoutes(app: FastifyInstance) {
     if (!body.success) return reply.status(400).send({ error: { code: 'VALIDATION', details: body.error.flatten() } })
     const campaign = await prisma.campaign.create({
       data: {
-        ...body.data,
+        name:        body.data.name,
+        direction:   body.data.direction,
+        channel:     body.data.channel ?? 'email',
+        status:      body.data.status,
         tenantId,
         botId,
         scheduledAt: body.data.scheduledAt ? new Date(body.data.scheduledAt) : undefined,
