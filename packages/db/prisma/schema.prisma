@@ -508,6 +508,7 @@ model Campaign {
   botId       String
   name        String
   direction   String    @default("outbound")
+  channel     String    @default("email")
   status      String    @default("draft")
   scheduledAt DateTime?
   sentAt      DateTime?
