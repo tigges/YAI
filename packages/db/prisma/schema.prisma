@@ -511,14 +511,35 @@ model Campaign {
   direction   String    @default("outbound")
   channel     String    @default("email")
   status      String    @default("draft")
+  subject     String?
+  body        String?
   scheduledAt DateTime?
   sentAt      DateTime?
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 
-  bot Bot @relation(fields: [botId], references: [id], onDelete: Cascade)
+  bot       Bot                @relation(fields: [botId], references: [id], onDelete: Cascade)
+  deliveries CampaignDelivery[]
 
   @@map("campaigns")
+}
+
+model CampaignDelivery {
+  id           String    @id @default(cuid())
+  tenantId     String
+  campaignId   String
+  contactId    String
+  email        String?
+  status       String    @default("pending")
+  sentAt       DateTime?
+  error        String?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  campaign Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  @@unique([campaignId, contactId])
+  @@map("campaign_deliveries")
 }
 
 model Template {

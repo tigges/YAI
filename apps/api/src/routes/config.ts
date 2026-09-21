@@ -145,15 +145,21 @@ export async function analyticsRoutes(app: FastifyInstance) {
     const botId = q['botId']
     const where = { tenantId, ...(botId ? { botId } : {}) }
 
-    const [totalConvos, resolvedConvos, escalatedConvos, totalContacts] = await Promise.all([
+    const [totalConvos, resolvedConvos, escalatedConvos, totalContacts, csatRows, botHandledConvos] = await Promise.all([
       prisma.conversation.count({ where }),
       prisma.conversation.count({ where: { ...where, status: 'resolved' } }),
       prisma.conversation.count({ where: { ...where, status: 'escalated' } }),
       prisma.contact.count({ where: { tenantId } }),
+      prisma.csatResponse.aggregate({ where: { tenantId }, _avg: { rating: true }, _count: { id: true } }),
+      prisma.conversation.count({ where: { ...where, assignedTo: null } }),
     ])
 
     const resolutionRate = totalConvos > 0 ? Math.round((resolvedConvos / totalConvos) * 100 * 10) / 10 : 0
     const escalationRate = totalConvos > 0 ? Math.round((escalatedConvos / totalConvos) * 100 * 10) / 10 : 0
+    const botHandledPct = totalConvos > 0 ? Math.round((botHandledConvos / totalConvos) * 100) : 0
+    // csatScore: convert -1/+1 ratings to a 0–100 scale
+    const avgRating = csatRows._avg.rating ?? 0
+    const csatScore = csatRows._count.id > 0 ? Math.round(((avgRating + 1) / 2) * 100) : 0
 
     return {
       data: {
@@ -162,9 +168,9 @@ export async function analyticsRoutes(app: FastifyInstance) {
         resolutionRate,
         escalationRate,
         totalContacts,
-        csatScore: 84.5,  // would come from CSAT responses in prod
+        csatScore,
         avgResponseTimeMs: 1400,
-        botHandledPct: 64,
+        botHandledPct,
       }
     }
   })

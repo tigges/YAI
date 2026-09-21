@@ -85,6 +85,40 @@ export async function campaignsRoutes(app: FastifyInstance) {
     await prisma.campaign.deleteMany({ where: { id, botId, tenantId } })
     return reply.status(204).send()
   })
+
+  // GET /:botId/campaigns/:id/deliveries
+  app.get('/:botId/campaigns/:id/deliveries', async (request, reply) => {
+    const { tenantId } = request.user as JWT
+    const { botId, id } = request.params as { botId: string; id: string }
+    const campaign = await prisma.campaign.findFirst({ where: { id, botId, tenantId } })
+    if (!campaign) return reply.status(404).send({ error: { code: 'NOT_FOUND' } })
+    const deliveries = await prisma.campaignDelivery.findMany({
+      where: { campaignId: id, tenantId },
+      orderBy: { createdAt: 'desc' },
+      take: 200,
+    })
+    return { data: deliveries }
+  })
+
+  // PATCH /:botId/campaigns/:id
+  app.patch('/:botId/campaigns/:id', async (request, reply) => {
+    const { tenantId } = request.user as JWT
+    const { botId, id } = request.params as { botId: string; id: string }
+    const body = z.object({
+      name: z.string().optional(),
+      channel: z.string().optional(),
+      status: z.string().optional(),
+      subject: z.string().optional(),
+      body: z.string().optional(),
+      scheduledAt: z.string().optional(),
+    }).safeParse(request.body)
+    if (!body.success) return reply.status(400).send({ error: { code: 'VALIDATION' } })
+    const updated = await prisma.campaign.updateMany({
+      where: { id, botId, tenantId },
+      data: { ...body.data, ...(body.data.scheduledAt ? { scheduledAt: new Date(body.data.scheduledAt) } : {}) },
+    })
+    return { data: updated }
+  })
 }
 
 export async function templatesRoutes(app: FastifyInstance) {
