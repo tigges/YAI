@@ -113,7 +113,7 @@ export function OverviewPage() {
           />
           <MetricTile
             label="Avg Response Time"
-            value={overview ? fmt(overview.avgResponseTimeMs) : '—'}
+            value={overview ? (overview.avgResponseTimeMs != null ? fmt(overview.avgResponseTimeMs) : '—') : '—'}
             icon={<Clock size={18} className="text-[var(--warning)]" />}
             color="var(--warning-muted)"
             loading={ovLoading}

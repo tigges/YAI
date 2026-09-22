@@ -125,6 +125,25 @@ export async function systemRoutes(app: FastifyInstance) {
     }
   })
 
+  // POST /system/seed-demo — populate the Acme Hair Studio demo workspace
+  // Protected by SEED_DEMO_SECRET env var (or any value if not set in dev)
+  app.post('/seed-demo', async (request, reply) => {
+    const secret = process.env['SEED_DEMO_SECRET']
+    const { authorization } = request.headers
+    if (secret && authorization !== `Bearer ${secret}`) {
+      return reply.status(403).send({ error: { code: 'FORBIDDEN' } })
+    }
+    try {
+      const { seedDemo } = await import('../scripts/seed-demo.js')
+      const result = await seedDemo()
+      return { data: result }
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err)
+      request.log.error({ err }, 'seed-demo failed')
+      return reply.status(500).send({ error: { code: 'SEED_FAILED', message: msg } })
+    }
+  })
+
   // Returns which env vars are configured — never the actual values.
   app.get('/config', async () => {
     const e = process.env
