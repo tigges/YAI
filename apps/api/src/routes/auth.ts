@@ -3,7 +3,6 @@ import { prisma } from '@ybot/db'
 import bcrypt from 'bcryptjs'
 import { z } from 'zod'
 
-
 const loginSchema = z.object({
   email: z.string().email(),
   password: z.string().min(8),
@@ -18,12 +17,14 @@ const registerSchema = z.object({
 })
 
 export async function authRoutes(app: FastifyInstance) {
+  // ── POST /login ───────────────────────────────────────────────────────────
   app.post('/login', async (request, reply) => {
     const body = loginSchema.safeParse(request.body)
     if (!body.success) {
       return reply.status(400).send({ error: { code: 'VALIDATION', message: 'Invalid input', details: body.error.flatten().fieldErrors } })
     }
 
+    // Include memberships so we can pick the correct tenant-scoped role.
     const user = await prisma.user.findFirst({
       where: { email: body.data.email },
       include: { memberships: true },
@@ -38,11 +39,15 @@ export async function authRoutes(app: FastifyInstance) {
       return reply.status(401).send({ error: { code: 'INVALID_CREDENTIALS', message: 'Invalid email or password' } })
     }
 
-    const token = app.jwt.sign({
-      sub: user.id,
-      tenantId: user.tenantId,
-      role: user.memberships[0]?.role ?? 'DEVELOPER',
-    }, { expiresIn: '7d' })
+    // Scope the membership lookup to the user's own tenant so the JWT role is
+    // always correct even if the user somehow belongs to multiple tenants.
+    const membership = user.memberships.find((m) => m.tenantId === user.tenantId)
+    const role = membership?.role ?? 'DEVELOPER'
+
+    const token = app.jwt.sign(
+      { sub: user.id, tenantId: user.tenantId, role },
+      { expiresIn: '7d' },
+    )
 
     reply.setCookie('ybot_token', token, {
       httpOnly: true,
@@ -61,18 +66,20 @@ export async function authRoutes(app: FastifyInstance) {
           displayName: user.displayName,
           avatarUrl: user.avatarUrl,
           tenantId: user.tenantId,
-          role: user.memberships[0]?.role ?? 'DEVELOPER',
+          role,
         },
       },
     }
   })
 
+  // ── POST /register ────────────────────────────────────────────────────────
   app.post('/register', async (request, reply) => {
     const body = registerSchema.safeParse(request.body)
     if (!body.success) {
       return reply.status(400).send({ error: { code: 'VALIDATION', message: 'Invalid input', details: body.error.flatten().fieldErrors } })
     }
 
+    // Email must be globally unique — each signup creates a new workspace.
     const existing = await prisma.user.findFirst({ where: { email: body.data.email } })
     if (existing) {
       return reply.status(409).send({ error: { code: 'EMAIL_TAKEN', message: 'Email already in use' } })
@@ -85,6 +92,7 @@ export async function authRoutes(app: FastifyInstance) {
 
     const passwordHash = await bcrypt.hash(body.data.password, 10)
 
+    // Create tenant + user in one transaction.
     const tenant = await prisma.tenant.create({
       data: {
         name: body.data.tenantName,
@@ -94,6 +102,8 @@ export async function authRoutes(app: FastifyInstance) {
             email: body.data.email,
             displayName: body.data.displayName,
             passwordHash,
+            // Membership tenantId is a placeholder — updated below after the
+            // tenant ID is known (Prisma's nested create can't self-reference).
             memberships: {
               create: { role: 'ADMIN', tenantId: '' },
             },
@@ -105,12 +115,14 @@ export async function authRoutes(app: FastifyInstance) {
 
     const user = tenant.users[0]!
 
+    // Fix the membership tenantId now that we have the real tenant ID.
     await prisma.membership.updateMany({
       where: { userId: user.id },
       data: { tenantId: tenant.id },
     })
 
-    await prisma.bot.create({
+    // Seed the default bot + two environments + default BotConfig.
+    const bot = await prisma.bot.create({
       data: {
         tenantId: tenant.id,
         name: `${body.data.tenantName} Bot`,
@@ -121,6 +133,10 @@ export async function authRoutes(app: FastifyInstance) {
           ],
         },
       },
+    })
+
+    await prisma.botConfig.create({
+      data: { tenantId: tenant.id, botId: bot.id },
     })
 
     const token = app.jwt.sign({ sub: user.id, tenantId: tenant.id, role: 'ADMIN' }, { expiresIn: '7d' })
@@ -148,7 +164,8 @@ export async function authRoutes(app: FastifyInstance) {
     })
   })
 
-  app.post('/logout', async (request, reply) => {
+  // ── POST /logout ──────────────────────────────────────────────────────────
+  app.post('/logout', async (_request, reply) => {
     reply.clearCookie('ybot_token', { path: '/' })
     return { data: { ok: true } }
   })
