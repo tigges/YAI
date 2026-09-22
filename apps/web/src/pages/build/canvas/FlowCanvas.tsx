@@ -118,7 +118,7 @@ const EDGE_STYLE = {
   strokeWidth: 1.5,
 }
 
-import { useSaveCanvas, useFlowCanvas } from '../../../lib/hooks'
+import { useFlows, useSaveCanvas, useFlowCanvas } from '../../../lib/hooks'
 import { useAppStore } from '../../../store/app'
 
 export function FlowCanvasPage() {
@@ -130,10 +130,12 @@ export function FlowCanvasPage() {
   const [selectedNode, setSelectedNode] = useState<Node | null>(null)
   const [status, setStatus] = useState<'draft' | 'saved' | 'published'>('draft')
   const [saving, setSaving] = useState(false)
-  const [canvasVersion] = useState(1)
+  const { data: flows } = useFlows()
+  const flow = (flows ?? []).find((item) => item.id === flowId)
+  const canvasVersion = flow?.versions[0]?.version ?? 0
 
   const saveCanvas = useSaveCanvas()
-  // Load canvas from API on mount
+  // Load the latest saved version. Welcome & Routing lives on version 2.
   const { data: savedCanvas } = useFlowCanvas(flowId ?? '', canvasVersion)
   React.useEffect(() => {
     if (savedCanvas?.graph?.nodes?.length) {
@@ -246,8 +248,8 @@ export function FlowCanvasPage() {
           </Button>
           <div className="h-4 w-px bg-[var(--border)]" />
           <div>
-            <p className="text-sm font-semibold text-[var(--text-primary)]">Welcome Flow</p>
-            <p className="text-xs text-[var(--text-muted)]">v3 · edited just now</p>
+            <p className="text-sm font-semibold text-[var(--text-primary)]">{flow?.name ?? 'Flow'}</p>
+            <p className="text-xs text-[var(--text-muted)]">{canvasVersion > 0 ? `v${canvasVersion}` : 'Loading…'}</p>
           </div>
           <Badge
             variant={status === 'published' ? 'success' : status === 'saved' ? 'info' : 'muted'}

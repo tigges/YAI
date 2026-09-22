@@ -49,8 +49,24 @@ async function pingRedis() {
   }
 }
 
+async function seedAuthorized(app: FastifyInstance, authorization: string | undefined): Promise<boolean> {
+  const secret = process.env['SEED_DEMO_SECRET']
+  if (secret && authorization === `Bearer ${secret}`) return true
+  const token = authorization?.startsWith('Bearer ') ? authorization.slice('Bearer '.length) : ''
+  if (token && token !== secret) {
+    try {
+      const payload = await app.jwt.verify<{ role?: string }>(token)
+      if (payload.role === 'ADMIN') return true
+    } catch {
+      // Not a valid admin session. Fall through.
+    }
+  }
+  return process.env['NODE_ENV'] !== 'production' && !secret
+}
+
 export async function systemRoutes(app: FastifyInstance) {
-  // ── GET /version — PUBLIC, no auth ────────────────────────────────────────
+  // Public. A hook on this plugin used to force a token on every route,
+  // including this one.
   app.get('/version', async () => {
     const e = process.env
     return {
@@ -64,10 +80,45 @@ export async function systemRoutes(app: FastifyInstance) {
     }
   })
 
-  app.addHook('preHandler', app.authenticate)
-  app.addHook('preHandler', requireRole('ADMIN'))
+  async function runEnsure(authorization: string | undefined, reply: { status: (code: number) => { send: (body: unknown) => unknown } }) {
+    if (!(await seedAuthorized(app, authorization))) {
+      return reply.status(403).send({ error: { code: 'FORBIDDEN', message: 'Admin login or SEED_DEMO_SECRET is required' } })
+    }
+    const { ensureDemos } = await import('../scripts/ensure-demos.js')
+    return { data: await ensureDemos() }
+  }
 
-  app.get('/status', async () => {
+  // Fills missing Acme and Bella demo data. Safe to call more than once.
+  app.post('/ensure-demos', async (request, reply) => {
+    try {
+      return await runEnsure(request.headers.authorization, reply)
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err)
+      request.log.error({ err }, 'ensure-demos failed')
+      return reply.status(500).send({ error: { code: 'SEED_FAILED', message: msg } })
+    }
+  })
+
+  // Old path. Same idempotent fill, so it no longer appends 240 chats.
+  app.post('/seed-demo', async (request, reply) => {
+    try {
+      return await runEnsure(request.headers.authorization, reply)
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err)
+      request.log.error({ err }, 'seed-demo failed')
+      return reply.status(500).send({ error: { code: 'SEED_FAILED', message: msg } })
+    }
+  })
+
+  await app.register(async function adminSystemRoutes(scope) {
+    scope.addHook('preHandler', app.authenticate)
+    scope.addHook('preHandler', requireRole('ADMIN'))
+    scope.get('/status', statusHandler)
+    scope.get('/config', configHandler)
+  })
+}
+
+async function statusHandler() {
     const [db, redis, rawContainers] = await Promise.all([
       pingDb(),
       pingRedis(),
@@ -123,29 +174,9 @@ export async function systemRoutes(app: FastifyInstance) {
         },
       },
     }
-  })
+}
 
-  // POST /system/seed-demo — populate the Acme Hair Studio demo workspace
-  // Protected by SEED_DEMO_SECRET env var (or any value if not set in dev)
-  app.post('/seed-demo', async (request, reply) => {
-    const secret = process.env['SEED_DEMO_SECRET']
-    const { authorization } = request.headers
-    if (secret && authorization !== `Bearer ${secret}`) {
-      return reply.status(403).send({ error: { code: 'FORBIDDEN' } })
-    }
-    try {
-      const { seedDemo } = await import('../scripts/seed-demo.js')
-      const result = await seedDemo()
-      return { data: result }
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : String(err)
-      request.log.error({ err }, 'seed-demo failed')
-      return reply.status(500).send({ error: { code: 'SEED_FAILED', message: msg } })
-    }
-  })
-
-  // Returns which env vars are configured — never the actual values.
-  app.get('/config', async () => {
+async function configHandler() {
     const e = process.env
     function isSet(key: string) { return !!e[key] && e[key] !== 'change-me-in-production' }
     function maskUrl(url: string | undefined) {
@@ -183,5 +214,4 @@ export async function systemRoutes(app: FastifyInstance) {
         },
       },
     }
-  })
 }

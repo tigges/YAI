@@ -8,4 +8,6 @@ dist/
 !.env.example
 !.env.aviori
 coverage/
+playwright-report/
+test-results/
 .DS_Store
