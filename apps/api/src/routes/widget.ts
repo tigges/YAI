@@ -211,7 +211,8 @@ export async function widgetRoutes(app: FastifyInstance) {
   app.get<{ Params: { channelId: string } }>('/widget-test/:channelId', async (request, reply) => {
     const { channelId } = request.params
     const channel = await prisma.channel.findFirst({ where: { id: channelId, isActive: true }, include: { bot: true } })
-    const botName = channel?.bot?.name ?? 'YBot'
+    const botLabel   = channel?.bot?.name ?? 'YBot'
+    const personaName = channel?.bot?.personaName ?? botLabel
     const origin  = `${request.protocol ?? 'http'}://${request.hostname}`
 
     return reply
@@ -221,7 +222,7 @@ export async function widgetRoutes(app: FastifyInstance) {
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>${botName} — Widget Test</title>
+  <title>${botLabel} — Widget Test</title>
   <style>
     *{box-sizing:border-box;margin:0;padding:0}
     body{font-family:system-ui,sans-serif;background:#f8fafc;min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:24px;color:#334155}
@@ -235,12 +236,12 @@ export async function widgetRoutes(app: FastifyInstance) {
 </head>
 <body>
   <div class="card">
-    <h1>🤖 ${botName}</h1>
+    <h1>🤖 ${botLabel}</h1>
     <p>The chat widget is loaded in the bottom-right corner.<br/>Click the 💬 bubble to start a conversation.</p>
     <div class="badge">Channel: ${channelId}</div>
   </div>
   <div class="arrow">👉</div>
-  <script>window.YBotTitle='${botName}';window.YBotBotName='${botName}';</script>
+  <script>window.YBotTitle='${botLabel}';window.YBotBotName='${personaName}';</script>
   <script src="${origin}/api/v1/widget.js?id=${channelId}" async></script>
 </body>
 </html>`)
@@ -251,7 +252,7 @@ export async function widgetRoutes(app: FastifyInstance) {
     const { channelId } = request.params
     const origin = `${request.protocol ?? 'http'}://${request.hostname}`
     const channel = await prisma.channel.findFirst({ where: { id: channelId, isActive: true }, include: { bot: true } })
-    const botName = channel?.bot?.name ?? ''
+    const personaName = channel?.bot?.personaName ?? channel?.bot?.name ?? ''
 
     return reply
       .header('Content-Type', 'text/html; charset=utf-8')
@@ -342,7 +343,7 @@ export async function widgetRoutes(app: FastifyInstance) {
     window.YBotChannelId='${channelId}';
     window.YBotTitle='Chat with Bella Hair Studio';
     window.YBotAccentColor='#8b5cf6';
-    ${botName ? `window.YBotBotName='${botName}';` : ''}
+    ${personaName ? `window.YBotBotName='${personaName}';` : ''}
     function openChat(){if(window.YBotWidget)window.YBotWidget.open();}
   </script>
   <script src="${origin}/api/v1/widget.js?id=${channelId}" async></script>

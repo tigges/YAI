@@ -13,6 +13,7 @@ export interface CurrentUser {
 export interface Bot {
   id: string
   name: string
+  personaName?: string | null
   description?: string | null
   avatarUrl?: string | null
   status: string
