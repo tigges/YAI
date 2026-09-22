@@ -11,13 +11,12 @@
  */
 
 import type { FastifyInstance } from 'fastify'
-import { PrismaClient } from '@ybot/db'
+import { prisma } from '@ybot/db'
 import { SessionMachine } from '@ybot/runtime'
 import type { Session, ExecutionServices } from '@ybot/runtime'
 import { createLlmAdapter, createEmbeddingAdapter } from '@ybot/llm'
 import type { LlmMessage } from '@ybot/llm'
 
-const prisma = new PrismaClient()
 const llm = createLlmAdapter()
 const embedAdapter = createEmbeddingAdapter()
 

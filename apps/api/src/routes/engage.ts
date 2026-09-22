@@ -1,13 +1,14 @@
 import type { FastifyInstance } from 'fastify'
-import { PrismaClient } from '@ybot/db'
+import { requireRole } from '../middleware/auth.js'
+import { prisma } from '@ybot/db'
 import { z } from 'zod'
 import { enqueueCampaignSend } from '../queues.js'
 
-const prisma = new PrismaClient()
 type JWT = { sub: string; tenantId: string; role: string }
 
 export async function campaignsRoutes(app: FastifyInstance) {
   app.addHook('preHandler', app.authenticate)
+  app.addHook('preHandler', requireRole('SUPERVISOR', 'ADMIN'))
 
   app.get('/:botId/campaigns', async (request) => {
     const { tenantId } = request.user as JWT
@@ -152,6 +153,7 @@ export async function campaignsRoutes(app: FastifyInstance) {
 
 export async function templatesRoutes(app: FastifyInstance) {
   app.addHook('preHandler', app.authenticate)
+  app.addHook('preHandler', requireRole('DEVELOPER', 'SUPERVISOR', 'ADMIN'))
 
   app.get('/:botId/templates', async (request) => {
     const { tenantId } = request.user as JWT

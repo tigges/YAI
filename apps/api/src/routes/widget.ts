@@ -7,15 +7,27 @@
  * POST /public/csat/:channelId        — submit CSAT rating for a conversation
  */
 
-import type { FastifyInstance } from 'fastify'
-import { PrismaClient } from '@ybot/db'
-import { createLlmAdapter, createEmbeddingAdapter } from '@ybot/llm'
+import type { FastifyInstance, FastifyRequest } from 'fastify'
+import { prisma } from '@ybot/db'
+import { createLlmAdapter, createLlmAdapterForModel, createEmbeddingAdapter } from '@ybot/llm'
 import type { LlmMessage } from '@ybot/llm'
 import { readFile } from 'node:fs/promises'
 import { resolve, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-const prisma  = new PrismaClient()
+/** Derive the public-facing origin robustly when running behind a reverse proxy.
+ *  With trustProxy:true Fastify already sets request.protocol from X-Forwarded-Proto,
+ *  but we also read the forwarded headers explicitly as belt-and-suspenders. */
+function requestOrigin(request: FastifyRequest): string {
+  const proto =
+    (request.headers['x-forwarded-proto'] as string | undefined)?.split(',')[0]?.trim() ??
+    request.protocol ??
+    'https'
+  const host =
+    (request.headers['x-forwarded-host'] as string | undefined)?.split(',')[0]?.trim() ??
+    request.hostname
+  return `${proto}://${host}`
+}
 const llm     = createLlmAdapter()
 const embedAI = createEmbeddingAdapter()
 
@@ -213,7 +225,7 @@ export async function widgetRoutes(app: FastifyInstance) {
     const channel = await prisma.channel.findFirst({ where: { id: channelId, isActive: true }, include: { bot: true } })
     const botLabel   = channel?.bot?.name ?? 'YBot'
     const personaName = channel?.bot?.personaName ?? botLabel
-    const origin  = `${request.protocol ?? 'http'}://${request.hostname}`
+    const origin  = requestOrigin(request)
     // Allow wizard/embed overrides via query params
     const titleOverride = request.query.title ? String(request.query.title) : null
     const colorOverride = request.query.color ? String(request.query.color) : null
@@ -253,7 +265,7 @@ export async function widgetRoutes(app: FastifyInstance) {
   // ── GET /public/demo/:channelId — hosted demo salon page ──────────────────
   app.get<{ Params: { channelId: string } }>('/public/demo/:channelId', async (request, reply) => {
     const { channelId } = request.params
-    const origin = `${request.protocol ?? 'http'}://${request.hostname}`
+    const origin = requestOrigin(request)
     const channel = await prisma.channel.findFirst({ where: { id: channelId, isActive: true }, include: { bot: true } })
     const personaName = channel?.bot?.personaName ?? channel?.bot?.name ?? ''
 
@@ -446,7 +458,9 @@ export async function widgetRoutes(app: FastifyInstance) {
 
     let fullText = ''
     try {
-      await llm.stream({
+      // Use model-aware routing: picks the right provider for the saved BotConfig model
+      const adapter = model ? createLlmAdapterForModel(model) : llm
+      await adapter.stream({
         messages, systemPrompt: systemPrompt + contextBlock, model, temperature, maxTokens,
         onChunk: (chunk) => { fullText += chunk; send({ chunk }) },
       })

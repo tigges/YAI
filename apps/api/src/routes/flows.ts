@@ -1,12 +1,13 @@
 import type { FastifyInstance } from 'fastify'
-import { PrismaClient } from '@ybot/db'
+import { requireRole } from '../middleware/auth.js'
+import { prisma } from '@ybot/db'
 import { z } from 'zod'
 
-const prisma = new PrismaClient()
 type JWT = { sub: string; tenantId: string; role: string }
 
 export async function flowsRoutes(app: FastifyInstance) {
   app.addHook('preHandler', app.authenticate)
+  app.addHook('preHandler', requireRole('DEVELOPER', 'SUPERVISOR', 'ADMIN'))
 
   // GET /bots/:botId/flows
   app.get('/:botId/flows', async (request) => {

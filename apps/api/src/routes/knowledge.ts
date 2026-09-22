@@ -1,10 +1,10 @@
 import type { FastifyInstance } from 'fastify'
-import { PrismaClient } from '@ybot/db'
+import { requireRole } from '../middleware/auth.js'
+import { prisma } from '@ybot/db'
 import { z } from 'zod'
 import { enqueueKnowledgeSync } from '../queues.js'
 import { Buffer } from 'node:buffer'
 
-const prisma = new PrismaClient()
 type JWT = { sub: string; tenantId: string; role: string }
 
 // ── Text extraction helpers ────────────────────────────────────────────────────
@@ -36,6 +36,7 @@ async function extractTextFromBuffer(buffer: Buffer, mimetype: string, filename:
 
 export async function knowledgeRoutes(app: FastifyInstance) {
   app.addHook('preHandler', app.authenticate)
+  app.addHook('preHandler', requireRole('DEVELOPER', 'SUPERVISOR', 'ADMIN'))
 
   // ── Intents ─────────────────────────────────────────────────────────────
   app.get('/:botId/intents', async (request) => {

@@ -10,10 +10,9 @@
  * review/approval via the Configure > Optimizations UI.
  */
 
-import { PrismaClient } from '@ybot/db'
+import { prisma } from '@ybot/db'
 import { createLlmAdapter } from '@ybot/llm'
 
-const prisma = new PrismaClient()
 const llm = createLlmAdapter()
 
 // ── Quality score ─────────────────────────────────────────────────────────────

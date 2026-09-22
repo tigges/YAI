@@ -10,10 +10,9 @@
  * Schema note: add `DocumentChunk` model to Prisma schema if not already present.
  */
 
-import { PrismaClient } from '@ybot/db'
+import { prisma } from '@ybot/db'
 import { createLlmAdapter } from '@ybot/llm'
 
-const prisma = new PrismaClient()
 const llm = createLlmAdapter()
 
 const CHUNK_SIZE = 400

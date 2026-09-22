@@ -1,10 +1,9 @@
 import type { FastifyInstance } from 'fastify'
-import { PrismaClient } from '@ybot/db'
+import { prisma } from '@ybot/db'
 import { z } from 'zod'
 import { processInboundMessage } from '../runtime-bridge.js'
 import { enqueueConversationAnalysis } from '../queues.js'
 
-const prisma = new PrismaClient()
 type JWT = { sub: string; tenantId: string; role: string }
 
 export async function conversationsRoutes(app: FastifyInstance) {

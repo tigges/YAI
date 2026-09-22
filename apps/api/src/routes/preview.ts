@@ -13,11 +13,11 @@
  */
 
 import type { FastifyInstance } from 'fastify'
-import { PrismaClient } from '@ybot/db'
-import { createLlmAdapter, createEmbeddingAdapter } from '@ybot/llm'
+import { requireRole } from '../middleware/auth.js'
+import { prisma } from '@ybot/db'
+import { createLlmAdapter, createLlmAdapterForModel, createEmbeddingAdapter } from '@ybot/llm'
 import { z } from 'zod'
 
-const prisma = new PrismaClient()
 
 // Shared adapters (module-level singletons)
 const llm = createLlmAdapter()
@@ -54,6 +54,7 @@ async function searchKnowledge(query: string, tenantId: string, botId: string, t
 
 export async function previewRoutes(app: FastifyInstance) {
   app.addHook('preHandler', app.authenticate)
+  app.addHook('preHandler', requireRole('DEVELOPER', 'SUPERVISOR', 'ADMIN'))
 
   /**
    * POST /api/v1/bots/:botId/preview/chat
@@ -76,6 +77,10 @@ export async function previewRoutes(app: FastifyInstance) {
     if (!bot) return reply.status(404).send({ error: { code: 'NOT_FOUND' } })
 
     const { message, systemPrompt, history } = body.data
+
+    // Load per-bot model config
+    const cfg = await prisma.botConfig.findUnique({ where: { botId } }).catch(() => null)
+    const botModel = cfg?.model ?? undefined
 
     // SSE headers
     reply.raw.writeHead(200, {
@@ -106,11 +111,11 @@ export async function previewRoutes(app: FastifyInstance) {
         { role: 'user' as const, content: message },
       ]
 
-      await llm.stream({
+      await (botModel ? createLlmAdapterForModel(botModel) : llm).stream({
         messages,
         systemPrompt: activeSystemPrompt + contextBlock,
-        temperature: 0.3,
-        maxTokens: 1024,
+        temperature: cfg?.temperature ?? 0.3,
+        maxTokens: cfg?.maxTokens ?? 1024,
         onChunk: (chunk) => {
           fullText += chunk
           sendEvent('chunk', { text: chunk })

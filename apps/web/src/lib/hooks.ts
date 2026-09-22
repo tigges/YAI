@@ -443,6 +443,16 @@ export function useDeleteChannel() {
   })
 }
 
+export function useUpdateChannel() {
+  const qc = useQueryClient()
+  const bid = botId()
+  return useMutation({
+    mutationFn: ({ id, ...body }: { id: string; name?: string; isActive?: boolean; config?: Record<string, unknown> }) =>
+      api.channels.update(bid, id, body),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['channels', bid] }),
+  })
+}
+
 export function useTemplates(channel?: string) {
   const bid = botId()
   return useQuery({

@@ -12,9 +12,8 @@
  * Without external credentials the worker marks deliveries as "simulated".
  */
 
-import { PrismaClient, type Prisma } from '@ybot/db'
+import { prisma, type Prisma } from '@ybot/db'
 
-const prisma = new PrismaClient()
 let cuidCounter = 0
 function createId() { return `cmp_${Date.now()}_${++cuidCounter}` }
 
