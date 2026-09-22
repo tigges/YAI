@@ -49,6 +49,11 @@ function getTestUrl(channelId: string): string {
   return `${base}/api/v1/widget-test/${channelId}`
 }
 
+function getDemoUrl(channelId: string): string {
+  const base = typeof window !== 'undefined' ? window.location.origin : ''
+  return `${base}/api/v1/public/demo/${channelId}`
+}
+
 export function ChannelsPage() {
   const selectedBotId = useAppStore((s: { selectedBotId: string | null }) => s.selectedBotId) ?? ''
   const { data: channels = [], isLoading } = useChannels()
@@ -234,9 +239,14 @@ export function ChannelsPage() {
                   <div>
                     <div className="flex items-center justify-between mb-2">
                       <label className="text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wide">Live preview</label>
-                      <Button variant="ghost" size="sm" className="gap-1.5 h-6 text-xs" onClick={() => window.open(getTestUrl(selected.id), '_blank')}>
-                        <FlaskConical size={11} /> Open full page
-                      </Button>
+                      <div className="flex items-center gap-1">
+                        <Button variant="ghost" size="sm" className="gap-1.5 h-6 text-xs" onClick={() => window.open(getDemoUrl(selected.id), '_blank')}>
+                          🌐 Demo site
+                        </Button>
+                        <Button variant="ghost" size="sm" className="gap-1.5 h-6 text-xs" onClick={() => window.open(getTestUrl(selected.id), '_blank')}>
+                          <FlaskConical size={11} /> Widget only
+                        </Button>
+                      </div>
                     </div>
                     <div className="relative rounded-[var(--radius-md)] border border-[var(--border)] overflow-hidden bg-[#f8fafc]" style={{ height: 300 }}>
                       <iframe
@@ -247,7 +257,7 @@ export function ChannelsPage() {
                         sandbox="allow-scripts allow-same-origin allow-forms"
                       />
                     </div>
-                    <p className="text-[11px] text-[var(--text-muted)] mt-1.5">Click the 💬 bubble to start a test conversation.</p>
+                    <p className="text-[11px] text-[var(--text-muted)] mt-1.5">Click the 💬 bubble to start a test conversation — or open the <strong>Demo site</strong> to test from a realistic customer-facing page.</p>
                   </div>
                 )}
 

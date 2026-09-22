@@ -146,6 +146,7 @@ const WIDGET_INLINE_JS = /* js */`
   function toggle(force){open=force!==undefined?force:!open;panel.style.display=open?'flex':'none';bubble.innerHTML=open?'&times;':'&#128172;';if(open&&messages.length===0)addMsg('bot','Hello! &#128075; How can I help you today?');if(open)setTimeout(function(){ta.focus();},50);}
   bubble.onclick=function(){toggle();};sendB.onclick=send;
   ta.onkeydown=function(e){if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();send();}};
+  window.YBotWidget={open:function(){toggle(true);},close:function(){toggle(false);},toggle:function(){toggle();}};
 })();`
 
 export async function widgetRoutes(app: FastifyInstance) {
@@ -210,6 +211,107 @@ export async function widgetRoutes(app: FastifyInstance) {
   </div>
   <div class="arrow">👉</div>
   <script>window.YBotTitle='${botName}';</script>
+  <script src="${origin}/api/v1/widget.js?id=${channelId}" async></script>
+</body>
+</html>`)
+  })
+
+  // ── GET /public/demo/:channelId — hosted demo salon page ──────────────────
+  app.get<{ Params: { channelId: string } }>('/public/demo/:channelId', async (request, reply) => {
+    const { channelId } = request.params
+    const origin = `${request.protocol ?? 'http'}://${request.hostname}`
+
+    return reply
+      .header('Content-Type', 'text/html; charset=utf-8')
+      .header('Cache-Control', 'public, max-age=60')
+      .send(`<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Bella Hair Studio — Modern Cuts, Colour &amp; Care</title>
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600&family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
+  <style>
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+    :root{--accent:#8b5cf6;--ink:#201b2e;--muted:#6b6780;--bg:#faf8ff}
+    body{font-family:"Inter",system-ui,sans-serif;color:var(--ink);background:var(--bg);line-height:1.6}
+    h1,h2,h3{font-family:"Fraunces",Georgia,serif;font-weight:600;letter-spacing:-.5px}
+    .wrap{max-width:1080px;margin:0 auto;padding:0 24px}
+    header{display:flex;align-items:center;justify-content:space-between;padding:22px 0}
+    .logo{font-family:"Fraunces",serif;font-size:22px;font-weight:600}
+    .logo span{color:var(--accent)}
+    nav a{color:var(--muted);text-decoration:none;margin-left:26px;font-size:15px;font-weight:500}
+    nav a:hover{color:var(--ink)}
+    .hero{display:grid;grid-template-columns:1.1fr 0.9fr;gap:48px;align-items:center;padding:60px 0 80px}
+    .hero h1{font-size:56px;line-height:1.05;margin-bottom:20px}
+    .hero p{font-size:19px;color:var(--muted);max-width:460px;margin-bottom:30px}
+    .btn{display:inline-block;background:var(--accent);color:#fff;padding:14px 26px;border-radius:30px;font-weight:600;text-decoration:none;border:none;cursor:pointer;font-size:16px;transition:transform .15s}
+    .btn:hover{transform:translateY(-2px)}
+    .hero-img{border-radius:24px;height:380px;background:linear-gradient(135deg,rgba(139,92,246,.9),rgba(236,72,153,.85));display:flex;align-items:center;justify-content:center;color:#fff;font-size:90px;box-shadow:0 30px 60px rgba(139,92,246,.3)}
+    .section{padding:60px 0}
+    .section h2{font-size:36px;text-align:center;margin-bottom:12px}
+    .section .lede{text-align:center;color:var(--muted);max-width:520px;margin:0 auto 44px;font-size:17px}
+    .cards{display:grid;grid-template-columns:repeat(3,1fr);gap:22px}
+    .card{background:#fff;border-radius:18px;padding:28px;box-shadow:0 10px 30px rgba(32,27,46,.06);border:1px solid #f0ecfa}
+    .card .emoji{font-size:34px}
+    .card h3{font-size:21px;margin:14px 0 8px}
+    .card p{color:var(--muted);font-size:15px;margin-bottom:12px}
+    .card .price{font-weight:600;color:var(--accent)}
+    .cta{background:linear-gradient(135deg,#2a2140,#3a2b5c);color:#fff;border-radius:28px;padding:56px;text-align:center;margin:40px 0}
+    .cta h2{color:#fff;font-size:34px;margin-bottom:12px}
+    .cta p{color:#d7cff0;margin-bottom:26px;font-size:17px}
+    .cta .btn{background:#fff;color:var(--accent)}
+    footer{text-align:center;color:var(--muted);padding:40px 0;font-size:14px;border-top:1px solid #eee7f8}
+    @media(max-width:800px){.hero{grid-template-columns:1fr;padding:30px 0 50px}.hero h1{font-size:40px}.hero-img{height:240px;font-size:64px}.cards{grid-template-columns:1fr}nav{display:none}}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <div class="logo">Bella<span>.</span>Hair Studio</div>
+      <nav>
+        <a href="#services">Services</a>
+        <a href="#about">About</a>
+        <a href="#book" onclick="openChat();return false">Book</a>
+      </nav>
+    </header>
+    <section class="hero">
+      <div>
+        <h1>Where great hair<br/>begins.</h1>
+        <p>Expert cuts, rich colour and restorative care from stylists who genuinely listen. Book your chair in under a minute.</p>
+        <button class="btn" onclick="openChat()">Book an appointment</button>
+      </div>
+      <div class="hero-img">&#128135;&#8205;&#9792;&#65039;</div>
+    </section>
+    <section class="section" id="services">
+      <h2>Our services</h2>
+      <p class="lede">A full menu of salon services, tailored to you. Not sure what you need? Just ask our receptionist.</p>
+      <div class="cards">
+        <div class="card"><div class="emoji">&#9986;&#65039;</div><h3>Cuts &amp; Styling</h3><p>Precision cuts, blow-dries and finishing that keeps its shape long after you leave.</p><div class="price">from £35</div></div>
+        <div class="card"><div class="emoji">&#127912;</div><h3>Colour &amp; Highlights</h3><p>Full colour, foils, balayage and gloss treatments using gentle, salon-grade products.</p><div class="price">from £70</div></div>
+        <div class="card"><div class="emoji">&#128134;</div><h3>Treatments</h3><p>Deep-conditioning, keratin smoothing and scalp care to bring your hair back to life.</p><div class="price">from £45</div></div>
+        <div class="card"><div class="emoji">&#127800;</div><h3>Balayage</h3><p>Sun-kissed, natural-looking colour that grows out gracefully with minimal upkeep.</p><div class="price">from £90</div></div>
+        <div class="card"><div class="emoji">&#128133;</div><h3>Skin Scrub</h3><p>Revitalising exfoliation and skin treatment to restore your natural glow.</p><div class="price">from £200</div></div>
+        <div class="card"><div class="emoji">&#129452;</div><h3>Keratin Smoothing</h3><p>Frizz-free, sleek hair for up to 3 months with professional keratin treatments.</p><div class="price">from £120</div></div>
+      </div>
+    </section>
+    <section class="cta" id="book">
+      <h2>Ready for your next look?</h2>
+      <p>Chat with our virtual receptionist and lock in a time that suits you.</p>
+      <button class="btn" onclick="openChat()">Start booking</button>
+    </section>
+    <section class="section" id="about">
+      <h2>Visit us</h2>
+      <p class="lede">Open Mon–Sat, 9am–6pm · 14 Rosewood Lane · Walk-ins welcome when we have space.</p>
+    </section>
+  </div>
+  <footer>© Bella Hair Studio · Powered by <a href="${origin}" style="color:inherit">BotStudio</a></footer>
+  <script>
+    window.YBotChannelId='${channelId}';
+    window.YBotTitle='Chat with Bella Hair Studio';
+    window.YBotAccentColor='#8b5cf6';
+    function openChat(){if(window.YBotWidget)window.YBotWidget.open();}
+  </script>
   <script src="${origin}/api/v1/widget.js?id=${channelId}" async></script>
 </body>
 </html>`)
