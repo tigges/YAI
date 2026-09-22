@@ -1,0 +1,470 @@
+/**
+ * Idempotent demo data for the two showcase companies.
+ *
+ * Acme Corp (already on the live site):
+ *   charles@acme.com  / password123     human admin, password left as-is
+ *   demo@acme.com     / Demo1234!        shared demo login
+ *   qa@acme.com       / QaDemo1234!      GitHub only (override with QA_ACCOUNT_PASSWORD)
+ *
+ * Bella Hair Studio (created here if missing):
+ *   charles@bella.com / password123
+ *   demo@bella.com    / Demo1234!
+ *
+ * Running this again does not duplicate chats, does not edit an existing
+ * Order Status graph, and does not reset passwords.
+ */
+
+import bcrypt from 'bcryptjs'
+import { prisma } from '@ybot/db'
+import { starterFlows } from './starter-flows.js'
+
+const DEMO_PASSWORD = 'Demo1234!'
+const CHARLES_PASSWORD = 'password123'
+const QA_PASSWORD = process.env['QA_ACCOUNT_PASSWORD'] || 'QaDemo1234!'
+
+const BELLA_SLUG = 'bella-hair-studio'
+const BELLA_NAME = 'Bella Hair Studio'
+const RULE_NAME = 'Note when a customer message arrives'
+
+const OPENING_HOURS = {
+  sla: { first_response: '1', resolution: '24' },
+  workingHours: {
+    start: '09:00',
+    end: '18:00',
+    timezone: 'Europe/London',
+    awayMessage: "Thanks for your message. We're currently outside our working hours and will reply when the team is back.",
+  },
+}
+
+const BELLA_NAMES = ['Emma Clarke', 'Olivia Bennett', 'Sophie Turner', 'Jack Murray', 'Aisha Khan', 'Noah Patel']
+
+const BELLA_CHATS: Array<{ subject: string; lines: Array<{ role: 'user' | 'bot'; text: string }> }> = [
+  {
+    subject: 'Booking inquiry',
+    lines: [
+      { role: 'user', text: 'Hi, I would like to book a haircut please.' },
+      { role: 'bot', text: "Hi, I'm Bella from Bella Hair Studio. Cuts start from £35. Do you have a preferred day?" },
+      { role: 'user', text: 'Thursday afternoon if possible.' },
+      { role: 'bot', text: 'Thursday at 4 pm is free. I have booked that for you.' },
+    ],
+  },
+  {
+    subject: 'Opening hours query',
+    lines: [
+      { role: 'user', text: 'What are your opening hours?' },
+      { role: 'bot', text: 'We are open Monday to Saturday 9 am to 6 pm, and Sunday 10 am to 4 pm.' },
+    ],
+  },
+  {
+    subject: 'Balayage price',
+    lines: [
+      { role: 'user', text: 'How much is a balayage?' },
+      { role: 'bot', text: 'Balayage starts from £120, including a treatment and blow-dry. A consultation is free.' },
+      { role: 'user', text: 'Yes please, how do I book that?' },
+      { role: 'bot', text: 'I can hold a 15 minute consultation. Which day suits you?' },
+    ],
+  },
+  {
+    subject: 'Colour correction',
+    lines: [
+      { role: 'user', text: 'I need colour correction after a home dye.' },
+      { role: 'bot', text: 'Colour correction usually takes 3 to 5 hours. We quote after seeing your hair.' },
+      { role: 'user', text: 'Can I come in on Saturday?' },
+      { role: 'bot', text: 'Saturday late morning is open for a consultation. Shall I book it?' },
+    ],
+  },
+  {
+    subject: 'Cancel appointment',
+    lines: [
+      { role: 'user', text: 'I need to cancel my appointment tomorrow.' },
+      { role: 'bot', text: 'I can cancel that. Would you like another day this week?' },
+      { role: 'user', text: 'Next Tuesday please.' },
+      { role: 'bot', text: 'Moved to Tuesday at the same time. See you then.' },
+    ],
+  },
+  {
+    subject: 'Gift voucher',
+    lines: [
+      { role: 'user', text: 'Do you sell gift vouchers?' },
+      { role: 'bot', text: 'Yes. Vouchers are £25, £50, or £100, and they last 12 months.' },
+      { role: 'user', text: 'I will take a £50 one.' },
+      { role: 'bot', text: 'Lovely. I can email the voucher as soon as you share the name to print on it.' },
+    ],
+  },
+]
+
+const ACME_CHATS: Array<{ subject: string; lines: Array<{ role: 'user' | 'bot'; text: string }> }> = [
+  {
+    subject: 'Where is order AC-20441',
+    lines: [
+      { role: 'user', text: 'Can you tell me where order AC-20441 is?' },
+      { role: 'bot', text: 'AC-20441 left the warehouse yesterday and is due on Thursday.' },
+      { role: 'user', text: 'Thanks, that is all I needed.' },
+    ],
+  },
+  {
+    subject: 'Damaged kettle return',
+    lines: [
+      { role: 'user', text: 'The kettle in my order arrived cracked.' },
+      { role: 'bot', text: 'Sorry about that. I can start a return and email a label today.' },
+      { role: 'user', text: 'Yes please.' },
+      { role: 'bot', text: 'The return is open. The label is on its way to your inbox.' },
+    ],
+  },
+  {
+    subject: 'Invoice for extra seats',
+    lines: [
+      { role: 'user', text: 'Our last invoice has two seats I do not recognise.' },
+      { role: 'bot', text: 'Those seats were added on the 12th. I can ask billing to send the breakdown.' },
+      { role: 'user', text: 'Please do.' },
+    ],
+  },
+  {
+    subject: 'Password reset email missing',
+    lines: [
+      { role: 'user', text: 'The password reset email never arrived.' },
+      { role: 'bot', text: 'I have sent a fresh link. Check spam if it is not in the inbox within a minute.' },
+    ],
+  },
+  {
+    subject: 'Speak to a person',
+    lines: [
+      { role: 'user', text: 'I would like to talk to someone on the team.' },
+      { role: 'bot', text: 'I am passing this to Sarah. She will pick up the chat shortly.' },
+    ],
+  },
+]
+
+export async function ensureDemos() {
+  const acme = await ensureAcme()
+  const bella = await ensureBella()
+  return { acme, bella }
+}
+
+async function ensureAcme() {
+  const charles = await prisma.user.findFirst({ where: { email: 'charles@acme.com' } })
+  if (!charles) return { status: 'skipped', reason: 'charles@acme.com is not in this database' }
+
+  const tenant = await prisma.tenant.findUnique({ where: { id: charles.tenantId } })
+  if (!tenant) return { status: 'skipped', reason: 'Acme tenant missing' }
+
+  await ensureUser(tenant.id, 'demo@acme.com', 'Demo', DEMO_PASSWORD)
+  await ensureUser(tenant.id, 'qa@acme.com', 'QA', QA_PASSWORD)
+
+  const bot = await prisma.bot.findFirst({
+    where: { tenantId: tenant.id, name: 'Acme Support Bot' },
+  }) ?? await prisma.bot.findFirst({ where: { tenantId: tenant.id }, orderBy: { createdAt: 'asc' } })
+  if (!bot) return { status: 'partial', tenant: tenant.slug, reason: 'no bot' }
+
+  const flowsAdded = await ensureFlows(tenant.id, bot.id, tenant.name)
+  const hoursSet = await ensureOpeningHours(tenant.id, bot.id)
+  const ruleAdded = await ensureRule(tenant.id, bot.id)
+
+  const channel = await prisma.channel.findFirst({
+    where: { tenantId: tenant.id, botId: bot.id, kind: 'web' },
+    orderBy: { createdAt: 'asc' },
+  })
+  const env = await prisma.environment.findFirst({
+    where: { tenantId: tenant.id, botId: bot.id },
+    orderBy: { createdAt: 'asc' },
+  })
+  const chatsAdded = channel && env
+    ? await ensureChats({
+        prefix: 'enrich-acme',
+        tenantId: tenant.id,
+        botId: bot.id,
+        channelId: channel.id,
+        environmentId: env.id,
+        templates: ACME_CHATS,
+        repeats: 1,
+      })
+    : 0
+
+  return {
+    status: 'ok',
+    tenant: tenant.slug,
+    flowsAdded,
+    hoursSet,
+    ruleAdded,
+    chatsAdded,
+  }
+}
+
+async function ensureBella() {
+  const tenant = await prisma.tenant.upsert({
+    where: { slug: BELLA_SLUG },
+    update: { name: BELLA_NAME },
+    create: { name: BELLA_NAME, slug: BELLA_SLUG, plan: 'pro', dataRegion: 'eu' },
+  })
+
+  await ensureUser(tenant.id, 'charles@bella.com', 'Charles', CHARLES_PASSWORD)
+  await ensureUser(tenant.id, 'demo@bella.com', 'Demo', DEMO_PASSWORD)
+
+  const bot = await prisma.bot.upsert({
+    where: { id: 'bella-bot' },
+    update: { name: 'Bella', personaName: 'Bella', status: 'active' },
+    create: {
+      id: 'bella-bot',
+      tenantId: tenant.id,
+      name: 'Bella',
+      personaName: 'Bella',
+      description: 'Books appointments and answers questions for Bella Hair Studio',
+      status: 'active',
+    },
+  })
+
+  await prisma.botConfig.upsert({
+    where: { botId: bot.id },
+    update: {},
+    create: {
+      tenantId: tenant.id,
+      botId: bot.id,
+      model: 'gemini-2.0-flash',
+      temperature: 0.3,
+      maxTokens: 2048,
+      systemPrompt: `You are Bella, the receptionist for ${BELLA_NAME}. Help with bookings, prices, and opening hours. Be warm and brief.`,
+      inboxConfig: OPENING_HOURS,
+    },
+  })
+
+  const env = await prisma.environment.upsert({
+    where: { botId_kind: { botId: bot.id, kind: 'production' } },
+    update: {},
+    create: {
+      id: 'bella-env-production',
+      tenantId: tenant.id,
+      botId: bot.id,
+      kind: 'production',
+      name: 'Production',
+      isActive: true,
+    },
+  })
+
+  await prisma.channel.upsert({
+    where: { id: 'bella-web' },
+    update: {},
+    create: {
+      id: 'bella-web',
+      tenantId: tenant.id,
+      botId: bot.id,
+      environmentId: env.id,
+      name: 'Website Chat',
+      kind: 'web',
+      isActive: true,
+      config: { primaryColor: '#7c3aed', greeting: "Hi, I'm Bella. How can I help today?" },
+    },
+  })
+  await prisma.channel.upsert({
+    where: { id: 'bella-whatsapp' },
+    update: {},
+    create: {
+      id: 'bella-whatsapp',
+      tenantId: tenant.id,
+      botId: bot.id,
+      environmentId: env.id,
+      name: 'WhatsApp',
+      kind: 'whatsapp',
+      isActive: true,
+      config: { phoneNumberId: 'demo_phone', accessToken: 'demo_token', verifyToken: 'demo_verify' },
+    },
+  })
+
+  const flowsAdded = await ensureFlows(tenant.id, bot.id, BELLA_NAME)
+  const ruleAdded = await ensureRule(tenant.id, bot.id)
+  const chatsAdded = await ensureChats({
+    prefix: 'enrich-bella',
+    tenantId: tenant.id,
+    botId: bot.id,
+    channelId: 'bella-web',
+    environmentId: env.id,
+    templates: BELLA_CHATS,
+    repeats: 4,
+  })
+
+  return { status: 'ok', tenant: tenant.slug, flowsAdded, ruleAdded, chatsAdded }
+}
+
+async function ensureUser(tenantId: string, email: string, displayName: string, password: string) {
+  const existing = await prisma.user.findUnique({ where: { tenantId_email: { tenantId, email } } })
+  const user = existing ?? await prisma.user.create({
+    data: {
+      tenantId,
+      email,
+      displayName,
+      passwordHash: await bcrypt.hash(password, 10),
+    },
+  })
+  await prisma.membership.upsert({
+    where: { tenantId_userId: { tenantId, userId: user.id } },
+    update: { role: 'ADMIN' },
+    create: { tenantId, userId: user.id, role: 'ADMIN' },
+  })
+  return user
+}
+
+async function ensureFlows(tenantId: string, botId: string, companyName: string) {
+  let added = 0
+  for (const starter of starterFlows(companyName)) {
+    const found = await prisma.flow.findFirst({ where: { tenantId, botId, name: starter.name } })
+    if (found) continue
+    const flow = await prisma.flow.create({
+      data: {
+        tenantId,
+        botId,
+        name: starter.name,
+        description: starter.description,
+        kind: 'flow',
+        tags: starter.tags,
+      },
+    })
+    await prisma.flowVersion.create({
+      data: {
+        tenantId,
+        flowId: flow.id,
+        version: 1,
+        status: starter.publish ? 'published' : 'draft',
+        graph: starter.graph,
+        publishedAt: starter.publish ? new Date() : null,
+      },
+    })
+    added += 1
+  }
+  return added
+}
+
+async function ensureOpeningHours(tenantId: string, botId: string) {
+  const cfg = await prisma.botConfig.findUnique({ where: { botId } })
+  const current = cfg?.inboxConfig
+  const empty = !current || typeof current !== 'object' || Array.isArray(current) || Object.keys(current).length === 0
+  if (!empty) return false
+  await prisma.botConfig.upsert({
+    where: { botId },
+    update: { inboxConfig: OPENING_HOURS },
+    create: {
+      tenantId,
+      botId,
+      systemPrompt: 'You are a helpful support assistant.',
+      inboxConfig: OPENING_HOURS,
+    },
+  })
+  return true
+}
+
+async function ensureRule(tenantId: string, botId: string) {
+  const found = await prisma.automationRule.findFirst({ where: { tenantId, botId, name: RULE_NAME } })
+  if (found) return false
+  await prisma.automationRule.create({
+    data: {
+      tenantId,
+      botId,
+      name: RULE_NAME,
+      description: 'Writes an audit entry for every inbound customer message.',
+      trigger: 'message.received',
+      conditions: '',
+      actions: ['notify_supervisor'],
+      status: 'active',
+    },
+  })
+  return true
+}
+
+async function ensureChats(opts: {
+  prefix: string
+  tenantId: string
+  botId: string
+  channelId: string
+  environmentId: string
+  templates: Array<{ subject: string; lines: Array<{ role: 'user' | 'bot'; text: string }> }>
+  repeats: number
+}) {
+  let added = 0
+  const total = opts.templates.length * opts.repeats
+  for (let i = 0; i < total; i++) {
+    const template = opts.templates[i % opts.templates.length]!
+    const person = opts.prefix === 'enrich-bella'
+      ? BELLA_NAMES[i % BELLA_NAMES.length]!
+      : `Alex ${i + 1}`
+    const id = `${opts.prefix}-convo-${i + 1}`
+    const existing = await prisma.conversation.findUnique({ where: { id } })
+    if (existing) continue
+
+    const daysAgo = total - i
+    const createdAt = new Date(Date.now() - daysAgo * 24 * 60 * 60 * 1000)
+    createdAt.setUTCHours(9 + (i % 8), (i * 7) % 60, 0, 0)
+    const status = i % 5 === 0 ? 'escalated' : i % 2 === 0 ? 'resolved' : 'active'
+    const resolvedAt = status === 'resolved' ? new Date(createdAt.getTime() + 30 * 60 * 1000) : null
+
+    const contactId = `${opts.prefix}-contact-${i + 1}`
+    const contact = await prisma.contact.upsert({
+      where: { id: contactId },
+      update: {},
+      create: {
+        id: contactId,
+        tenantId: opts.tenantId,
+        displayName: person,
+        email: `${opts.prefix}.${i + 1}@example.com`,
+        channelId: opts.channelId,
+        createdAt,
+      },
+    })
+
+    await prisma.conversation.create({
+      data: {
+        id,
+        tenantId: opts.tenantId,
+        botId: opts.botId,
+        environmentId: opts.environmentId,
+        channelId: opts.channelId,
+        contactId: contact.id,
+        status,
+        subject: template.subject,
+        createdAt,
+        updatedAt: resolvedAt ?? createdAt,
+        resolvedAt,
+      },
+    })
+
+    let msgTime = new Date(createdAt)
+    for (const line of template.lines) {
+      msgTime = new Date(msgTime.getTime() + 45_000)
+      await prisma.message.create({
+        data: {
+          tenantId: opts.tenantId,
+          conversationId: id,
+          direction: line.role === 'user' ? 'inbound' : 'outbound',
+          authorKind: line.role,
+          authorId: line.role === 'user' ? contact.id : opts.botId,
+          content: { text: line.text },
+          createdAt: msgTime,
+        },
+      })
+    }
+
+    if (status === 'resolved') {
+      await prisma.csatResponse.create({
+        data: {
+          tenantId: opts.tenantId,
+          conversationId: id,
+          rating: i % 6 === 0 ? -1 : 1,
+          comment: i % 6 === 0 ? 'Took a while to get an answer.' : 'Quick and friendly.',
+          createdAt: resolvedAt ?? createdAt,
+        },
+      })
+    }
+    added += 1
+  }
+  return added
+}
+
+const isDirectRun = process.argv[1]?.endsWith('ensure-demos.ts') || process.argv[1]?.endsWith('ensure-demos.js')
+if (isDirectRun) {
+  ensureDemos()
+    .then((result) => {
+      console.log(JSON.stringify(result, null, 2))
+      return prisma.$disconnect()
+    })
+    .catch((err) => {
+      console.error(err)
+      process.exit(1)
+    })
+}

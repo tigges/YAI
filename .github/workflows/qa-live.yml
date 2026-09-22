@@ -1,0 +1,104 @@
+name: Live QA
+
+on:
+  workflow_run:
+    workflows: ["Build & Push Docker images"]
+    types: [completed]
+    branches: [main]
+  schedule:
+    - cron: "0 1 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  live:
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Chromium
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Wait until the live site is running this build
+        env:
+          LIVE_URL: https://app.botstudio.uk
+          EXPECTED_SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
+        run: |
+          set -euo pipefail
+          echo "Waiting for $EXPECTED_SHA"
+          for i in $(seq 1 60); do
+            body="$(curl -fsS "$LIVE_URL/api/v1/system/version" || true)"
+            echo "$body"
+            if printf '%s' "$body" | grep -q "$EXPECTED_SHA"; then
+              echo "Live site is on $EXPECTED_SHA"
+              exit 0
+            fi
+            sleep 20
+          done
+          echo "Live site did not report $EXPECTED_SHA within 20 minutes"
+          exit 1
+
+      - name: Fill any missing demo data
+        env:
+          LIVE_URL: https://app.botstudio.uk
+          SEED_DEMO_SECRET: ${{ secrets.SEED_DEMO_SECRET }}
+          DEMO_ADMIN_EMAIL: charles@acme.com
+          DEMO_ADMIN_PASSWORD: ${{ secrets.DEMO_ADMIN_PASSWORD }}
+        run: |
+          set -euo pipefail
+          auth_header=""
+          if [ -n "$SEED_DEMO_SECRET" ]; then
+            auth_header="Authorization: Bearer $SEED_DEMO_SECRET"
+          else
+            password="${DEMO_ADMIN_PASSWORD:-password123}"
+            token="$(curl -fsS -X POST "$LIVE_URL/api/v1/auth/login" \
+              -H "Content-Type: application/json" \
+              -d "{\"email\":\"$DEMO_ADMIN_EMAIL\",\"password\":\"$password\"}" \
+              | node -e "let s='';process.stdin.on('data',d=>s+=d);process.stdin.on('end',()=>{const j=JSON.parse(s); if(!j.data||!j.data.token){console.error(s); process.exit(1)}; process.stdout.write(j.data.token)})")"
+            auth_header="Authorization: Bearer $token"
+          fi
+          curl -fsS -X POST "$LIVE_URL/api/v1/system/ensure-demos" \
+            -H "$auth_header" \
+            -H "Content-Type: application/json" \
+            --max-time 180
+
+      - name: Run live tests
+        env:
+          LIVE_URL: https://app.botstudio.uk
+          QA_EMAIL: qa@acme.com
+          QA_PASSWORD: ${{ secrets.QA_ACCOUNT_PASSWORD }}
+          BELLA_EMAIL: demo@bella.com
+          BELLA_PASSWORD: Demo1234!
+        run: |
+          set -euo pipefail
+          if [ -z "$QA_PASSWORD" ]; then
+            QA_PASSWORD='QaDemo1234!'
+          fi
+          export QA_PASSWORD
+          pnpm exec playwright test --config qa/playwright.config.ts
+
+      - name: Upload the Playwright report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: live-qa-report
+          path: |
+            playwright-report/
+            test-results/
+          if-no-files-found: ignore
