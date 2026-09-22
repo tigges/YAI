@@ -367,6 +367,11 @@ model Conversation {
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
   resolvedAt    DateTime?
+  firstResponseDueAt   DateTime?
+  resolutionDueAt      DateTime?
+  firstRespondedAt     DateTime?
+  afterHoursNotifiedAt DateTime?
+  slaBreachedAt        DateTime?
 
   bot         Bot          @relation(fields: [botId], references: [id], onDelete: Cascade)
   environment Environment  @relation(fields: [environmentId], references: [id])
@@ -719,7 +724,7 @@ model AutomationRule {
   botId       String
   name        String
   description String?
-  trigger     String   // conversation.resolved | message.received | contact.created | ticket.created | schedule | intent_matched
+  trigger     String   // conversation.resolved | message.received | contact.created | ticket.created | schedule | intent_matched | sla.breached
   conditions  String   @default("")
   actions     Json     @default("[]")  // array of action strings
   status      String   @default("draft") // active | paused | draft

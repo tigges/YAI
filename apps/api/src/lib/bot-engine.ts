@@ -6,6 +6,7 @@
  */
 
 import { prisma } from '@ybot/db'
+import { onInboundCustomerMessage, onOutboundReply } from './sla.js'
 import { createLlmAdapter, createLlmAdapterForModel, createEmbeddingAdapter } from '@ybot/llm'
 import type { LlmMessage } from '@ybot/llm'
 
@@ -96,6 +97,15 @@ export async function getBotReply(params: BotReplyParams): Promise<BotReplyResul
     await prisma.message.create({
       data: { tenantId, conversationId, direction: 'inbound', authorKind: 'user', content: { text: userText } },
     }).catch(() => {})
+
+    const away = await onInboundCustomerMessage({ conversationId, botId }).catch(() => null)
+    if (away) {
+      await prisma.message.create({
+        data: { tenantId, conversationId, direction: 'outbound', authorKind: 'bot', content: { text: away } },
+      }).catch(() => {})
+      await onOutboundReply(conversationId).catch(() => {})
+      return { reply: away, conversationId }
+    }
   }
 
   // ── LLM config ────────────────────────────────────────────────────────────
@@ -142,6 +152,7 @@ export async function getBotReply(params: BotReplyParams): Promise<BotReplyResul
     await prisma.message.create({
       data: { tenantId, conversationId, direction: 'outbound', authorKind: 'bot', content: { text: reply } },
     }).catch(() => {})
+    await onOutboundReply(conversationId).catch(() => {})
   }
 
   return { reply, conversationId }

@@ -15,6 +15,7 @@ import { readFile } from 'node:fs/promises'
 import { triggerRules } from '../lib/automation-engine.js'
 import { resolve, dirname } from 'node:path'
 import { runFlowIfPublished } from '../lib/flow-runner.js'
+import { onInboundCustomerMessage, onOutboundReply } from '../lib/sla.js'
 import { fileURLToPath } from 'node:url'
 
 /** Derive the public-facing origin robustly when running behind a reverse proxy.
@@ -459,6 +460,21 @@ export async function widgetRoutes(app: FastifyInstance) {
     // Emit conversationId first so client can persist it
     if (conversationId) send({ conversationId })
 
+    // One away reply per conversation when the message arrives outside working hours.
+    if (conversationId) {
+      const away = await onInboundCustomerMessage({ conversationId, botId }).catch(() => null)
+      if (away) {
+        send({ chunk: away })
+        await prisma.message.create({
+          data: { tenantId, conversationId, direction: 'outbound', authorKind: 'bot', content: { text: away } },
+        }).catch(() => {})
+        await onOutboundReply(conversationId).catch(() => {})
+        send({ done: true })
+        reply.raw.end()
+        return
+      }
+    }
+
     // ── Try published flow first ──────────────────────────────────────────
     if (conversationId) {
       try {
@@ -471,6 +487,7 @@ export async function widgetRoutes(app: FastifyInstance) {
             await prisma.message.create({
               data: { tenantId, conversationId, direction: 'outbound', authorKind: 'bot', content: { text: fullText } },
             }).catch(() => {})
+            await onOutboundReply(conversationId).catch(() => {})
           }
           send({ done: true })
           reply.raw.end()
@@ -516,6 +533,7 @@ export async function widgetRoutes(app: FastifyInstance) {
         await prisma.message.create({
           data: { tenantId, conversationId, direction: 'outbound', authorKind: 'bot', content: { text: fullText } },
         }).catch(() => {})
+        await onOutboundReply(conversationId).catch(() => {})
       }
       reply.raw.end()
     }
