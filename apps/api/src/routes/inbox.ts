@@ -4,6 +4,7 @@ import { z } from 'zod'
 import { processInboundMessage } from '../runtime-bridge.js'
 import { enqueueConversationAnalysis } from '../queues.js'
 import { triggerRules } from '../lib/automation-engine.js'
+import { attachSlaLabels, onOutboundReply } from '../lib/sla.js'
 
 type JWT = { sub: string; tenantId: string; role: string }
 
@@ -88,7 +89,8 @@ export async function conversationsRoutes(app: FastifyInstance) {
       take: parseInt(q['limit'] ?? '50'),
       skip: parseInt(q['offset'] ?? '0'),
     })
-    return { data: conversations }
+    const data = await attachSlaLabels(conversations).catch(() => conversations.map((c) => ({ ...c, sla: null as string | null })))
+    return { data }
   })
 
   // GET /conversations/:id
@@ -100,7 +102,8 @@ export async function conversationsRoutes(app: FastifyInstance) {
       include: { contact: true, channel: true, messages: { orderBy: { createdAt: 'asc' } }, labels: { include: { label: true } }, tickets: true },
     })
     if (!convo) return reply.status(404).send({ error: { code: 'NOT_FOUND' } })
-    return { data: convo }
+    const [labeled] = await attachSlaLabels([convo]).catch(() => [{ ...convo, sla: null as string | null }])
+    return { data: labeled }
   })
 
   // PATCH /conversations/:id  (assign, resolve, escalate, etc.)
@@ -164,6 +167,9 @@ export async function conversationsRoutes(app: FastifyInstance) {
       data: { tenantId, conversationId: id, direction, authorId: userId, authorKind: body.data.authorKind, content: body.data.content },
     })
     await prisma.conversation.update({ where: { id }, data: { updatedAt: new Date() } })
+    if (direction === 'outbound' && !body.data.isInternalNote) {
+      await onOutboundReply(id).catch(() => {})
+    }
 
     // Trigger bot engine for inbound user messages
     if (direction === 'inbound' && body.data.authorKind === 'user') {

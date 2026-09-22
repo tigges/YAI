@@ -333,7 +333,7 @@ export interface Entity { id: string; name: string; kind: string; values: object
 export interface Faq { id: string; question: string; answer: string; tags: string[] }
 export interface KnowledgeSource { id: string; name: string; kind: string; config: Record<string, unknown>; lastSyncAt?: string; documents: Array<{ id: string; status: string }> }
 export interface LlmConfig { model: string; temperature: number; maxTokens: number; systemPrompt: string }
-export interface Conversation { id: string; status: string; assignedTo?: string; contact?: Contact; channel?: { id: string; name: string; kind: string }; messages: Message[]; labels: Array<{ label: Label }>; updatedAt: string }
+export interface Conversation { id: string; status: string; assignedTo?: string; contact?: Contact; channel?: { id: string; name: string; kind: string }; messages: Message[]; labels: Array<{ label: Label }>; updatedAt: string; sla?: string | null }
 export interface Message { id: string; direction: string; authorKind: string; content: { text: string }; createdAt: string }
 export interface Ticket { id: string; subject: string; status: string; priority: string; assignedTo?: string; tags: string[]; createdAt: string; conversation?: { contact?: Contact } }
 export interface Contact { id: string; displayName?: string; email?: string; phone?: string; metadata: Record<string, unknown>; createdAt: string }

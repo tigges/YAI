@@ -155,6 +155,7 @@ export function ChatsPage() {
     unread: c.messages?.filter((m) => m.direction === 'inbound').length ?? 0,
     channel: (c.channel?.kind ?? 'web') as Convo['channel'],
     assignee: c.assignedTo ?? null,
+    sla: c.sla ?? undefined,
     labels: c.labels?.map((l) => l.label?.name ?? '') ?? [],
     email: c.contact?.email,
     phone: c.contact?.phone,

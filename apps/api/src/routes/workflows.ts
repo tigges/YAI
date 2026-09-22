@@ -21,6 +21,7 @@ const VALID_TRIGGERS = [
   'message.received',
   'contact.created',
   'csat.submitted',
+  'sla.breached',
   'ticket.created',
   'schedule',
   'intent_matched',

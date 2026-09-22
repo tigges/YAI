@@ -32,12 +32,15 @@ const DEFAULTS = {
   showTypingIndicator: true, allowContactMerge: true,
 }
 
+const DEFAULT_AWAY = "Thanks for your message. We're currently outside our working hours and will reply when the team is back."
+
 export function InboxSettingsPage() {
   const { data: savedConfig, isLoading } = useInboxConfig()
   const saveConfig = useSaveInboxConfig()
   const [settings, setSettings] = useState(DEFAULTS)
   const [slaHours, setSlaHours] = useState({ first_response: '1', resolution: '24' })
   const [workingHours, setWorkingHours] = useState({ start: '09:00', end: '18:00', timezone: 'Europe/London' })
+  const [awayMessage, setAwayMessage] = useState(DEFAULT_AWAY)
   const [saved, setSaved] = useState(false)
 
   useEffect(() => {
@@ -45,7 +48,15 @@ export function InboxSettingsPage() {
     const cfg = savedConfig as Record<string, unknown>
     if (cfg['toggles']) setSettings({ ...DEFAULTS, ...(cfg['toggles'] as typeof DEFAULTS) })
     if (cfg['sla']) setSlaHours({ ...slaHours, ...(cfg['sla'] as typeof slaHours) })
-    if (cfg['workingHours']) setWorkingHours({ ...workingHours, ...(cfg['workingHours'] as typeof workingHours) })
+    if (cfg['workingHours']) {
+      const hours = cfg['workingHours'] as { start?: string; end?: string; timezone?: string; awayMessage?: string }
+      setWorkingHours({
+        start: hours.start ?? workingHours.start,
+        end: hours.end ?? workingHours.end,
+        timezone: hours.timezone ?? workingHours.timezone,
+      })
+      if (hours.awayMessage) setAwayMessage(hours.awayMessage)
+    }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [savedConfig])
 
@@ -54,7 +65,7 @@ export function InboxSettingsPage() {
   }
 
   async function save() {
-    await saveConfig.mutateAsync({ toggles: settings, sla: slaHours, workingHours })
+    await saveConfig.mutateAsync({ toggles: settings, sla: slaHours, workingHours: { ...workingHours, awayMessage } })
     setSaved(true)
     setTimeout(() => setSaved(false), 2000)
   }
@@ -122,6 +133,7 @@ export function InboxSettingsPage() {
               <h2 className="text-sm font-semibold text-[var(--text-primary)]">Working Hours</h2>
             </div>
             <Card>
+              <p className="text-xs text-[var(--text-muted)] mb-3">The first customer message outside this window gets a single away reply on web chat and WhatsApp. Later messages still reach the bot.</p>
               <div className="grid grid-cols-3 gap-4">
                 <div>
                   <label className="text-xs font-medium text-[var(--text-muted)] mb-1.5 block">Start time</label>
@@ -142,6 +154,15 @@ export function InboxSettingsPage() {
                     <option>Asia/Dubai</option><option>Asia/Singapore</option>
                   </select>
                 </div>
+              </div>
+              <div className="mt-4">
+                <label className="text-xs font-medium text-[var(--text-muted)] mb-1.5 block">Away message</label>
+                <textarea
+                  rows={3}
+                  value={awayMessage}
+                  onChange={(e) => setAwayMessage(e.target.value)}
+                  className="w-full rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--bg-overlay)] px-3 py-2 text-sm text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--accent)]/40"
+                />
               </div>
             </Card>
           </section>

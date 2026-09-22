@@ -260,6 +260,15 @@ export async function seedDemo() {
       temperature: 0.3,
       maxTokens: 2048,
       systemPrompt: `You are ${PERSONA}, a helpful and friendly AI assistant for ${TENANT_NAME}. Help customers with bookings, pricing, and general enquiries. Be warm, concise, and professional.`,
+      inboxConfig: {
+        sla: { first_response: '1', resolution: '24' },
+        workingHours: {
+          start: '09:00',
+          end: '18:00',
+          timezone: 'Europe/London',
+          awayMessage: "Thanks for your message. We're currently outside our working hours and will reply when the team is back.",
+        },
+      },
     },
   })
   console.log(`  ✓ Bot: ${bot.id} (${BOT_NAME})`)
