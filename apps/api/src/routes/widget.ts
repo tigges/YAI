@@ -180,7 +180,7 @@ const WIDGET_INLINE_JS = /* js */`
         addMsg('bot','Welcome back, '+visitorName+'! 👋 How can I help you today?');
       } else {
         // First time — ask for name conversationally, introducing the bot
-        var intro=BOT_NAME?'Hi there, I\'m '+BOT_NAME+'! 👋 What\'s your name?':'Hi there! 👋 What\'s your name?';
+        var intro=BOT_NAME?"Hi there, I'm "+BOT_NAME+"! 👋 What's your name?":"Hi there! 👋 What's your name?";
         addMsg('bot',intro);
         nameAsked=true;
       }
