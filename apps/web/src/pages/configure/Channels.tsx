@@ -2,7 +2,7 @@ import React, { useState } from 'react'
 import {
   Globe, MessageSquare, Phone, Mail, Facebook,
   Send, CheckCircle2, Circle, Pencil, Trash2, Plus, Code2,
-  Copy, Loader2, FlaskConical,
+  Copy, Loader2, FlaskConical, Wand2,
 } from 'lucide-react'
 import { Badge, Button } from '@ybot/ui'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogBody, DialogFooter } from '@ybot/ui'
@@ -12,6 +12,7 @@ import { cn } from '@ybot/ui'
 import { useChannels, useCreateChannel, useDeleteChannel } from '../../lib/hooks'
 import type { Channel } from '../../lib/api'
 import { useAppStore } from '../../store/app'
+import { WidgetSetupWizard } from './WidgetSetupWizard'
 
 const SUBNAV = [
   { label: 'Channels',      path: '/configure/channels' },
@@ -60,12 +61,13 @@ export function ChannelsPage() {
   const createChannel = useCreateChannel()
   const deleteChannel = useDeleteChannel()
 
-  const [selected, setSelected]   = useState<Channel | null>(null)
-  const [showAdd, setShowAdd]     = useState(false)
-  const [showEmbed, setShowEmbed] = useState<Channel | null>(null)
-  const [addKind, setAddKind]     = useState('web')
-  const [addName, setAddName]     = useState('')
-  const [copied, setCopied]       = useState(false)
+  const [selected, setSelected]       = useState<Channel | null>(null)
+  const [showAdd, setShowAdd]         = useState(false)
+  const [showEmbed, setShowEmbed]     = useState<Channel | null>(null)
+  const [addKind, setAddKind]         = useState('web')
+  const [addName, setAddName]         = useState('')
+  const [copied, setCopied]           = useState(false)
+  const [showWizard, setShowWizard]   = useState(false)
 
   function copyEmbed(channelId: string) {
     navigator.clipboard?.writeText(getEmbedCode(channelId)).catch(() => {})
@@ -83,12 +85,19 @@ export function ChannelsPage() {
     setAddKind('web')
   }
 
+  function handleAddChannel() {
+    setAddKind('web')
+    setShowAdd(true)
+  }
+
   return (
     <div className="flex flex-col h-full">
+      {showWizard && <WidgetSetupWizard onClose={() => setShowWizard(false)} />}
+
       <div className="border-b border-[var(--border)] bg-[var(--bg-surface)] px-6 pt-4 pb-0 shrink-0">
         <div className="flex items-center justify-between pb-3">
           <h1 className="text-base font-semibold text-[var(--text-primary)]">Configure</h1>
-          <Button size="sm" className="gap-1.5" onClick={() => setShowAdd(true)}>
+          <Button size="sm" className="gap-1.5" onClick={handleAddChannel}>
             <Plus size={14} /> Add Channel
           </Button>
         </div>
@@ -123,9 +132,14 @@ export function ChannelsPage() {
               <p className="font-semibold text-[var(--text-primary)] mb-1">No channels yet</p>
               <p className="text-sm text-[var(--text-muted)]">Add a channel to start receiving conversations.</p>
             </div>
-            <Button size="sm" className="gap-1.5 mt-2" onClick={() => setShowAdd(true)}>
-              <Plus size={14} /> Add your first channel
-            </Button>
+            <div className="flex items-center gap-2 mt-2">
+              <Button size="sm" className="gap-1.5" onClick={() => setShowWizard(true)}>
+                <Wand2 size={14} /> Set up web widget
+              </Button>
+              <Button size="sm" variant="ghost" className="gap-1.5" onClick={handleAddChannel}>
+                <Plus size={14} /> Other channel
+              </Button>
+            </div>
           </div>
         )}
 
@@ -178,6 +192,7 @@ export function ChannelsPage() {
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
                         <DropdownMenuItem onClick={() => setSelected(ch)}><Pencil size={13} /> Settings</DropdownMenuItem>
+                        {ch.kind === 'web' && <DropdownMenuItem onClick={() => { setShowWizard(true) }}><Wand2 size={13} /> Setup wizard</DropdownMenuItem>}
                         {ch.kind === 'web' && <DropdownMenuItem onClick={() => window.open(getTestUrl(ch.id), '_blank')}><FlaskConical size={13} /> Test widget</DropdownMenuItem>}
                         {ch.kind === 'web' && <DropdownMenuItem onClick={() => setShowEmbed(ch)}><Code2 size={13} /> Embed code</DropdownMenuItem>}
                         <DropdownMenuSeparator />
@@ -315,10 +330,29 @@ export function ChannelsPage() {
         <DialogContent size="sm">
           <DialogHeader><DialogTitle>Add a channel</DialogTitle></DialogHeader>
           <DialogBody className="space-y-4">
+            {/* Web widget – promote wizard */}
+            <button
+              onClick={() => { setShowAdd(false); setShowWizard(true) }}
+              className="w-full flex items-center gap-3 p-3 rounded-[var(--radius-md)] border-2 border-[var(--accent)] bg-[var(--accent-muted)] text-left hover:bg-[var(--accent)]/15 transition-colors"
+            >
+              <span className="p-2 rounded-[var(--radius-md)] bg-[var(--accent)] text-white shrink-0"><Globe size={16} /></span>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-semibold text-[var(--accent)]">Web Widget</p>
+                <p className="text-xs text-[var(--text-muted)]">Guided wizard — customise, get embed code, verify</p>
+              </div>
+              <Wand2 size={14} className="text-[var(--accent)] shrink-0" />
+            </button>
+
+            <div className="relative flex items-center gap-2">
+              <div className="flex-1 border-t border-[var(--border)]" />
+              <span className="text-[10px] font-medium text-[var(--text-muted)] uppercase tracking-wide">Other channels</span>
+              <div className="flex-1 border-t border-[var(--border)]" />
+            </div>
+
             <div>
               <label className="text-xs font-medium text-[var(--text-muted)] mb-1.5 block">Channel type</label>
               <div className="grid grid-cols-2 gap-2">
-                {ADD_KINDS.map((k) => {
+                {ADD_KINDS.filter((k) => k !== 'web').map((k) => {
                   const m = KIND_META[k]!
                   return (
                     <button
@@ -338,7 +372,6 @@ export function ChannelsPage() {
             <div>
               <label className="text-xs font-medium text-[var(--text-muted)] mb-1.5 block">Channel name *</label>
               <input
-                autoFocus
                 className="w-full rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--bg-overlay)] px-3 py-2 text-sm text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--accent)]/40"
                 placeholder={`e.g. ${KIND_META[addKind]?.label ?? 'My channel'}`}
                 value={addName}
