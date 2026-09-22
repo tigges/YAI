@@ -3,7 +3,8 @@ import {
   Search, Filter, ChevronDown, ChevronRight,
   LogIn, Bot, FileText, Users, Settings, Globe,
   CheckCircle2, AlertCircle, Info, Pencil, Trash2,
-  Shield, UserPlus, Send, RefreshCw, Key,
+  Shield, UserPlus, Send, RefreshCw, Key, Bell, Tag,
+  MessageSquare,
 } from 'lucide-react'
 import { Avatar, Badge, Button, Input } from '@ybot/ui'
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from '@ybot/ui'
@@ -25,6 +26,8 @@ type AuditAction =
   | 'webhook.created' | 'webhook.deleted'
   | 'settings.updated' | 'api_key.created' | 'api_key.revoked'
   | 'knowledge.synced' | 'contact.deleted'
+  | 'automation.alert' | 'automation.label_added'
+  | 'training.run'
 
 type AuditSeverity = 'info' | 'warning' | 'success' | 'error'
 
@@ -59,6 +62,9 @@ const ACTION_CFG: Record<AuditAction, { icon: React.ReactNode; label: string; ca
   'api_key.revoked':      { icon: <Key size={12} />,          label: 'API key revoked',        category: 'Auth' },
   'knowledge.synced':     { icon: <RefreshCw size={12} />,    label: 'Knowledge synced',       category: 'Build' },
   'contact.deleted':      { icon: <Trash2 size={12} />,       label: 'Contact deleted',        category: 'Inbox' },
+  'automation.alert':     { icon: <Bell size={12} />,         label: 'Automation alert',       category: 'Automation' },
+  'automation.label_added': { icon: <Tag size={12} />,        label: 'Label added',            category: 'Automation' },
+  'training.run':         { icon: <RefreshCw size={12} />,    label: 'Training run',           category: 'Build' },
 }
 
 const SEVERITY_VARIANT: Record<AuditSeverity, 'info' | 'success' | 'warning' | 'error'> = {
@@ -105,8 +111,8 @@ export function AuditPage() {
     ? apiEvents.map((e) => ({
         id: e.id,
         actor: { name: e.user?.displayName ?? 'System', email: e.user?.email ?? '' },
-        action: (e.action in ACTION_CFG ? e.action : 'user.login') as AuditEvent['action'],
-        resource: (e.resource ?? '—'),
+        action: (e.action in ACTION_CFG ? e.action : 'automation.alert') as AuditEvent['action'],
+        resource: (e.resource ?? e.resourceId ?? '—'),
         details: JSON.stringify(e.metadata ?? {}),
         ip: (e.metadata?.ip ?? 'unknown') as string,
         timestamp: formatAuditTime(e.createdAt),
@@ -117,8 +123,10 @@ export function AuditPage() {
   const filtered = events.filter((e) => {
     const matchSearch = !search ||
       e.actor.name.toLowerCase().includes(search.toLowerCase()) ||
+      e.action.toLowerCase().includes(search.toLowerCase()) ||
       ACTION_CFG[e.action]?.label?.toLowerCase().includes(search.toLowerCase()) ||
-      e.resource.toLowerCase().includes(search.toLowerCase())
+      e.resource.toLowerCase().includes(search.toLowerCase()) ||
+      e.details.toLowerCase().includes(search.toLowerCase())
     const matchCat = categoryFilter === 'all' || ACTION_CFG[e.action]?.category === categoryFilter
     const matchSev = severityFilter === 'all' || e.severity === severityFilter
     return matchSearch && matchCat && matchSev

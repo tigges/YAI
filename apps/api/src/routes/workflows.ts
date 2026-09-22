@@ -17,8 +17,10 @@ type JWT = { sub: string; tenantId: string; role: string }
 
 const VALID_TRIGGERS = [
   'conversation.resolved',
+  'conversation.escalated',
   'message.received',
   'contact.created',
+  'csat.submitted',
   'ticket.created',
   'schedule',
   'intent_matched',

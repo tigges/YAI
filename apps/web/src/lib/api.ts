@@ -352,7 +352,7 @@ export interface CsatTrendPoint { date: string; score: number; positive: number;
 export interface ResolutionBreakdownItem { name: string; value: number }
 export interface ResponseTimeHourPoint { hour: string; time: number }
 export interface TrainingRun { id: string; createdAt: string; model: string; examples: number; intents: number; faqs: number; sources: number; status: string; durationMs: number }
-export interface AuditEvent { id: string; action: string; resource?: string; metadata: Record<string, unknown>; createdAt: string; user?: { displayName: string; email: string } }
+export interface AuditEvent { id: string; action: string; resource?: string; resourceId?: string; metadata: Record<string, unknown>; createdAt: string; user?: { displayName: string; email: string } }
 
 export interface DockerContainer { id: string; name: string; image: string; state: string; status: string; created?: number }
 export interface ServicePing { ok: boolean; latencyMs: number }
