@@ -71,14 +71,33 @@ export async function webhooksRoutes(app: FastifyInstance) {
     return reply.status(204).send()
   })
 
-  // POST /webhooks/:id/test  — simulate delivery
+  // POST /webhooks/:id/test  — fire a real test delivery
   app.post('/:id/test', async (request, reply) => {
     const { tenantId } = request.user as JWT
     const { id } = request.params as { id: string }
     const wh = await prisma.webhook.findFirst({ where: { id, tenantId } })
     if (!wh) return reply.status(404).send({ error: { code: 'NOT_FOUND' } })
-    // In production: fire actual HTTP POST to wh.url with test payload
-    return { data: { delivered: true, statusCode: 200, durationMs: 143 } }
+
+    const payload = {
+      event: 'webhook.test',
+      timestamp: new Date().toISOString(),
+      webhook: { id: wh.id, url: wh.url },
+      data: { message: 'This is a test delivery from BotStudio.' },
+    }
+
+    const start = Date.now()
+    try {
+      const res = await fetch(wh.url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-YBot-Event': 'webhook.test', 'X-YBot-Signature': `sha256=${id}` },
+        body: JSON.stringify(payload),
+        signal: AbortSignal.timeout(10_000),
+      })
+      return { data: { delivered: res.ok, statusCode: res.status, durationMs: Date.now() - start } }
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Request failed'
+      return { data: { delivered: false, statusCode: 0, durationMs: Date.now() - start, error: msg } }
+    }
   })
 }
 
@@ -160,7 +179,7 @@ export async function analyticsRoutes(app: FastifyInstance) {
   app.addHook('preHandler', app.authenticate)
   app.addHook('preHandler', requireRole('SUPERVISOR', 'ADMIN'))
 
-  // GET /analytics/overview?botId=...&range=7d
+  // GET /analytics/overview?botId=...
   app.get('/overview', async (request) => {
     const { tenantId } = request.user as JWT
     const q = request.query as Record<string, string>
@@ -176,10 +195,35 @@ export async function analyticsRoutes(app: FastifyInstance) {
       prisma.conversation.count({ where: { ...where, assignedTo: null } }),
     ])
 
+    // Compute real avg response time: avg seconds between first user msg and first bot reply
+    type RespRow = { avg_ms: string | null }
+    const respRows = await (prisma.$queryRawUnsafe as (sql: string, ...p: unknown[]) => Promise<RespRow[]>)(
+      botId
+        ? `SELECT AVG(EXTRACT(EPOCH FROM (mb."createdAt" - mu."createdAt")) * 1000)::text AS avg_ms
+           FROM messages mu
+           JOIN LATERAL (
+             SELECT "createdAt" FROM messages
+             WHERE "conversationId" = mu."conversationId" AND "authorKind" = 'bot'
+             ORDER BY "createdAt" ASC LIMIT 1
+           ) mb ON true
+           WHERE mu."tenantId" = $1 AND mu."authorKind" = 'user'
+             AND mu."tenantId" IN (SELECT "tenantId" FROM bots WHERE id = $2)`
+        : `SELECT AVG(EXTRACT(EPOCH FROM (mb."createdAt" - mu."createdAt")) * 1000)::text AS avg_ms
+           FROM messages mu
+           JOIN LATERAL (
+             SELECT "createdAt" FROM messages
+             WHERE "conversationId" = mu."conversationId" AND "authorKind" = 'bot'
+             ORDER BY "createdAt" ASC LIMIT 1
+           ) mb ON true
+           WHERE mu."tenantId" = $1 AND mu."authorKind" = 'user'`,
+      ...(botId ? [tenantId, botId] : [tenantId]),
+    ).catch(() => [{ avg_ms: null }])
+
+    const avgResponseTimeMs = respRows[0]?.avg_ms ? Math.round(parseFloat(respRows[0].avg_ms)) : null
+
     const resolutionRate = totalConvos > 0 ? Math.round((resolvedConvos / totalConvos) * 100 * 10) / 10 : 0
     const escalationRate = totalConvos > 0 ? Math.round((escalatedConvos / totalConvos) * 100 * 10) / 10 : 0
     const botHandledPct = totalConvos > 0 ? Math.round((botHandledConvos / totalConvos) * 100) : 0
-    // csatScore: convert -1/+1 ratings to a 0–100 scale
     const avgRating = csatRows._avg.rating ?? 0
     const csatScore = csatRows._count.id > 0 ? Math.round(((avgRating + 1) / 2) * 100) : 0
 
@@ -191,7 +235,7 @@ export async function analyticsRoutes(app: FastifyInstance) {
         escalationRate,
         totalContacts,
         csatScore,
-        avgResponseTimeMs: 1400,
+        avgResponseTimeMs,
         botHandledPct,
       }
     }
@@ -229,6 +273,95 @@ export async function analyticsRoutes(app: FastifyInstance) {
         conversations: parseInt(row.conversations, 10),
         resolved: parseInt(row.resolved, 10),
         escalated: parseInt(row.escalated, 10),
+      }))
+    }
+  })
+
+  // GET /analytics/csat-trend?days=30
+  app.get('/csat-trend', async (request) => {
+    const { tenantId } = request.user as JWT
+    const q = request.query as Record<string, string>
+    const days = Math.min(Math.max(parseInt(q['days'] ?? '30', 10), 1), 90)
+    const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000)
+
+    type CsatRow = { day: Date; positive: string; negative: string }
+    const rows = await (prisma.$queryRawUnsafe as (sql: string, ...p: unknown[]) => Promise<CsatRow[]>)(
+      `SELECT date_trunc('day', "createdAt") AS day,
+         SUM(CASE WHEN rating=1  THEN 1 ELSE 0 END)::text AS positive,
+         SUM(CASE WHEN rating=-1 THEN 1 ELSE 0 END)::text AS negative
+       FROM csat_responses
+       WHERE "tenantId"=$1 AND "createdAt">=$2
+       GROUP BY 1 ORDER BY 1 ASC`,
+      tenantId, since,
+    )
+
+    return {
+      data: rows.map((r) => {
+        const pos = parseInt(r.positive, 10)
+        const neg = parseInt(r.negative, 10)
+        const total = pos + neg
+        return {
+          date: new Date(r.day).toLocaleDateString('en-GB', { month: 'short', day: 'numeric' }),
+          score: total > 0 ? Math.round((pos / total) * 100) : 0,
+          positive: pos,
+          negative: neg,
+        }
+      })
+    }
+  })
+
+  // GET /analytics/resolution-breakdown
+  app.get('/resolution-breakdown', async (request) => {
+    const { tenantId } = request.user as JWT
+    const q = request.query as Record<string, string>
+    const botId = q['botId']
+    const where = { tenantId, ...(botId ? { botId } : {}) }
+
+    const [total, resolved, escalated, botResolved] = await Promise.all([
+      prisma.conversation.count({ where }),
+      prisma.conversation.count({ where: { ...where, status: 'resolved' } }),
+      prisma.conversation.count({ where: { ...where, status: 'escalated' } }),
+      prisma.conversation.count({ where: { ...where, status: 'resolved', assignedTo: null } }),
+    ])
+
+    const agentHandover = resolved - botResolved
+    const abandoned = Math.max(0, total - resolved - escalated)
+
+    return {
+      data: [
+        { name: 'Bot resolved', value: botResolved },
+        { name: 'Agent handover', value: agentHandover },
+        { name: 'Escalated', value: escalated },
+        { name: 'Abandoned', value: abandoned },
+      ]
+    }
+  })
+
+  // GET /analytics/response-time-by-hour
+  app.get('/response-time-by-hour', async (request) => {
+    const { tenantId } = request.user as JWT
+
+    type HourRow = { hour: number; avg_ms: string }
+    const rows = await (prisma.$queryRawUnsafe as (sql: string, ...p: unknown[]) => Promise<HourRow[]>)(
+      `SELECT EXTRACT(HOUR FROM mu."createdAt")::int AS hour,
+         AVG(EXTRACT(EPOCH FROM (mb."createdAt" - mu."createdAt")) * 1000)::text AS avg_ms
+       FROM messages mu
+       JOIN LATERAL (
+         SELECT "createdAt" FROM messages
+         WHERE "conversationId" = mu."conversationId" AND "authorKind" = 'bot'
+         ORDER BY "createdAt" ASC LIMIT 1
+       ) mb ON true
+       WHERE mu."tenantId" = $1 AND mu."authorKind" = 'user'
+       GROUP BY 1 ORDER BY 1 ASC`,
+      tenantId,
+    ).catch(() => [] as HourRow[])
+
+    // Fill all 24 hours, default 0 for missing
+    const byHour = new Map(rows.map((r) => [r.hour, Math.round(parseFloat(r.avg_ms) / 1000)]))
+    return {
+      data: Array.from({ length: 24 }, (_, h) => ({
+        hour: `${String(h).padStart(2, '0')}:00`,
+        time: byHour.get(h) ?? 0,
       }))
     }
   })

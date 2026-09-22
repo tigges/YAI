@@ -1,12 +1,14 @@
 import React, { useState } from 'react'
 import {
-  Dumbbell, Play, CheckCircle, Clock, AlertCircle,
+  Play, CheckCircle, Clock, AlertCircle,
   Cpu, TrendingUp, RefreshCw, Info,
 } from 'lucide-react'
 import { Button, Badge, Card, CardHeader, CardTitle } from '@ybot/ui'
 import { SubNav } from '../../../components/SubNav'
 import { cn } from '@ybot/ui'
-import { useTraining, useSaveTraining } from '../../../lib/hooks'
+import { useTraining, useSaveTraining, useTrainingRuns } from '../../../lib/hooks'
+import { useQueryClient } from '@tanstack/react-query'
+import { useAppStore } from '../../../store/app'
 
 const SUBNAV = [
   { label: 'Intents', path: '/build/knowledge/intents' },
@@ -79,28 +81,27 @@ const MODEL_GROUPS: Array<{
 const MODEL_TO_GROUP: Record<string, (typeof MODEL_GROUPS)[number]> = {}
 MODEL_GROUPS.forEach((g) => g.models.forEach((m) => { MODEL_TO_GROUP[m.value] = g }))
 
-interface TrainingRun {
-  id: string
-  status: 'success' | 'running' | 'failed'
-  triggeredBy: string
-  startedAt: string
-  duration: string
-  intents: number
-  entities: number
-  accuracy?: number
+function timeAgo(iso: string) {
+  const diff = Date.now() - new Date(iso).getTime()
+  const s = Math.floor(diff / 1000)
+  if (s < 60) return 'just now'
+  if (s < 3600) return `${Math.floor(s / 60)}m ago`
+  if (s < 86400) return `${Math.floor(s / 3600)}h ago`
+  return `${Math.floor(s / 86400)}d ago`
 }
 
-const MOCK_RUNS: TrainingRun[] = [
-  { id: '1', status: 'success', triggeredBy: 'admin@acme.com', startedAt: '2h ago', duration: '1m 42s', intents: 5, entities: 3, accuracy: 94.2 },
-  { id: '2', status: 'success', triggeredBy: 'dev@acme.com', startedAt: '1d ago', duration: '1m 18s', intents: 4, entities: 3, accuracy: 91.8 },
-  { id: '3', status: 'failed', triggeredBy: 'admin@acme.com', startedAt: '3d ago', duration: '0m 12s', intents: 4, entities: 2 },
-  { id: '4', status: 'success', triggeredBy: 'dev@acme.com', startedAt: '5d ago', duration: '1m 05s', intents: 3, entities: 2, accuracy: 88.5 },
-]
+function durationLabel(ms: number) {
+  if (ms < 1000) return `${ms}ms`
+  const s = Math.floor(ms / 1000)
+  return s >= 60 ? `${Math.floor(s / 60)}m ${s % 60}s` : `${s}s`
+}
 
 export function TrainingPage() {
   const { data: config } = useTraining()
   const saveTraining = useSaveTraining()
-  const [runs, setRuns] = useState(MOCK_RUNS)
+  const { data: trainingRuns = [] } = useTrainingRuns()
+  const qc = useQueryClient()
+  const selectedBotId = useAppStore((s: { selectedBotId: string | null }) => s.selectedBotId)
   const [training, setTraining] = useState(false)
   const [saved, setSaved] = useState(false)
   const [selectedModel, setSelectedModel] = useState(config?.model ?? 'gemini-2.0-flash')
@@ -127,22 +128,13 @@ export function TrainingPage() {
     setTraining(true)
     try {
       await saveTraining.mutateAsync({ model: selectedModel, temperature: parseFloat(temperature), systemPrompt })
+      // Invalidate training-runs so the new run appears immediately
+      await qc.invalidateQueries({ queryKey: ['training-runs', selectedBotId] })
     } catch { /* demo mode */ }
-    await new Promise((r) => setTimeout(r, 1500))
-    setRuns((rs) => [{
-      id: `run-${Date.now()}`,
-      status: 'success',
-      triggeredBy: 'admin@acme.com',
-      startedAt: 'just now',
-      duration: '1m 38s',
-      intents: 5,
-      entities: 3,
-      accuracy: 95.1,
-    }, ...rs])
     setTraining(false)
   }
 
-  const latestSuccess = runs.find((r) => r.status === 'success')
+  const latestSuccess = trainingRuns.find((r) => r.status === 'success')
   const selectedGroup = MODEL_TO_GROUP[selectedModel]
   const selectedModelMeta = selectedGroup?.models.find((m) => m.value === selectedModel)
 
@@ -188,7 +180,6 @@ export function TrainingPage() {
                     </optgroup>
                   ))}
                 </select>
-                {/* Contextual hint for the selected model */}
                 {selectedGroup && (
                   <p className="mt-1.5 text-[11px] text-[var(--text-muted)] flex items-start gap-1">
                     <Info size={11} className="shrink-0 mt-0.5" />
@@ -242,17 +233,17 @@ export function TrainingPage() {
         {latestSuccess && (
           <div className="grid grid-cols-3 gap-4">
             <Card>
-              <p className="text-xs text-[var(--text-muted)]">Intent Accuracy</p>
-              <p className="text-2xl font-bold text-[var(--success)] mt-1">{latestSuccess.accuracy}%</p>
+              <p className="text-xs text-[var(--text-muted)]">Knowledge Sources</p>
+              <p className="text-2xl font-bold text-[var(--success)] mt-1">{latestSuccess.examples}</p>
               <Badge variant="success" dot className="mt-1">Last training</Badge>
             </Card>
             <Card>
-              <p className="text-xs text-[var(--text-muted)]">Intents Trained</p>
+              <p className="text-xs text-[var(--text-muted)]">Intents</p>
               <p className="text-2xl font-bold text-[var(--text-primary)] mt-1">{latestSuccess.intents}</p>
             </Card>
             <Card>
-              <p className="text-xs text-[var(--text-muted)]">Entities Trained</p>
-              <p className="text-2xl font-bold text-[var(--text-primary)] mt-1">{latestSuccess.entities}</p>
+              <p className="text-xs text-[var(--text-muted)]">FAQs</p>
+              <p className="text-2xl font-bold text-[var(--text-primary)] mt-1">{latestSuccess.faqs}</p>
             </Card>
           </div>
         )}
@@ -266,41 +257,44 @@ export function TrainingPage() {
             </div>
           </CardHeader>
           <div className="divide-y divide-[var(--border)]">
-            {runs.map((run) => {
-              const StatusIcon = run.status === 'success' ? CheckCircle : run.status === 'running' ? Clock : AlertCircle
-              return (
-                <div key={run.id} className="flex items-center gap-4 px-4 py-3">
-                  <StatusIcon
-                    size={15}
-                    className={cn(
-                      run.status === 'success' ? 'text-[var(--success)]' :
-                      run.status === 'running' ? 'text-[var(--warning)] animate-spin' :
-                      'text-[var(--error)]'
-                    )}
-                  />
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2">
-                      <Badge
-                        variant={run.status === 'success' ? 'success' : run.status === 'running' ? 'warning' : 'error'}
-                        dot
-                      >
-                        {run.status}
-                      </Badge>
-                      {run.accuracy && (
-                        <span className="text-xs text-[var(--text-secondary)]">{run.accuracy}% accuracy</span>
-                      )}
-                    </div>
-                    <p className="text-xs text-[var(--text-muted)] mt-0.5">
-                      {run.intents} intents · {run.entities} entities · {run.duration}
-                    </p>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-xs text-[var(--text-muted)]">{run.startedAt}</p>
-                    <p className="text-[10px] text-[var(--text-muted)]">{run.triggeredBy}</p>
-                  </div>
+            {trainingRuns.length === 0
+              ? (
+                <div className="px-4 py-8 text-center text-xs text-[var(--text-muted)]">
+                  No training runs yet. Click &ldquo;Run Training&rdquo; to sync your knowledge base.
                 </div>
               )
-            })}
+              : trainingRuns.map((run) => {
+                  const StatusIcon = run.status === 'success' ? CheckCircle : run.status === 'running' ? Clock : AlertCircle
+                  return (
+                    <div key={run.id} className="flex items-center gap-4 px-4 py-3">
+                      <StatusIcon
+                        size={15}
+                        className={cn(
+                          run.status === 'success' ? 'text-[var(--success)]' :
+                          run.status === 'running' ? 'text-[var(--warning)] animate-spin' :
+                          'text-[var(--error)]'
+                        )}
+                      />
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2">
+                          <Badge
+                            variant={run.status === 'success' ? 'success' : run.status === 'running' ? 'warning' : 'error'}
+                            dot
+                          >
+                            {run.status}
+                          </Badge>
+                          <span className="text-xs text-[var(--text-secondary)]">{run.model}</span>
+                        </div>
+                        <p className="text-xs text-[var(--text-muted)] mt-0.5">
+                          {run.examples} items · {durationLabel(run.durationMs)}
+                        </p>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-xs text-[var(--text-muted)]">{timeAgo(run.createdAt)}</p>
+                      </div>
+                    </div>
+                  )
+                })}
           </div>
         </Card>
       </div>
