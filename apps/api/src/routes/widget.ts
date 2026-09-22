@@ -57,6 +57,7 @@ const WIDGET_INLINE_JS = /* js */`
   if(script){try{var u=new URL(script.src);API_BASE=u.protocol+'//'+u.host+'/api/v1';}catch(e){}}
   var ACCENT=window.YBotAccentColor||'#6366f1';
   var TITLE=window.YBotTitle||'Chat with us';
+  var BOT_NAME=window.YBotBotName||'';
   // visitorName is remembered within the same browser tab (sessionStorage).
   // 'nameAsked' means the bot asked for the name but the user hasn't replied yet.
   var visitorName=sessionStorage.getItem('ybot_vname')||'';
@@ -165,8 +166,9 @@ const WIDGET_INLINE_JS = /* js */`
         // Returning visitor — greet by name straight away
         addMsg('bot','Welcome back, '+visitorName+'! 👋 How can I help you today?');
       } else {
-        // First time — ask for name conversationally
-        addMsg('bot','Hi there! 👋 What\'s your name?');
+        // First time — ask for name conversationally, introducing the bot
+        var intro=BOT_NAME?'Hi there, I\'m '+BOT_NAME+'! 👋 What\'s your name?':'Hi there! 👋 What\'s your name?';
+        addMsg('bot',intro);
         nameAsked=true;
       }
     }
@@ -238,7 +240,7 @@ export async function widgetRoutes(app: FastifyInstance) {
     <div class="badge">Channel: ${channelId}</div>
   </div>
   <div class="arrow">👉</div>
-  <script>window.YBotTitle='${botName}';</script>
+  <script>window.YBotTitle='${botName}';window.YBotBotName='${botName}';</script>
   <script src="${origin}/api/v1/widget.js?id=${channelId}" async></script>
 </body>
 </html>`)
@@ -248,6 +250,8 @@ export async function widgetRoutes(app: FastifyInstance) {
   app.get<{ Params: { channelId: string } }>('/public/demo/:channelId', async (request, reply) => {
     const { channelId } = request.params
     const origin = `${request.protocol ?? 'http'}://${request.hostname}`
+    const channel = await prisma.channel.findFirst({ where: { id: channelId, isActive: true }, include: { bot: true } })
+    const botName = channel?.bot?.name ?? ''
 
     return reply
       .header('Content-Type', 'text/html; charset=utf-8')
@@ -338,6 +342,7 @@ export async function widgetRoutes(app: FastifyInstance) {
     window.YBotChannelId='${channelId}';
     window.YBotTitle='Chat with Bella Hair Studio';
     window.YBotAccentColor='#8b5cf6';
+    ${botName ? `window.YBotBotName='${botName}';` : ''}
     function openChat(){if(window.YBotWidget)window.YBotWidget.open();}
   </script>
   <script src="${origin}/api/v1/widget.js?id=${channelId}" async></script>
