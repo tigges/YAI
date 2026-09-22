@@ -77,8 +77,10 @@ export function ChannelsPage() {
 
   async function handleCreate() {
     if (!addName.trim()) return
-    const envs = (useAppStore.getState() as unknown as { selectedBot?: { environments?: Array<{ id: string }> } }).selectedBot
-    const envId = envs?.environments?.[0]?.id ?? selectedBotId
+    const state = useAppStore.getState() as unknown as { bots: Array<{ id: string; environments: Array<{ id: string }> }>; selectedBotId: string | null }
+    const currentBot = state.bots?.find((b) => b.id === (state.selectedBotId ?? selectedBotId))
+    const envId = currentBot?.environments?.[0]?.id ?? ''
+    if (!envId) return
     await createChannel.mutateAsync({ name: addName.trim(), kind: addKind, environmentId: envId })
     setShowAdd(false)
     setAddName('')
@@ -97,9 +99,14 @@ export function ChannelsPage() {
       <div className="border-b border-[var(--border)] bg-[var(--bg-surface)] px-6 pt-4 pb-0 shrink-0">
         <div className="flex items-center justify-between pb-3">
           <h1 className="text-base font-semibold text-[var(--text-primary)]">Configure</h1>
-          <Button size="sm" className="gap-1.5" onClick={handleAddChannel}>
-            <Plus size={14} /> Add Channel
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button size="sm" variant="ghost" className="gap-1.5" onClick={handleAddChannel}>
+              <Plus size={14} /> Add Channel
+            </Button>
+            <Button size="sm" className="gap-1.5" onClick={() => setShowWizard(true)}>
+              <Wand2 size={14} /> Widget wizard
+            </Button>
+          </div>
         </div>
         <SubNav items={SUBNAV} />
       </div>

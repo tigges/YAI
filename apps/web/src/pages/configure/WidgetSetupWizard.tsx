@@ -231,8 +231,15 @@ export function WidgetSetupWizard({ onClose }: WidgetSetupWizardProps) {
     setCreating(true)
     setCreateError(null)
     try {
-      const state = useAppStore.getState() as unknown as { selectedBot?: { environments?: Array<{ id: string }> } }
-      const envId = state.selectedBot?.environments?.[0]?.id ?? selectedBotId ?? ''
+      const state = useAppStore.getState()
+      const currentBots = (state as unknown as { bots: Array<{ id: string; environments: Array<{ id: string }> }> }).bots
+      const currentBot = currentBots?.find((b) => b.id === selectedBotId)
+      const envId = currentBot?.environments?.[0]?.id ?? ''
+      if (!envId) {
+        setCreateError('No environment found for the selected bot. Please select a bot first.')
+        setCreating(false)
+        return
+      }
       const ch = await createChannel.mutateAsync({ name: siteName.trim(), kind: 'web', environmentId: envId })
       setChannelId(ch.id)
       setStep('install')
@@ -434,7 +441,7 @@ export function WidgetSetupWizard({ onClose }: WidgetSetupWizardProps) {
         {/* Right: iframe preview */}
         <div className="rounded-[var(--radius-lg)] border border-[var(--border)] overflow-hidden" style={{ minHeight: 340 }}>
           <iframe
-            src={`${origin}/api/v1/widget-test/${channelId}`}
+            src={`${origin}/api/v1/widget-test/${channelId}?title=${encodeURIComponent(widgetTitle)}&color=${encodeURIComponent(accent)}`}
             title="Widget test"
             className="w-full h-full border-0"
             sandbox="allow-scripts allow-same-origin allow-forms"

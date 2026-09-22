@@ -208,12 +208,15 @@ export async function widgetRoutes(app: FastifyInstance) {
   })
 
   // ── GET /widget-test/:channelId — browser test page ────────────────────────
-  app.get<{ Params: { channelId: string } }>('/widget-test/:channelId', async (request, reply) => {
+  app.get<{ Params: { channelId: string }; Querystring: { title?: string; color?: string } }>('/widget-test/:channelId', async (request, reply) => {
     const { channelId } = request.params
     const channel = await prisma.channel.findFirst({ where: { id: channelId, isActive: true }, include: { bot: true } })
     const botLabel   = channel?.bot?.name ?? 'YBot'
     const personaName = channel?.bot?.personaName ?? botLabel
     const origin  = `${request.protocol ?? 'http'}://${request.hostname}`
+    // Allow wizard/embed overrides via query params
+    const titleOverride = request.query.title ? String(request.query.title) : null
+    const colorOverride = request.query.color ? String(request.query.color) : null
 
     return reply
       .header('Content-Type', 'text/html; charset=utf-8')
@@ -241,7 +244,7 @@ export async function widgetRoutes(app: FastifyInstance) {
     <div class="badge">Channel: ${channelId}</div>
   </div>
   <div class="arrow">👉</div>
-  <script>window.YBotTitle='${botLabel}';window.YBotBotName='${personaName}';</script>
+  <script>window.YBotTitle='${titleOverride ?? botLabel}';window.YBotBotName='${personaName}';${colorOverride ? `window.YBotAccentColor='${colorOverride}';` : ''}</script>
   <script src="${origin}/api/v1/widget.js?id=${channelId}" async></script>
 </body>
 </html>`)
