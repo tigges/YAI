@@ -195,7 +195,7 @@ export async function analyticsRoutes(app: FastifyInstance) {
       prisma.conversation.count({ where: { ...where, assignedTo: null } }),
     ])
 
-    // Compute real avg response time: avg seconds between first user msg and first bot reply
+    // Compute real avg response time: avg ms between a user message and the next bot reply
     type RespRow = { avg_ms: string | null }
     const respRows = await (prisma.$queryRawUnsafe as (sql: string, ...p: unknown[]) => Promise<RespRow[]>)(
       botId
@@ -203,7 +203,9 @@ export async function analyticsRoutes(app: FastifyInstance) {
            FROM messages mu
            JOIN LATERAL (
              SELECT "createdAt" FROM messages
-             WHERE "conversationId" = mu."conversationId" AND "authorKind" = 'bot'
+             WHERE "conversationId" = mu."conversationId"
+               AND "authorKind" = 'bot'
+               AND "createdAt" > mu."createdAt"
              ORDER BY "createdAt" ASC LIMIT 1
            ) mb ON true
            WHERE mu."tenantId" = $1 AND mu."authorKind" = 'user'
@@ -212,7 +214,9 @@ export async function analyticsRoutes(app: FastifyInstance) {
            FROM messages mu
            JOIN LATERAL (
              SELECT "createdAt" FROM messages
-             WHERE "conversationId" = mu."conversationId" AND "authorKind" = 'bot'
+             WHERE "conversationId" = mu."conversationId"
+               AND "authorKind" = 'bot'
+               AND "createdAt" > mu."createdAt"
              ORDER BY "createdAt" ASC LIMIT 1
            ) mb ON true
            WHERE mu."tenantId" = $1 AND mu."authorKind" = 'user'`,
@@ -348,7 +352,9 @@ export async function analyticsRoutes(app: FastifyInstance) {
        FROM messages mu
        JOIN LATERAL (
          SELECT "createdAt" FROM messages
-         WHERE "conversationId" = mu."conversationId" AND "authorKind" = 'bot'
+         WHERE "conversationId" = mu."conversationId"
+           AND "authorKind" = 'bot'
+           AND "createdAt" > mu."createdAt"
          ORDER BY "createdAt" ASC LIMIT 1
        ) mb ON true
        WHERE mu."tenantId" = $1 AND mu."authorKind" = 'user'
