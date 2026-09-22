@@ -16,7 +16,11 @@ async function signIn(page: Page, email: string, password: string) {
 test('Acme walkthrough stays on the real demo', async ({ page, request }) => {
   await signIn(page, qaEmail, qaPassword)
 
-  await expect(page.getByText('Bob Smith').first()).toBeVisible()
+  // Overview lists only the five newest chats. Bob shares a timestamp with
+  // the other seeded customers, so he is not always on that short list.
+  await page.goto('/inbox/chats')
+  await page.getByText('Bob Smith').first().click()
+  await expect(page.getByText(/arrived damaged/i)).toBeVisible()
 
   await page.goto('/build/flows')
   await page.getByText('Order Status', { exact: true }).click()
