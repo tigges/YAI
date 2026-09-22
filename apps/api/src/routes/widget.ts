@@ -225,7 +225,6 @@ export async function widgetRoutes(app: FastifyInstance) {
     const channel = await prisma.channel.findFirst({ where: { id: channelId, isActive: true }, include: { bot: true } })
     const botLabel   = channel?.bot?.name ?? 'YBot'
     const personaName = channel?.bot?.personaName ?? botLabel
-    const origin  = requestOrigin(request)
     // Allow wizard/embed overrides via query params
     const titleOverride = request.query.title ? String(request.query.title) : null
     const colorOverride = request.query.color ? String(request.query.color) : null
@@ -257,7 +256,7 @@ export async function widgetRoutes(app: FastifyInstance) {
   </div>
   <div class="arrow">👉</div>
   <script>window.YBotTitle='${titleOverride ?? botLabel}';window.YBotBotName='${personaName}';${colorOverride ? `window.YBotAccentColor='${colorOverride}';` : ''}</script>
-  <script src="${origin}/api/v1/widget.js?id=${channelId}" async></script>
+  <script src="/api/v1/widget.js?id=${channelId}" defer></script>
 </body>
 </html>`)
   })
@@ -361,7 +360,7 @@ export async function widgetRoutes(app: FastifyInstance) {
     ${personaName ? `window.YBotBotName='${personaName}';` : ''}
     function openChat(){if(window.YBotWidget)window.YBotWidget.open();}
   </script>
-  <script src="${origin}/api/v1/widget.js?id=${channelId}" async></script>
+  <script src="/api/v1/widget.js?id=${channelId}" defer></script>
 </body>
 </html>`)
   })
