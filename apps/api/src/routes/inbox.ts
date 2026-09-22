@@ -3,6 +3,7 @@ import { prisma } from '@ybot/db'
 import { z } from 'zod'
 import { processInboundMessage } from '../runtime-bridge.js'
 import { enqueueConversationAnalysis } from '../queues.js'
+import { triggerRules } from '../lib/automation-engine.js'
 
 type JWT = { sub: string; tenantId: string; role: string }
 
@@ -118,6 +119,18 @@ export async function conversationsRoutes(app: FastifyInstance) {
       const full = await prisma.conversation.findFirst({ where: { id, tenantId } })
       if (full) {
         enqueueConversationAnalysis({ conversationId: id, tenantId, botId: full.botId }).catch(() => {})
+        triggerRules('conversation.resolved', {
+          tenantId, botId: full.botId, conversationId: id, conversationStatus: 'resolved',
+        }).catch(() => {})
+      }
+    }
+
+    if (body.data.status === 'escalated') {
+      const full = await prisma.conversation.findFirst({ where: { id, tenantId } })
+      if (full) {
+        triggerRules('conversation.escalated', {
+          tenantId, botId: full.botId, conversationId: id, conversationStatus: 'escalated',
+        }).catch(() => {})
       }
     }
 

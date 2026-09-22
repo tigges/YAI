@@ -12,6 +12,7 @@ import { prisma } from '@ybot/db'
 import { createLlmAdapter, createLlmAdapterForModel, createEmbeddingAdapter } from '@ybot/llm'
 import type { LlmMessage } from '@ybot/llm'
 import { readFile } from 'node:fs/promises'
+import { triggerRules } from '../lib/automation-engine.js'
 import { resolve, dirname } from 'node:path'
 import { runFlowIfPublished } from '../lib/flow-runner.js'
 import { fileURLToPath } from 'node:url'
@@ -434,6 +435,15 @@ export async function widgetRoutes(app: FastifyInstance) {
       await prisma.message.create({
         data: { tenantId, conversationId, direction: 'inbound', authorKind: 'user', content: { text: userText } },
       }).catch(() => {})
+
+      // Fire automation rules for message.received
+      const msgCount = await prisma.message.count({ where: { conversationId, direction: 'inbound' } }).catch(() => 0)
+      triggerRules('message.received', {
+        tenantId, botId, conversationId,
+        messageContent: userText,
+        messageCount: msgCount,
+        conversationStatus: 'active',
+      }).catch(() => {})
     }
 
     // ── SSE helpers (shared by both flow and RAG paths) ───────────────────
@@ -528,6 +538,16 @@ export async function widgetRoutes(app: FastifyInstance) {
     await prisma.csatResponse.create({
       data: { tenantId: convo.tenantId, conversationId, messageId, rating, comment },
     })
+
+    // Fire automation rules for csat.submitted
+    triggerRules('csat.submitted', {
+      tenantId: convo.tenantId,
+      botId: convo.botId,
+      conversationId,
+      csatRating: rating,
+      hasComment: !!(comment && comment.trim()),
+    }).catch(() => {})
+
     return reply.send({ ok: true })
   })
 }
