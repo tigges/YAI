@@ -57,6 +57,8 @@ export const bots = {
   get: (id: string) => apiFetch<{ data: BotSummary }>(`/bots/${id}`),
   create: (name: string, description?: string) =>
     apiFetch<{ data: BotSummary }>('/bots', { method: 'POST', body: JSON.stringify({ name, description }) }),
+  update: (id: string, body: Partial<{ name: string; personaName: string | null; description: string | null; avatarUrl: string | null }>) =>
+    apiFetch<{ data: BotSummary }>(`/bots/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
 }
 
 // ── Flows ─────────────────────────────────────────────────────────────────────

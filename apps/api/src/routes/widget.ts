@@ -57,10 +57,14 @@ const WIDGET_INLINE_JS = /* js */`
   if(script){try{var u=new URL(script.src);API_BASE=u.protocol+'//'+u.host+'/api/v1';}catch(e){}}
   var ACCENT=window.YBotAccentColor||'#6366f1';
   var TITLE=window.YBotTitle||'Chat with us';
+  var BOT_NAME=window.YBotBotName||'';
+  // visitorName is remembered within the same browser tab (sessionStorage).
+  // 'nameAsked' means the bot asked for the name but the user hasn't replied yet.
+  var visitorName=sessionStorage.getItem('ybot_vname')||'';
+  var nameAsked=false;
   var conversationId=null;
   var sessionId='ws_'+Date.now()+'_'+Math.random().toString(36).slice(2);
   var open=false,messages=[],loading=false;
-  // CSAT state: null = not shown, 'pending' = awaiting rating, 1/-1 = rated
   var csatState=null;
   function css(el,s){Object.assign(el.style,s);}
   function mk(tag,a){var n=document.createElement(tag);for(var k in a)n.setAttribute(k,a[k]);return n;}
@@ -123,11 +127,21 @@ const WIDGET_INLINE_JS = /* js */`
   }
   async function send(){
     var text=ta.value.trim();if(!text||loading)return;
-    ta.value='';loading=true;sendB.disabled=true;
+    ta.value='';
+    // First reply after asking for name — capture it as the visitor name,
+    // then forward "My name is <name>" to the AI as the opening message.
+    if(nameAsked&&!visitorName){
+      visitorName=text;
+      sessionStorage.setItem('ybot_vname',text);
+      nameAsked=false;
+    }
+    loading=true;sendB.disabled=true;
     var hist=messages.slice(-10).map(function(m){return{role:m.role==='user'?'user':'assistant',content:m.text};});
     addMsg('user',text);var bi=addMsg('bot','',true);
     try{
-      var res=await fetch(API_BASE+'/public/chat/'+channelId,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({message:text,sessionId:sessionId,conversationId:conversationId,history:hist})});
+      var body={message:text,sessionId:sessionId,conversationId:conversationId,history:hist};
+      if(visitorName)body.visitorName=visitorName;
+      var res=await fetch(API_BASE+'/public/chat/'+channelId,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
       if(!res.ok||!res.body){updMsg(bi,'Sorry, something went wrong. ('+res.status+')');loading=false;sendB.disabled=false;return;}
       var reader=res.body.getReader(),dec=new TextDecoder(),buf='',botText='';
       while(true){
@@ -143,7 +157,23 @@ const WIDGET_INLINE_JS = /* js */`
     }catch(e){updMsg(bi,"Couldn\\'t reach the server. Please try again.");}
     finally{loading=false;sendB.disabled=false;}
   }
-  function toggle(force){open=force!==undefined?force:!open;panel.style.display=open?'flex':'none';bubble.innerHTML=open?'&times;':'&#128172;';if(open&&messages.length===0)addMsg('bot','Hello! &#128075; How can I help you today?');if(open)setTimeout(function(){ta.focus();},50);}
+  function toggle(force){
+    open=force!==undefined?force:!open;
+    panel.style.display=open?'flex':'none';
+    bubble.innerHTML=open?'&times;':'&#128172;';
+    if(open&&messages.length===0){
+      if(visitorName){
+        // Returning visitor — greet by name straight away
+        addMsg('bot','Welcome back, '+visitorName+'! 👋 How can I help you today?');
+      } else {
+        // First time — ask for name conversationally, introducing the bot
+        var intro=BOT_NAME?'Hi there, I\'m '+BOT_NAME+'! 👋 What\'s your name?':'Hi there! 👋 What\'s your name?';
+        addMsg('bot',intro);
+        nameAsked=true;
+      }
+    }
+    if(open)setTimeout(function(){ta.focus();},50);
+  }
   bubble.onclick=function(){toggle();};sendB.onclick=send;
   ta.onkeydown=function(e){if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();send();}};
   window.YBotWidget={open:function(){toggle(true);},close:function(){toggle(false);},toggle:function(){toggle();}};
@@ -178,11 +208,15 @@ export async function widgetRoutes(app: FastifyInstance) {
   })
 
   // ── GET /widget-test/:channelId — browser test page ────────────────────────
-  app.get<{ Params: { channelId: string } }>('/widget-test/:channelId', async (request, reply) => {
+  app.get<{ Params: { channelId: string }; Querystring: { title?: string; color?: string } }>('/widget-test/:channelId', async (request, reply) => {
     const { channelId } = request.params
     const channel = await prisma.channel.findFirst({ where: { id: channelId, isActive: true }, include: { bot: true } })
-    const botName = channel?.bot?.name ?? 'YBot'
+    const botLabel   = channel?.bot?.name ?? 'YBot'
+    const personaName = channel?.bot?.personaName ?? botLabel
     const origin  = `${request.protocol ?? 'http'}://${request.hostname}`
+    // Allow wizard/embed overrides via query params
+    const titleOverride = request.query.title ? String(request.query.title) : null
+    const colorOverride = request.query.color ? String(request.query.color) : null
 
     return reply
       .header('Content-Type', 'text/html; charset=utf-8')
@@ -191,7 +225,7 @@ export async function widgetRoutes(app: FastifyInstance) {
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>${botName} — Widget Test</title>
+  <title>${botLabel} — Widget Test</title>
   <style>
     *{box-sizing:border-box;margin:0;padding:0}
     body{font-family:system-ui,sans-serif;background:#f8fafc;min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:24px;color:#334155}
@@ -205,12 +239,12 @@ export async function widgetRoutes(app: FastifyInstance) {
 </head>
 <body>
   <div class="card">
-    <h1>🤖 ${botName}</h1>
+    <h1>🤖 ${botLabel}</h1>
     <p>The chat widget is loaded in the bottom-right corner.<br/>Click the 💬 bubble to start a conversation.</p>
     <div class="badge">Channel: ${channelId}</div>
   </div>
   <div class="arrow">👉</div>
-  <script>window.YBotTitle='${botName}';</script>
+  <script>window.YBotTitle='${titleOverride ?? botLabel}';window.YBotBotName='${personaName}';${colorOverride ? `window.YBotAccentColor='${colorOverride}';` : ''}</script>
   <script src="${origin}/api/v1/widget.js?id=${channelId}" async></script>
 </body>
 </html>`)
@@ -220,6 +254,8 @@ export async function widgetRoutes(app: FastifyInstance) {
   app.get<{ Params: { channelId: string } }>('/public/demo/:channelId', async (request, reply) => {
     const { channelId } = request.params
     const origin = `${request.protocol ?? 'http'}://${request.hostname}`
+    const channel = await prisma.channel.findFirst({ where: { id: channelId, isActive: true }, include: { bot: true } })
+    const personaName = channel?.bot?.personaName ?? channel?.bot?.name ?? ''
 
     return reply
       .header('Content-Type', 'text/html; charset=utf-8')
@@ -310,6 +346,7 @@ export async function widgetRoutes(app: FastifyInstance) {
     window.YBotChannelId='${channelId}';
     window.YBotTitle='Chat with Bella Hair Studio';
     window.YBotAccentColor='#8b5cf6';
+    ${personaName ? `window.YBotBotName='${personaName}';` : ''}
     function openChat(){if(window.YBotWidget)window.YBotWidget.open();}
   </script>
   <script src="${origin}/api/v1/widget.js?id=${channelId}" async></script>
@@ -325,6 +362,7 @@ export async function widgetRoutes(app: FastifyInstance) {
       message?: string
       sessionId?: string
       conversationId?: string
+      visitorName?: string
       history?: Array<{ role: string; content: string }>
     }
     const userText = (body.message ?? '').trim()
@@ -348,11 +386,15 @@ export async function widgetRoutes(app: FastifyInstance) {
       if (env) {
         // Upsert an anonymous contact keyed by sessionId
         const sessionId = body.sessionId ?? `anon_${Date.now()}`
+        const displayName = (body.visitorName ?? '').trim() || 'Visitor'
         let contact = await prisma.contact.findFirst({ where: { tenantId, externalId: sessionId } })
         if (!contact) {
           contact = await prisma.contact.create({
-            data: { tenantId, externalId: sessionId, displayName: 'Visitor', channelId },
+            data: { tenantId, externalId: sessionId, displayName, channelId },
           })
+        } else if (contact.displayName === 'Visitor' && displayName !== 'Visitor') {
+          // Upgrade "Visitor" to the real name once the user provides it
+          await prisma.contact.update({ where: { id: contact.id }, data: { displayName } })
         }
         const convo = await prisma.conversation.create({
           data: { tenantId, botId, environmentId: env.id, channelId, contactId: contact.id, status: 'active' },

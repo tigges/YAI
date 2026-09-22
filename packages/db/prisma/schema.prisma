@@ -120,6 +120,7 @@ model Bot {
   id          String   @id @default(cuid())
   tenantId    String
   name        String
+  personaName String?
   description String?
   avatarUrl   String?
   status      String   @default("active")

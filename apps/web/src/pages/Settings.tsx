@@ -3,11 +3,12 @@ import { Card, Button, Input, Badge, Avatar } from '@ybot/ui'
 import { useAppStore } from '../store/app'
 import { useSystemConfig, useSystemStatus } from '../lib/hooks'
 import type { ConfigEntry } from '../lib/api'
+import { bots as botsApi } from '../lib/api'
 import {
   CheckCircle2, XCircle, Key, Database, Radio,
   HardDrive, Cpu, Globe, Settings2, User, Lock,
   RefreshCw, ChevronRight, Copy, ExternalLink,
-  Bot, Zap,
+  Bot, Zap, Sparkles,
 } from 'lucide-react'
 import { cn } from '@ybot/ui'
 
@@ -209,9 +210,111 @@ function SecretsTab() {
   )
 }
 
+// ── Bot Identity tab ─────────────────────────────────────────────────────────
+
+function BotIdentityTab() {
+  const { bots, selectedBotId, setBots } = useAppStore()
+  const selectedBot = bots.find((b) => b.id === selectedBotId) ?? null
+  const [personaName, setPersonaName] = useState(selectedBot?.personaName ?? '')
+  const [agentAlias, setAgentAlias] = useState('')
+  const [saved, setSaved] = useState(false)
+  const [saving, setSaving] = useState(false)
+
+  async function handleSave() {
+    if (!selectedBot) return
+    setSaving(true)
+    try {
+      const updated = await botsApi.update(selectedBot.id, {
+        personaName: personaName.trim() || null,
+      })
+      // Sync updated bot into store
+      setBots(bots.map((b) => (b.id === selectedBot.id ? { ...b, ...updated.data } : b)))
+      setSaved(true)
+      setTimeout(() => setSaved(false), 2000)
+    } catch { /* ignore */ } finally {
+      setSaving(false)
+    }
+  }
+
+  if (!selectedBot) {
+    return (
+      <div className="max-w-lg">
+        <p className="text-sm text-[var(--text-muted)]">Select a bot from the top bar first.</p>
+      </div>
+    )
+  }
+
+  return (
+    <div className="max-w-lg space-y-6">
+      {/* Bot persona */}
+      <Card>
+        <div className="flex items-start gap-3 mb-5">
+          <div className="w-8 h-8 rounded-full bg-[var(--accent)]/15 flex items-center justify-center shrink-0 mt-0.5">
+            <Bot size={14} className="text-[var(--accent)]" />
+          </div>
+          <div>
+            <h3 className="text-sm font-semibold text-[var(--text-primary)]">Bot persona</h3>
+            <p className="text-xs text-[var(--text-muted)] mt-0.5">
+              The friendly first name customers see in the chat widget.
+              Your internal bot label (<strong>{selectedBot.name}</strong>) stays unchanged.
+            </p>
+          </div>
+        </div>
+        <div className="space-y-3">
+          <Input
+            label="Persona name (customer-facing)"
+            placeholder="e.g. Bella, Luna, Max"
+            value={personaName}
+            onChange={(e) => setPersonaName(e.target.value)}
+            hint={'Widget greeting: "Hi, I\'m ' + (personaName.trim() || 'Bella') + '! What\'s your name?"'}
+          />
+        </div>
+        <div className="mt-4 flex justify-end">
+          <Button size="md" onClick={handleSave} disabled={saving}>
+            {saved ? 'Saved!' : saving ? 'Saving…' : 'Save'}
+          </Button>
+        </div>
+      </Card>
+
+      {/* Agent alias guidance */}
+      <Card>
+        <div className="flex items-start gap-3 mb-4">
+          <div className="w-8 h-8 rounded-full bg-[var(--success)]/15 flex items-center justify-center shrink-0 mt-0.5">
+            <User size={14} className="text-[var(--success)]" />
+          </div>
+          <div>
+            <h3 className="text-sm font-semibold text-[var(--text-primary)]">Human agent aliases</h3>
+            <p className="text-xs text-[var(--text-muted)] mt-0.5">
+              Each agent's <strong>display name</strong> in their profile is shown to customers when they handle a conversation.
+              Use culturally relevant first names — e.g. <em>Sofia</em> for Spanish-speaking markets,
+              <em> Amara</em> for West Africa, <em>Yuki</em> for Japan — instead of real names.
+            </p>
+          </div>
+        </div>
+        <div className="space-y-3">
+          <Input
+            label="Your agent alias (preview)"
+            placeholder="e.g. Sofia"
+            value={agentAlias}
+            onChange={(e) => setAgentAlias(e.target.value)}
+            hint="Set the full alias in Team → your profile"
+          />
+        </div>
+        <div className="mt-3 rounded-[var(--radius)] bg-[var(--bg-overlay)] p-3 text-[11px] text-[var(--text-muted)] space-y-1">
+          <p className="font-medium text-[var(--text-secondary)]">Recommended naming convention</p>
+          <p>• Pick a friendly first name that fits the territory and language</p>
+          <p>• Keep it consistent — don't change it mid-conversation</p>
+          <p>• Never use the agent's real surname</p>
+          <p>• One alias per territory is fine; agents can share a persona</p>
+        </div>
+      </Card>
+    </div>
+  )
+}
+
 // ── main page ─────────────────────────────────────────────────────────────────
 
-type Tab = 'profile' | 'password' | 'secrets'
+type Tab = 'profile' | 'password' | 'secrets' | 'bot-identity'
 
 export function SettingsPage() {
   const { user } = useAppStore()
@@ -225,9 +328,10 @@ export function SettingsPage() {
   }
 
   const TABS: { id: Tab; label: string; icon: React.ElementType }[] = [
-    { id: 'profile', label: 'Profile', icon: User },
-    { id: 'password', label: 'Password', icon: Lock },
-    { id: 'secrets', label: 'Secrets & Connections', icon: Key },
+    { id: 'profile',      label: 'Profile',              icon: User },
+    { id: 'bot-identity', label: 'Bot Identity',         icon: Sparkles },
+    { id: 'password',     label: 'Password',             icon: Lock },
+    { id: 'secrets',      label: 'Secrets & Connections', icon: Key },
   ]
 
   return (
@@ -298,6 +402,7 @@ export function SettingsPage() {
         )}
 
         {tab === 'secrets' && <SecretsTab />}
+        {tab === 'bot-identity' && <BotIdentityTab />}
       </div>
     </div>
   )
