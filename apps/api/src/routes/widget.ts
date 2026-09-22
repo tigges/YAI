@@ -7,13 +7,27 @@
  * POST /public/csat/:channelId        — submit CSAT rating for a conversation
  */
 
-import type { FastifyInstance } from 'fastify'
+import type { FastifyInstance, FastifyRequest } from 'fastify'
 import { PrismaClient } from '@ybot/db'
 import { createLlmAdapter, createEmbeddingAdapter } from '@ybot/llm'
 import type { LlmMessage } from '@ybot/llm'
 import { readFile } from 'node:fs/promises'
 import { resolve, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
+
+/** Derive the public-facing origin robustly when running behind a reverse proxy.
+ *  With trustProxy:true Fastify already sets request.protocol from X-Forwarded-Proto,
+ *  but we also read the forwarded headers explicitly as belt-and-suspenders. */
+function requestOrigin(request: FastifyRequest): string {
+  const proto =
+    (request.headers['x-forwarded-proto'] as string | undefined)?.split(',')[0]?.trim() ??
+    request.protocol ??
+    'https'
+  const host =
+    (request.headers['x-forwarded-host'] as string | undefined)?.split(',')[0]?.trim() ??
+    request.hostname
+  return `${proto}://${host}`
+}
 
 const prisma  = new PrismaClient()
 const llm     = createLlmAdapter()
@@ -163,7 +177,7 @@ export async function widgetRoutes(app: FastifyInstance) {
     const { channelId } = request.params
     const channel = await prisma.channel.findFirst({ where: { id: channelId, isActive: true }, include: { bot: true } })
     const botName = channel?.bot?.name ?? 'YBot'
-    const origin  = `${request.protocol ?? 'http'}://${request.hostname}`
+    const origin  = requestOrigin(request)
 
     return reply
       .header('Content-Type', 'text/html; charset=utf-8')
