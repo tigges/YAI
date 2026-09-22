@@ -40,6 +40,12 @@ export const auth = {
     apiFetch<{ data: { token: string; user: { id: string; email: string; displayName: string; tenantId: string } } }>('/auth/login', { method: 'POST', body: JSON.stringify({ email, password }) }),
   register: (body: { email: string; password: string; displayName: string; tenantName: string; tenantSlug: string }) =>
     apiFetch<{ data: { token: string; user: unknown } }>('/auth/register', { method: 'POST', body: JSON.stringify(body) }),
+  forgotPassword: (email: string) =>
+    apiFetch<{ data: { message: string } }>('/auth/forgot-password', { method: 'POST', body: JSON.stringify({ email }) }),
+  resetPassword: (token: string, password: string) =>
+    apiFetch<{ data: { message: string } }>('/auth/reset-password', { method: 'POST', body: JSON.stringify({ token, password }) }),
+  acceptInvite: (token: string, password: string, displayName?: string) =>
+    apiFetch<{ data: { token: string; user: { id: string; email: string; displayName: string; tenantId: string; role: string } } }>('/auth/accept-invite', { method: 'POST', body: JSON.stringify({ token, password, displayName }) }),
 }
 
 // ── Me ────────────────────────────────────────────────────────────────────────

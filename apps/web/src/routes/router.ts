@@ -11,6 +11,9 @@ import { useAppStore } from '../store/app'
 
 // ── Page imports ──────────────────────────────────────────────────────────────
 import { SignInPage } from '../pages/SignIn'
+import { ForgotPasswordPage } from '../pages/ForgotPassword'
+import { ResetPasswordPage } from '../pages/ResetPassword'
+import { AcceptInvitePage } from '../pages/AcceptInvite'
 import { BotSelectorPage } from '../pages/BotSelector'
 import { OverviewPage } from '../pages/Overview'
 import { FlowsPage } from '../pages/build/Flows'
@@ -55,6 +58,24 @@ const signInRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/sign-in',
   component: SignInPage,
+})
+
+const forgotPasswordRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/forgot-password',
+  component: ForgotPasswordPage,
+})
+
+const resetPasswordRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/reset-password',
+  component: ResetPasswordPage,
+})
+
+const acceptInviteRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/accept-invite',
+  component: AcceptInvitePage,
 })
 
 // ── Bot selector ─────────────────────────────────────────────────────────────
@@ -141,6 +162,9 @@ const settingsRoute = createRoute({ getParentRoute: () => appRoute, path: '/sett
 // ── Router ────────────────────────────────────────────────────────────────────
 const routeTree = rootRoute.addChildren([
   signInRoute,
+  forgotPasswordRoute,
+  resetPasswordRoute,
+  acceptInviteRoute,
   botSelectorRoute,
   botNewRoute,
   appRoute.addChildren([
