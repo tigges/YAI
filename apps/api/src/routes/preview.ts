@@ -13,11 +13,11 @@
  */
 
 import type { FastifyInstance } from 'fastify'
-import { PrismaClient } from '@ybot/db'
+import { requireRole } from '../middleware/auth.js'
+import { prisma } from '@ybot/db'
 import { createLlmAdapter, createLlmAdapterForModel, createEmbeddingAdapter } from '@ybot/llm'
 import { z } from 'zod'
 
-const prisma = new PrismaClient()
 
 // Shared adapters (module-level singletons)
 const llm = createLlmAdapter()
@@ -54,6 +54,7 @@ async function searchKnowledge(query: string, tenantId: string, botId: string, t
 
 export async function previewRoutes(app: FastifyInstance) {
   app.addHook('preHandler', app.authenticate)
+  app.addHook('preHandler', requireRole('DEVELOPER', 'SUPERVISOR', 'ADMIN'))
 
   /**
    * POST /api/v1/bots/:botId/preview/chat

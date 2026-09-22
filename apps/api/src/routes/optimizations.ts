@@ -9,13 +9,14 @@
  */
 
 import type { FastifyInstance } from 'fastify'
-import { PrismaClient } from '@ybot/db'
+import { requireRole } from '../middleware/auth.js'
+import { prisma } from '@ybot/db'
 
-const prisma = new PrismaClient()
 type JWT = { sub: string; tenantId: string; role: string }
 
 export async function optimizationRoutes(app: FastifyInstance) {
   app.addHook('preHandler', app.authenticate)
+  app.addHook('preHandler', requireRole('DEVELOPER', 'SUPERVISOR', 'ADMIN'))
 
   // ── List optimizations ───────────────────────────────────────────────────
   app.get<{ Params: { botId: string } }>('/:botId/optimizations', async (request) => {

@@ -9,10 +9,10 @@
  */
 
 import type { FastifyInstance } from 'fastify'
-import { PrismaClient } from '@ybot/db'
+import { requireRole } from '../middleware/auth.js'
+import { prisma } from '@ybot/db'
 import { z } from 'zod'
 
-const prisma = new PrismaClient()
 type JWT = { sub: string; tenantId: string; role: string }
 
 const VALID_TRIGGERS = [
@@ -28,6 +28,7 @@ const VALID_STATUSES = ['active', 'paused', 'draft'] as const
 
 export async function workflowsRoutes(app: FastifyInstance) {
   app.addHook('preHandler', app.authenticate)
+  app.addHook('preHandler', requireRole('DEVELOPER', 'SUPERVISOR', 'ADMIN'))
 
   app.get('/:botId/workflows', async (request) => {
     const { tenantId } = request.user as JWT

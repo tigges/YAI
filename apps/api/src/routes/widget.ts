@@ -8,7 +8,7 @@
  */
 
 import type { FastifyInstance, FastifyRequest } from 'fastify'
-import { PrismaClient } from '@ybot/db'
+import { prisma } from '@ybot/db'
 import { createLlmAdapter, createLlmAdapterForModel, createEmbeddingAdapter } from '@ybot/llm'
 import type { LlmMessage } from '@ybot/llm'
 import { readFile } from 'node:fs/promises'
@@ -28,8 +28,6 @@ function requestOrigin(request: FastifyRequest): string {
     request.hostname
   return `${proto}://${host}`
 }
-
-const prisma  = new PrismaClient()
 const llm     = createLlmAdapter()
 const embedAI = createEmbeddingAdapter()
 
