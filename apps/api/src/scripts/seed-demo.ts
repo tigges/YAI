@@ -15,7 +15,7 @@
  */
 
 import { prisma } from '@ybot/db'
-import * as bcrypt from 'bcryptjs'
+import bcrypt from 'bcryptjs'
 
 // ──────────────────────────────────────────────────────────────────────────────
 // Configuration
