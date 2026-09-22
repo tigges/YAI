@@ -1,5 +1,6 @@
 import type { FastifyInstance } from 'fastify'
 import { prisma } from '@ybot/db'
+import { requireRole } from '../middleware/auth.js'
 import * as os from 'node:os'
 import * as http from 'node:http'
 
@@ -64,6 +65,7 @@ export async function systemRoutes(app: FastifyInstance) {
   })
 
   app.addHook('preHandler', app.authenticate)
+  app.addHook('preHandler', requireRole('ADMIN'))
 
   app.get('/status', async () => {
     const [db, redis, rawContainers] = await Promise.all([

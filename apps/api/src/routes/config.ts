@@ -1,11 +1,13 @@
 import type { FastifyInstance } from 'fastify'
 import { prisma } from '@ybot/db'
+import { requireRole } from '../middleware/auth.js'
 import { z } from 'zod'
 
 type JWT = { sub: string; tenantId: string; role: string }
 
 export async function channelsRoutes(app: FastifyInstance) {
   app.addHook('preHandler', app.authenticate)
+  app.addHook('preHandler', requireRole('SUPERVISOR', 'ADMIN'))
 
   app.get('/:botId/channels', async (request) => {
     const { tenantId } = request.user as JWT
@@ -38,6 +40,7 @@ export async function channelsRoutes(app: FastifyInstance) {
 
 export async function webhooksRoutes(app: FastifyInstance) {
   app.addHook('preHandler', app.authenticate)
+  app.addHook('preHandler', requireRole('SUPERVISOR', 'ADMIN'))
 
   app.get('/', async (request) => {
     const { tenantId } = request.user as JWT
@@ -80,8 +83,7 @@ export async function webhooksRoutes(app: FastifyInstance) {
 
 export async function teamRoutes(app: FastifyInstance) {
   app.addHook('preHandler', app.authenticate)
-
-  // GET /team/members
+  app.addHook('preHandler', requireRole('ADMIN'))
   app.get('/members', async (request) => {
     const { tenantId } = request.user as JWT
     const members = await prisma.user.findMany({
@@ -136,6 +138,7 @@ export async function teamRoutes(app: FastifyInstance) {
 
 export async function analyticsRoutes(app: FastifyInstance) {
   app.addHook('preHandler', app.authenticate)
+  app.addHook('preHandler', requireRole('SUPERVISOR', 'ADMIN'))
 
   // GET /analytics/overview?botId=...&range=7d
   app.get('/overview', async (request) => {
@@ -260,6 +263,7 @@ export async function analyticsRoutes(app: FastifyInstance) {
 
 export async function auditRoutes(app: FastifyInstance) {
   app.addHook('preHandler', app.authenticate)
+  app.addHook('preHandler', requireRole('ADMIN'))
 
   app.get('/', async (request) => {
     const { tenantId } = request.user as JWT

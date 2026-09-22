@@ -1,4 +1,5 @@
 import type { FastifyInstance } from 'fastify'
+import { requireRole } from '../middleware/auth.js'
 import { prisma } from '@ybot/db'
 import { z } from 'zod'
 import { enqueueKnowledgeSync } from '../queues.js'
@@ -7,6 +8,7 @@ type JWT = { sub: string; tenantId: string; role: string }
 
 export async function knowledgeRoutes(app: FastifyInstance) {
   app.addHook('preHandler', app.authenticate)
+  app.addHook('preHandler', requireRole('DEVELOPER', 'SUPERVISOR', 'ADMIN'))
 
   // ── Intents ─────────────────────────────────────────────────────────────
   app.get('/:botId/intents', async (request) => {

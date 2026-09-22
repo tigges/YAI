@@ -13,6 +13,7 @@
  */
 
 import type { FastifyInstance } from 'fastify'
+import { requireRole } from '../middleware/auth.js'
 import { prisma } from '@ybot/db'
 import { createLlmAdapter, createEmbeddingAdapter } from '@ybot/llm'
 import { z } from 'zod'
@@ -53,6 +54,7 @@ async function searchKnowledge(query: string, tenantId: string, botId: string, t
 
 export async function previewRoutes(app: FastifyInstance) {
   app.addHook('preHandler', app.authenticate)
+  app.addHook('preHandler', requireRole('DEVELOPER', 'SUPERVISOR', 'ADMIN'))
 
   /**
    * POST /api/v1/bots/:botId/preview/chat

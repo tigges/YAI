@@ -1,5 +1,6 @@
 import type { FastifyInstance } from 'fastify'
 import { prisma } from '@ybot/db'
+import { requireRole } from '../middleware/auth.js'
 
 
 interface JwtPayload {
@@ -10,6 +11,7 @@ interface JwtPayload {
 
 export async function tenantsRoutes(app: FastifyInstance) {
   app.addHook('preHandler', app.authenticate)
+  app.addHook('preHandler', requireRole('SUPERVISOR', 'ADMIN'))
 
   app.get('/me', async (request) => {
     const { tenantId } = request.user as JwtPayload
