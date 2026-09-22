@@ -30,11 +30,11 @@ interface Integration {
 }
 
 const INTEGRATIONS: Integration[] = [
-  { id: 'hubspot', name: 'HubSpot', description: 'Sync contacts and conversations to HubSpot CRM', category: 'CRM', status: 'connected', logo: '🟠', connectedAt: '2 weeks ago' },
+  { id: 'hubspot', name: 'HubSpot', description: 'Sync contacts and conversations to HubSpot CRM', category: 'CRM', status: 'available', logo: '🟠' },
   { id: 'salesforce', name: 'Salesforce', description: 'Push leads and cases to Salesforce automatically', category: 'CRM', status: 'available', logo: '🔵' },
-  { id: 'zendesk', name: 'Zendesk', description: 'Create and sync Zendesk tickets from conversations', category: 'Ticketing', status: 'connected', logo: '🟢', connectedAt: '1 month ago' },
+  { id: 'zendesk', name: 'Zendesk', description: 'Create and sync Zendesk tickets from conversations', category: 'Ticketing', status: 'available', logo: '🟢' },
   { id: 'jira', name: 'Jira', description: 'Create Jira issues directly from chat escalations', category: 'Ticketing', status: 'available', logo: '🔷' },
-  { id: 'slack', name: 'Slack', description: 'Post conversation alerts and reports to Slack channels', category: 'Messaging', status: 'connected', logo: '💜', connectedAt: '3 months ago' },
+  { id: 'slack', name: 'Slack', description: 'Post conversation alerts and reports to Slack channels', category: 'Messaging', status: 'available', logo: '💜' },
   { id: 'teams', name: 'Microsoft Teams', description: 'Send notifications and alerts to Teams channels', category: 'Messaging', status: 'available', logo: '🟣' },
   { id: 'zapier', name: 'Zapier', description: 'Connect YBot to 5000+ apps via Zapier workflows', category: 'Automation', status: 'available', logo: '🟡' },
   { id: 'n8n', name: 'n8n', description: 'Self-hosted automation workflows with n8n', category: 'Automation', status: 'available', logo: '🔴' },

@@ -593,6 +593,41 @@ export function useAnalyticsChannels() {
   })
 }
 
+export function useAnalyticsCsatTrend(days = 30) {
+  return useQuery({
+    queryKey: ['analytics-csat-trend', days],
+    queryFn: () => api.analytics.csatTrend(days).then((r) => r.data),
+    staleTime: 60_000,
+  })
+}
+
+export function useAnalyticsResolutionBreakdown() {
+  const bid = botId()
+  return useQuery({
+    queryKey: ['analytics-resolution-breakdown', bid],
+    queryFn: () => api.analytics.resolutionBreakdown(bid).then((r) => r.data),
+    staleTime: 60_000,
+  })
+}
+
+export function useAnalyticsResponseTimeByHour() {
+  return useQuery({
+    queryKey: ['analytics-response-time-by-hour'],
+    queryFn: () => api.analytics.responseTimeByHour().then((r) => r.data),
+    staleTime: 60_000,
+  })
+}
+
+export function useTrainingRuns() {
+  const bid = botId()
+  return useQuery({
+    queryKey: ['training-runs', bid],
+    queryFn: () => bid ? api.knowledge.training.runs(bid).then((r) => r.data) : Promise.resolve([]),
+    staleTime: 30_000,
+    enabled: !!bid,
+  })
+}
+
 export function useCampaignDeliveries(campaignId: string) {
   const bid = botId()
   return useQuery({

@@ -131,6 +131,7 @@ export const knowledge = {
   training: {
     get: (botId: string) => apiFetch<{ data: LlmConfig }>(`/bots/${botId}/training`),
     update: (botId: string, config: Partial<LlmConfig>) => apiFetch<{ data: LlmConfig }>(`/bots/${botId}/training`, { method: 'PUT', body: JSON.stringify(config) }),
+    runs: (botId: string) => apiFetch<{ data: TrainingRun[] }>(`/bots/${botId}/training-runs`),
   },
   inboxConfig: {
     get: (botId: string) => apiFetch<{ data: Record<string, unknown> }>(`/bots/${botId}/inbox-config`),
@@ -244,6 +245,9 @@ export const analytics = {
   conversations: (params?: Record<string, string>) => apiFetch<{ data: ConversationTrend[] }>(`/analytics/conversations?${new URLSearchParams(params ?? {})}`),
   agents: (params?: Record<string, string>) => apiFetch<{ data: AgentStat[] }>(`/analytics/agents?${new URLSearchParams(params ?? {})}`),
   channels: () => apiFetch<{ data: ChannelStat[] }>('/analytics/channels'),
+  csatTrend: (days?: number) => apiFetch<{ data: CsatTrendPoint[] }>(`/analytics/csat-trend?days=${days ?? 30}`),
+  resolutionBreakdown: (botId?: string) => apiFetch<{ data: ResolutionBreakdownItem[] }>(`/analytics/resolution-breakdown${botId ? `?botId=${botId}` : ''}`),
+  responseTimeByHour: () => apiFetch<{ data: ResponseTimeHourPoint[] }>('/analytics/response-time-by-hour'),
 }
 
 export const audit = {
@@ -340,10 +344,14 @@ export interface Channel { id: string; name: string; kind: string; config: Recor
 export interface Webhook { id: string; url: string; events: string[]; isActive: boolean; createdAt: string }
 export interface Label { id: string; name: string; color: string }
 export interface TeamMember { id: string; displayName: string; email: string; memberships: Array<{ role: string }>; agentProfile?: { status: string } }
-export interface AnalyticsOverview { totalConversations: number; resolvedConversations: number; resolutionRate: number; escalationRate: number; totalContacts: number; csatScore: number; avgResponseTimeMs: number; botHandledPct: number }
+export interface AnalyticsOverview { totalConversations: number; resolvedConversations: number; resolutionRate: number; escalationRate: number; totalContacts: number; csatScore: number; avgResponseTimeMs: number | null; botHandledPct: number }
 export interface ConversationTrend { date: string; conversations: number; resolved: number; escalated: number }
 export interface AgentStat { agentId: string; name: string; total: number; resolved: number; escalated: number; resolutionRate: number }
 export interface ChannelStat { channelId: string; name: string; total: number }
+export interface CsatTrendPoint { date: string; score: number; positive: number; negative: number }
+export interface ResolutionBreakdownItem { name: string; value: number }
+export interface ResponseTimeHourPoint { hour: string; time: number }
+export interface TrainingRun { id: string; createdAt: string; model: string; examples: number; intents: number; faqs: number; sources: number; status: string; durationMs: number }
 export interface AuditEvent { id: string; action: string; resource?: string; metadata: Record<string, unknown>; createdAt: string; user?: { displayName: string; email: string } }
 
 export interface DockerContainer { id: string; name: string; image: string; state: string; status: string; created?: number }
