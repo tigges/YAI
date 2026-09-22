@@ -143,7 +143,7 @@ const WIDGET_INLINE_JS = /* js */`
     }catch(e){updMsg(bi,"Couldn\\'t reach the server. Please try again.");}
     finally{loading=false;sendB.disabled=false;}
   }
-  function toggle(force){open=force!==undefined?force:!open;panel.style.display=open?'flex':'none';bubble.innerHTML=open?'&times;':'&#128172;';if(open&&messages.length===0)addMsg('bot','Hello! &#128075; How can I help you today?');if(open)setTimeout(function(){ta.focus();},50);}
+  function toggle(force){open=force!==undefined?force:!open;panel.style.display=open?'flex':'none';bubble.innerHTML=open?'&times;':'&#128172;';if(open&&messages.length===0)addMsg('bot','Hello! 👋 How can I help you today?');if(open)setTimeout(function(){ta.focus();},50);}
   bubble.onclick=function(){toggle();};sendB.onclick=send;
   ta.onkeydown=function(e){if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();send();}};
   window.YBotWidget={open:function(){toggle(true);},close:function(){toggle(false);},toggle:function(){toggle();}};
