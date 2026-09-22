@@ -63,7 +63,7 @@ export function useFlowCanvas(flowId: string, version: number) {
       if (isDemoMode()) return null
       return api.flows.getCanvas(bid, flowId, version).then((r) => r.data)
     },
-    enabled: !!flowId && !isDemoMode(),
+    enabled: !!flowId && version > 0 && !isDemoMode(),
   })
 }
 

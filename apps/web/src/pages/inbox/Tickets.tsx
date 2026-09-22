@@ -23,7 +23,7 @@ const SUBNAV = [
   { label: 'Settings', path: '/inbox/settings' },
 ]
 
-type Priority = 'urgent' | 'high' | 'normal' | 'low'
+type Priority = 'urgent' | 'high' | 'medium' | 'normal' | 'low'
 type TicketStatus = 'open' | 'in_progress' | 'pending' | 'resolved' | 'closed'
 
 interface Ticket {
@@ -63,12 +63,13 @@ const COLUMNS: { status: TicketStatus; label: string; icon: React.ReactNode; col
 const PRIORITY_CONFIG: Record<Priority, { label: string; variant: 'error' | 'warning' | 'info' | 'muted'; dot: boolean }> = {
   urgent: { label: 'Urgent', variant: 'error', dot: true },
   high: { label: 'High', variant: 'warning', dot: true },
+  medium: { label: 'Medium', variant: 'warning', dot: true },
   normal: { label: 'Normal', variant: 'info', dot: false },
   low: { label: 'Low', variant: 'muted', dot: false },
 }
 
 function TicketCard({ ticket, onMove }: { ticket: Ticket; onMove: (id: string, status: TicketStatus) => void }) {
-  const p = PRIORITY_CONFIG[ticket.priority]
+  const p = PRIORITY_CONFIG[ticket.priority] ?? PRIORITY_CONFIG.normal
   return (
     <div className="rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--bg-surface)] p-3 hover:border-[var(--accent)]/40 transition-colors cursor-pointer group">
       <div className="flex items-start justify-between gap-2 mb-2">
@@ -254,7 +255,7 @@ export function TicketsPage() {
             </thead>
             <tbody className="divide-y divide-[var(--border)]">
               {filtered.map((t) => {
-                const p = PRIORITY_CONFIG[t.priority]
+                const p = PRIORITY_CONFIG[t.priority] ?? PRIORITY_CONFIG.normal
                 const col = COLUMNS.find((c) => c.status === t.status)!
                 return (
                   <tr key={t.id} className="hover:bg-[var(--bg-hover)] transition-colors cursor-pointer">

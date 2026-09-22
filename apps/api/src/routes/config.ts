@@ -108,7 +108,20 @@ export async function teamRoutes(app: FastifyInstance) {
     const { tenantId } = request.user as JWT
     const members = await prisma.user.findMany({
       where: { tenantId },
-      include: { memberships: true, agentProfile: true, _count: { select: { activities: true } } },
+      select: {
+        id: true,
+        tenantId: true,
+        email: true,
+        displayName: true,
+        avatarUrl: true,
+        locale: true,
+        timezone: true,
+        lastSeenAt: true,
+        createdAt: true,
+        memberships: true,
+        agentProfile: true,
+        _count: { select: { activities: true } },
+      },
       orderBy: { displayName: 'asc' },
     })
     return { data: members }
