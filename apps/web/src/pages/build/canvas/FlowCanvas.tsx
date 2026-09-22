@@ -33,6 +33,23 @@ function newId() {
   return `node_${nodeIdCounter++}_${Math.random().toString(36).slice(2, 7)}`
 }
 
+/** Saved graphs use `flow-node` (seed) or omit type entirely. The canvas only registers `flowNode`. */
+function normalizeCanvasNode(node: Node, index: number): Node {
+  const position =
+    node.position && Number.isFinite(node.position.x) && Number.isFinite(node.position.y)
+      ? node.position
+      : { x: 80 + index * 220, y: 120 }
+  return { ...node, type: 'flowNode', position }
+}
+
+/** Older graphs branch conditions with yes/no; the canvas ports are true/false. */
+function normalizeCanvasEdge(edge: Edge): Edge {
+  const handle = edge.sourceHandle
+  const sourceHandle =
+    handle === 'yes' ? 'true' : handle === 'no' ? 'false' : handle
+  return sourceHandle === handle ? edge : { ...edge, sourceHandle }
+}
+
 const INITIAL_NODES: Node[] = [
   {
     id: 'start-1',
@@ -120,8 +137,8 @@ export function FlowCanvasPage() {
   const { data: savedCanvas } = useFlowCanvas(flowId ?? '', canvasVersion)
   React.useEffect(() => {
     if (savedCanvas?.graph?.nodes?.length) {
-      setNodes(savedCanvas.graph.nodes as Node[])
-      setEdges(savedCanvas.graph.edges as Edge[])
+      setNodes(savedCanvas.graph.nodes.map((n, index) => normalizeCanvasNode(n as Node, index)))
+      setEdges((savedCanvas.graph.edges as Edge[]).map(normalizeCanvasEdge))
       setStatus(savedCanvas.status as 'draft' | 'saved' | 'published')
     }
   }, [savedCanvas])
