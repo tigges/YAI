@@ -13,6 +13,7 @@ import { createLlmAdapter, createLlmAdapterForModel, createEmbeddingAdapter } fr
 import type { LlmMessage } from '@ybot/llm'
 import { readFile } from 'node:fs/promises'
 import { resolve, dirname } from 'node:path'
+import { runFlowIfPublished } from '../lib/flow-runner.js'
 import { fileURLToPath } from 'node:url'
 
 /** Derive the public-facing origin robustly when running behind a reverse proxy.
@@ -179,7 +180,7 @@ const WIDGET_INLINE_JS = /* js */`
         addMsg('bot','Welcome back, '+visitorName+'! 👋 How can I help you today?');
       } else {
         // First time — ask for name conversationally, introducing the bot
-        var intro=BOT_NAME?'Hi there, I\'m '+BOT_NAME+'! 👋 What\'s your name?':'Hi there! 👋 What\'s your name?';
+        var intro=BOT_NAME?"Hi there, I'm "+BOT_NAME+"! 👋 What's your name?":"Hi there! 👋 What's your name?";
         addMsg('bot',intro);
         nameAsked=true;
       }
@@ -435,28 +436,7 @@ export async function widgetRoutes(app: FastifyInstance) {
       }).catch(() => {})
     }
 
-    // ── LLM config ────────────────────────────────────────────────────────
-    const cfg = await prisma.botConfig.findUnique({ where: { botId } }).catch(() => null)
-    const systemPrompt = cfg?.systemPrompt ?? `You are a helpful assistant for ${bot.name}. Answer using the knowledge base context.`
-    const model = cfg?.model ?? undefined
-    const temperature = cfg?.temperature ?? 0.3
-    const maxTokens = cfg?.maxTokens ?? 2048
-
-    // ── RAG context ────────────────────────────────────────────────────────
-    const ragChunks = await ragSearch(userText, tenantId, botId)
-    const contextBlock = ragChunks.length > 0
-      ? `\n\n--- KNOWLEDGE BASE ---\n${ragChunks.map((c, i) => `[${i + 1}] ${c}`).join('\n\n')}\n--- END KNOWLEDGE BASE ---\n\nAnswer using only this context. If unknown, say so.`
-      : ''
-
-    // ── History ────────────────────────────────────────────────────────────
-    const history: LlmMessage[] = (body.history ?? [])
-      .filter((m) => m.role === 'user' || m.role === 'assistant')
-      .slice(-10)
-      .map((m) => ({ role: m.role as 'user' | 'assistant', content: m.content }))
-
-    const messages: LlmMessage[] = [...history, { role: 'user', content: userText }]
-
-    // ── SSE stream ─────────────────────────────────────────────────────────
+    // ── SSE helpers (shared by both flow and RAG paths) ───────────────────
     reply.raw.setHeader('Content-Type', 'text/event-stream')
     reply.raw.setHeader('Cache-Control', 'no-cache')
     reply.raw.setHeader('Connection', 'keep-alive')
@@ -469,9 +449,49 @@ export async function widgetRoutes(app: FastifyInstance) {
     // Emit conversationId first so client can persist it
     if (conversationId) send({ conversationId })
 
+    // ── Try published flow first ──────────────────────────────────────────
+    if (conversationId) {
+      try {
+        const flowResult = await runFlowIfPublished({ conversationId, botId, tenantId, userText })
+
+        if (flowResult.handled) {
+          const fullText = flowResult.messages.join('\n\n')
+          if (fullText) {
+            send({ chunk: fullText })
+            await prisma.message.create({
+              data: { tenantId, conversationId, direction: 'outbound', authorKind: 'bot', content: { text: fullText } },
+            }).catch(() => {})
+          }
+          send({ done: true })
+          reply.raw.end()
+          return
+        }
+      } catch (flowErr) {
+        request.log.warn({ err: flowErr }, 'Flow runner error — falling back to RAG/LLM')
+      }
+    }
+
+    // ── RAG/LLM fallback (no published flow) ─────────────────────────────
+    const cfg = await prisma.botConfig.findUnique({ where: { botId } }).catch(() => null)
+    const systemPrompt = cfg?.systemPrompt ?? `You are a helpful assistant for ${bot.name}. Answer using the knowledge base context.`
+    const model = cfg?.model ?? undefined
+    const temperature = cfg?.temperature ?? 0.3
+    const maxTokens = cfg?.maxTokens ?? 2048
+
+    const ragChunks = await ragSearch(userText, tenantId, botId)
+    const contextBlock = ragChunks.length > 0
+      ? `\n\n--- KNOWLEDGE BASE ---\n${ragChunks.map((c, i) => `[${i + 1}] ${c}`).join('\n\n')}\n--- END KNOWLEDGE BASE ---\n\nAnswer using only this context. If unknown, say so.`
+      : ''
+
+    const history: LlmMessage[] = (body.history ?? [])
+      .filter((m) => m.role === 'user' || m.role === 'assistant')
+      .slice(-10)
+      .map((m) => ({ role: m.role as 'user' | 'assistant', content: m.content }))
+
+    const messages: LlmMessage[] = [...history, { role: 'user', content: userText }]
+
     let fullText = ''
     try {
-      // Use model-aware routing: picks the right provider for the saved BotConfig model
       const adapter = model ? createLlmAdapterForModel(model) : llm
       await adapter.stream({
         messages, systemPrompt: systemPrompt + contextBlock, model, temperature, maxTokens,
@@ -482,7 +502,6 @@ export async function widgetRoutes(app: FastifyInstance) {
       send({ chunk: "I'm sorry, something went wrong. Please try again.", done: true })
       fullText = "I'm sorry, something went wrong."
     } finally {
-      // ── Save bot reply ──────────────────────────────────────────────────
       if (conversationId && fullText.trim()) {
         await prisma.message.create({
           data: { tenantId, conversationId, direction: 'outbound', authorKind: 'bot', content: { text: fullText } },

@@ -732,3 +732,25 @@ model AutomationRule {
 
   @@map("automation_rules")
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// FLOW RUNTIME SESSION
+// ─────────────────────────────────────────────────────────────────────────────
+
+model FlowSession {
+  id             String   @id @default(cuid())
+  tenantId       String
+  conversationId String   @unique
+  botId          String
+  flowId         String
+  flowVersionId  String
+  currentNodeId  String
+  variables      Json     @default("{\"flow\":{},\"global\":{},\"contact\":{}}")
+  status         String   @default("running") // running | waiting_input | completed | failed | handed_over
+  waitingFor     Json?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([tenantId])
+  @@map("flow_sessions")
+}
