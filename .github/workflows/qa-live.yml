@@ -73,10 +73,16 @@ jobs:
               | node -e "let s='';process.stdin.on('data',d=>s+=d);process.stdin.on('end',()=>{const j=JSON.parse(s); if(!j.data||!j.data.token){console.error(s); process.exit(1)}; process.stdout.write(j.data.token)})")"
             auth_header="Authorization: Bearer $token"
           fi
-          curl -fsS -X POST "$LIVE_URL/api/v1/system/ensure-demos" \
+          # Fastify rejects an empty body when Content-Type is application/json.
+          code="$(curl -sS -o /tmp/ensure.json -w '%{http_code}' -X POST "$LIVE_URL/api/v1/system/ensure-demos" \
             -H "$auth_header" \
             -H "Content-Type: application/json" \
-            --max-time 180
+            -d '{}' \
+            --max-time 180)"
+          echo "ensure-demos HTTP $code"
+          cat /tmp/ensure.json
+          echo
+          test "$code" = "200"
 
       - name: Run live tests
         env:
