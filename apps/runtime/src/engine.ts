@@ -70,6 +70,8 @@ export class SessionMachine {
       session.variables.flow[variable] = incomingText
       session.waitingFor = undefined
       session.status = 'running'
+      // Advance past the waiting node (e.g. ask_question) — don't re-execute it
+      session.currentNodeId = this.nextNode(session.currentNodeId, edgeMap, undefined)
     }
 
     let currentId = session.currentNodeId
