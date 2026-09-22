@@ -24,6 +24,7 @@ const TRIGGER_LABELS: Record<string, { label: string; icon: React.ReactNode }> =
   'message.received':      { label: 'Message received',      icon: <MessageSquare size={12} /> },
   'contact.created':       { label: 'Contact created',        icon: <Globe size={12} /> },
   'ticket.created':        { label: 'Ticket created',         icon: <AlertCircle size={12} /> },
+  'sla.breached':          { label: 'SLA breached',           icon: <Clock size={12} /> },
   'schedule':              { label: 'Scheduled',              icon: <Clock size={12} /> },
   'intent_matched':        { label: 'Intent matched',         icon: <Zap size={12} /> },
 }

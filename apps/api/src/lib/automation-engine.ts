@@ -12,6 +12,7 @@
  *   message.received     — Inbound message saved (context: messageContent, messageCount)
  *   conversation.resolved — Conversation marked resolved
  *   conversation.escalated — Conversation marked escalated
+ *   sla.breached         — First time a conversation misses its SLA clock
  *   contact.created      — New contact created
  *
  * ── Conditions (conditions field = JSON string) ───────────────────────────────
