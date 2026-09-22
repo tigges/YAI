@@ -71,16 +71,33 @@ export function ChannelsPage() {
   const [addName, setAddName]       = useState('')
   const [copied, setCopied]         = useState(false)
   const [showWizard, setShowWizard] = useState(false)
+  // WhatsApp credential fields (used in both Add + Settings)
+  const [waPhoneNumberId, setWaPhoneNumberId] = useState('')
+  const [waAccessToken, setWaAccessToken]     = useState('')
+  const [waVerifyToken, setWaVerifyToken]     = useState('')
 
   function openSettings(ch: Channel) {
     setSelected(ch)
     setEditName(ch.name)
     setEditActive(ch.isActive)
+    if (ch.kind === 'whatsapp') {
+      setWaPhoneNumberId(String(ch.config['phoneNumberId'] ?? ''))
+      setWaAccessToken(String(ch.config['accessToken'] ?? ''))
+      setWaVerifyToken(String(ch.config['verifyToken'] ?? ''))
+    }
   }
 
   async function handleSaveSettings() {
     if (!selected) return
-    await updateChannel.mutateAsync({ id: selected.id, name: editName.trim() || selected.name, isActive: editActive })
+    const patch: Parameters<typeof updateChannel.mutateAsync>[0] = {
+      id: selected.id,
+      name: editName.trim() || selected.name,
+      isActive: editActive,
+    }
+    if (selected.kind === 'whatsapp') {
+      patch.config = { phoneNumberId: waPhoneNumberId.trim(), accessToken: waAccessToken.trim(), verifyToken: waVerifyToken.trim() }
+    }
+    await updateChannel.mutateAsync(patch)
     setSelected(null)
   }
 
@@ -96,10 +113,14 @@ export function ChannelsPage() {
     const currentBot = state.bots?.find((b) => b.id === (state.selectedBotId ?? selectedBotId))
     const envId = currentBot?.environments?.[0]?.id ?? ''
     if (!envId) return
-    await createChannel.mutateAsync({ name: addName.trim(), kind: addKind, environmentId: envId })
+    const config = addKind === 'whatsapp'
+      ? { phoneNumberId: waPhoneNumberId.trim(), accessToken: waAccessToken.trim(), verifyToken: waVerifyToken.trim() }
+      : {}
+    await createChannel.mutateAsync({ name: addName.trim(), kind: addKind, environmentId: envId, config })
     setShowAdd(false)
     setAddName('')
     setAddKind('web')
+    setWaPhoneNumberId(''); setWaAccessToken(''); setWaVerifyToken('')
   }
 
   function handleAddChannel() {
@@ -298,6 +319,41 @@ export function ChannelsPage() {
                   </div>
                 )}
 
+                {selected.kind === 'whatsapp' && (
+                  <div className="space-y-3">
+                    <p className="text-xs text-[var(--text-muted)]">
+                      Credentials from{' '}
+                      <a href="https://developers.facebook.com/apps" target="_blank" rel="noopener noreferrer" className="text-[var(--text-link)] hover:underline">
+                        Meta for Developers
+                      </a>
+                      {' '}→ WhatsApp → API Setup.
+                    </p>
+                    {[
+                      { label: 'Phone Number ID', value: waPhoneNumberId, set: setWaPhoneNumberId, placeholder: '1234567890', hint: 'Found in the WhatsApp API Setup page' },
+                      { label: 'Access Token', value: waAccessToken, set: setWaAccessToken, placeholder: 'EAAxxxxxxx…', hint: 'Permanent token from your Meta System User' },
+                      { label: 'Verify Token', value: waVerifyToken, set: setWaVerifyToken, placeholder: 'my-secret-verify-token', hint: 'Any string you choose — enter this in the Meta webhook form too' },
+                    ].map(({ label, value, set, placeholder, hint }) => (
+                      <div key={label}>
+                        <label className="text-xs font-semibold text-[var(--text-muted)] mb-1 block">{label}</label>
+                        <input
+                          className="w-full rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--bg-overlay)] px-3 py-2 text-sm text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--accent)]/40 font-mono"
+                          placeholder={placeholder}
+                          value={value}
+                          onChange={(e) => set(e.target.value)}
+                        />
+                        <p className="text-[11px] text-[var(--text-muted)] mt-1">{hint}</p>
+                      </div>
+                    ))}
+                    <div className="rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--bg-overlay)] p-3 space-y-1">
+                      <p className="text-xs font-semibold text-[var(--text-secondary)]">Webhook URL for Meta</p>
+                      <code className="text-[11px] font-mono text-[var(--text-muted)] break-all select-all">
+                        {typeof window !== 'undefined' ? window.location.origin : ''}/api/v1/webhooks/whatsapp
+                      </code>
+                      <p className="text-[11px] text-[var(--text-muted)]">Subscribe to the <strong>messages</strong> webhook field.</p>
+                    </div>
+                  </div>
+                )}
+
                 {selected.kind === 'web' && (
                   <div>
                     <div className="flex items-center justify-between mb-2">
@@ -430,6 +486,29 @@ export function ChannelsPage() {
                 onKeyDown={(e) => { if (e.key === 'Enter') handleCreate() }}
               />
             </div>
+            {addKind === 'whatsapp' && (
+              <div className="space-y-3 pt-1">
+                <div className="flex items-center gap-2 p-2.5 rounded-[var(--radius-md)] bg-[var(--bg-overlay)] border border-[var(--border)]">
+                  <MessageSquare size={14} className="text-[var(--accent)] shrink-0" />
+                  <p className="text-xs text-[var(--text-muted)]">Enter your credentials from <a href="https://developers.facebook.com/apps" target="_blank" rel="noopener noreferrer" className="text-[var(--text-link)] underline">Meta for Developers</a>.</p>
+                </div>
+                {[
+                  { label: 'Phone Number ID', value: waPhoneNumberId, set: setWaPhoneNumberId, placeholder: '1234567890' },
+                  { label: 'Access Token', value: waAccessToken, set: setWaAccessToken, placeholder: 'EAAxxxxxxx…' },
+                  { label: 'Verify Token', value: waVerifyToken, set: setWaVerifyToken, placeholder: 'my-secret-verify-token' },
+                ].map(({ label, value, set, placeholder }) => (
+                  <div key={label}>
+                    <label className="text-xs font-medium text-[var(--text-muted)] mb-1 block">{label}</label>
+                    <input
+                      className="w-full rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--bg-overlay)] px-3 py-2 text-xs text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--accent)]/40 font-mono"
+                      placeholder={placeholder}
+                      value={value}
+                      onChange={(e) => set(e.target.value)}
+                    />
+                  </div>
+                ))}
+              </div>
+            )}
           </DialogBody>
           <DialogFooter>
             <Button variant="ghost" onClick={() => setShowAdd(false)}>Cancel</Button>
