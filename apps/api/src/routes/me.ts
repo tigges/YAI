@@ -1,6 +1,7 @@
 import type { FastifyInstance } from 'fastify'
 import { prisma } from '@ybot/db'
 import { z } from 'zod'
+import bcrypt from 'bcryptjs'
 
 
 interface JwtPayload {
@@ -60,5 +61,26 @@ export async function meRoutes(app: FastifyInstance) {
     }
 
     return reply.send({ data: { ok: true } })
+  })
+
+  // ── POST /me/password — change password (authenticated) ───────────────────
+  app.post('/password', async (request, reply) => {
+    const { sub: userId } = request.user as JwtPayload
+    const body = z.object({
+      currentPassword: z.string().min(1),
+      newPassword: z.string().min(8),
+    }).safeParse(request.body)
+    if (!body.success) return reply.status(400).send({ error: { code: 'VALIDATION', details: body.error.flatten() } })
+
+    const user = await prisma.user.findUnique({ where: { id: userId } })
+    if (!user?.passwordHash) return reply.status(400).send({ error: { code: 'NO_PASSWORD', message: 'Account has no password set' } })
+
+    const valid = await bcrypt.compare(body.data.currentPassword, user.passwordHash)
+    if (!valid) return reply.status(401).send({ error: { code: 'INVALID_CREDENTIALS', message: 'Current password is incorrect' } })
+
+    const passwordHash = await bcrypt.hash(body.data.newPassword, 10)
+    await prisma.user.update({ where: { id: userId }, data: { passwordHash } })
+
+    return reply.send({ data: { message: 'Password changed successfully.' } })
   })
 }

@@ -225,7 +225,6 @@ export async function widgetRoutes(app: FastifyInstance) {
     const channel = await prisma.channel.findFirst({ where: { id: channelId, isActive: true }, include: { bot: true } })
     const botLabel   = channel?.bot?.name ?? 'YBot'
     const personaName = channel?.bot?.personaName ?? botLabel
-    const origin  = requestOrigin(request)
     // Allow wizard/embed overrides via query params
     const titleOverride = request.query.title ? String(request.query.title) : null
     const colorOverride = request.query.color ? String(request.query.color) : null
@@ -257,7 +256,7 @@ export async function widgetRoutes(app: FastifyInstance) {
   </div>
   <div class="arrow">👉</div>
   <script>window.YBotTitle='${titleOverride ?? botLabel}';window.YBotBotName='${personaName}';${colorOverride ? `window.YBotAccentColor='${colorOverride}';` : ''}</script>
-  <script src="${origin}/api/v1/widget.js?id=${channelId}" async></script>
+  <script src="/api/v1/widget.js?id=${channelId}" defer></script>
 </body>
 </html>`)
   })
@@ -361,13 +360,15 @@ export async function widgetRoutes(app: FastifyInstance) {
     ${personaName ? `window.YBotBotName='${personaName}';` : ''}
     function openChat(){if(window.YBotWidget)window.YBotWidget.open();}
   </script>
-  <script src="${origin}/api/v1/widget.js?id=${channelId}" async></script>
+  <script src="/api/v1/widget.js?id=${channelId}" defer></script>
 </body>
 </html>`)
   })
 
   // ── POST /public/chat/:channelId — public SSE streaming chat ───────────────
-  app.post<{ Params: { channelId: string } }>('/public/chat/:channelId', async (request, reply) => {
+  app.post<{ Params: { channelId: string } }>('/public/chat/:channelId', {
+    config: { rateLimit: { max: 30, timeWindow: '1 minute' } },
+  }, async (request, reply) => {
     setCors(reply)
     const { channelId } = request.params
     const body = request.body as {
@@ -382,6 +383,18 @@ export async function widgetRoutes(app: FastifyInstance) {
 
     const channel = await prisma.channel.findFirst({ where: { id: channelId, isActive: true }, include: { bot: true } })
     if (!channel?.bot) return reply.status(404).send({ error: 'Channel not found' })
+
+    // ── Domain allowlist check ─────────────────────────────────────────────
+    if (channel.allowedDomains.length > 0) {
+      const origin = (request.headers['origin'] as string | undefined) ?? ''
+      const hostname = (() => { try { return new URL(origin).hostname } catch { return '' } })()
+      const allowed = channel.allowedDomains.some((d) =>
+        hostname === d || hostname.endsWith(`.${d}`)
+      )
+      if (!allowed) {
+        return reply.status(403).send({ error: { code: 'DOMAIN_NOT_ALLOWED', message: 'This domain is not authorised to use this widget' } })
+      }
+    }
 
     const { tenantId, botId, bot } = { tenantId: channel.tenantId, botId: channel.botId, bot: channel.bot }
 

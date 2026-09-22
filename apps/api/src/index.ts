@@ -4,6 +4,7 @@ import cookie from '@fastify/cookie'
 import jwt from '@fastify/jwt'
 import wsPlugin from '@fastify/websocket'
 import multipart from '@fastify/multipart'
+import rateLimit from '@fastify/rate-limit'
 import { authRoutes } from './routes/auth.js'
 import { meRoutes } from './routes/me.js'
 import { botsRoutes } from './routes/bots.js'
@@ -46,6 +47,22 @@ const app = Fastify({
 await app.register(cors, {
   origin: FRONTEND_URL,
   credentials: true,
+})
+
+// ── Rate limiting ──────────────────────────────────────────────────────────
+// Global: 200 req/min per IP. Auth + public chat override below.
+await app.register(rateLimit, {
+  global: true,
+  max: 200,
+  timeWindow: '1 minute',
+  keyGenerator: (req) =>
+    (req.headers['x-forwarded-for'] as string | undefined)?.split(',')[0]?.trim() ?? req.ip,
+  errorResponseBuilder: (_req, context) => ({
+    error: {
+      code: 'RATE_LIMITED',
+      message: `Too many requests — try again in ${Math.ceil((context.ttl ?? 60000) / 1000)}s`,
+    },
+  }),
 })
 
 await app.register(cookie, {
