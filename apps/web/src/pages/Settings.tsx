@@ -312,6 +312,59 @@ function BotIdentityTab() {
   )
 }
 
+// ── PasswordTab ───────────────────────────────────────────────────────────────
+
+function PasswordTab() {
+  const [current, setCurrent] = useState('')
+  const [next, setNext] = useState('')
+  const [confirm, setConfirm] = useState('')
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [success, setSuccess] = useState(false)
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    setError(null)
+    if (next !== confirm) { setError('New passwords do not match'); return }
+    if (next.length < 8) { setError('Password must be at least 8 characters'); return }
+    setLoading(true)
+    try {
+      const { me: meApi } = await import('../lib/api')
+      await meApi.changePassword(current, next)
+      setSuccess(true)
+      setCurrent(''); setNext(''); setConfirm('')
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to update password')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <div className="max-w-lg">
+      <Card>
+        <h3 className="text-sm font-semibold text-[var(--text-primary)] mb-4">Change Password</h3>
+        {success && (
+          <div className="mb-4 rounded-[var(--radius)] bg-green-50 border border-green-200 px-3 py-2 text-sm text-green-700">
+            Password updated successfully.
+          </div>
+        )}
+        <form onSubmit={handleSubmit} className="space-y-3">
+          <Input label="Current password" type="password" placeholder="••••••••" value={current} onChange={(e) => { setCurrent(e.target.value); setSuccess(false) }} required />
+          <Input label="New password" type="password" placeholder="••••••••" value={next} onChange={(e) => setNext(e.target.value)} required />
+          <Input label="Confirm new password" type="password" placeholder="••••••••" value={confirm} onChange={(e) => setConfirm(e.target.value)} required />
+          {error && <p className="text-xs text-[var(--error)] rounded bg-[var(--error-muted)] px-3 py-2">{error}</p>}
+          <div className="mt-4 flex justify-end">
+            <Button type="submit" size="md" variant="secondary" disabled={loading}>
+              {loading ? 'Updating…' : 'Update password'}
+            </Button>
+          </div>
+        </form>
+      </Card>
+    </div>
+  )
+}
+
 // ── main page ─────────────────────────────────────────────────────────────────
 
 type Tab = 'profile' | 'password' | 'secrets' | 'bot-identity'
@@ -385,21 +438,7 @@ export function SettingsPage() {
           </div>
         )}
 
-        {tab === 'password' && (
-          <div className="max-w-lg">
-            <Card>
-              <h3 className="text-sm font-semibold text-[var(--text-primary)] mb-4">Change Password</h3>
-              <div className="space-y-3">
-                <Input label="Current password" type="password" placeholder="••••••••" />
-                <Input label="New password" type="password" placeholder="••••••••" />
-                <Input label="Confirm new password" type="password" placeholder="••••••••" />
-              </div>
-              <div className="mt-4 flex justify-end">
-                <Button size="md" variant="secondary">Update password</Button>
-              </div>
-            </Card>
-          </div>
-        )}
+        {tab === 'password' && <PasswordTab />}
 
         {tab === 'secrets' && <SecretsTab />}
         {tab === 'bot-identity' && <BotIdentityTab />}

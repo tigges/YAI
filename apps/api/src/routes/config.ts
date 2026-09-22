@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify'
 import { prisma } from '@ybot/db'
 import { requireRole } from '../middleware/auth.js'
 import { z } from 'zod'
+import { sendEmail, inviteEmail } from '../lib/email.js'
 
 type JWT = { sub: string; tenantId: string; role: string }
 
@@ -26,7 +27,7 @@ export async function channelsRoutes(app: FastifyInstance) {
   app.patch('/:botId/channels/:id', async (request, reply) => {
     const { tenantId } = request.user as JWT
     const { botId, id } = request.params as { botId: string; id: string }
-    const body = z.object({ name: z.string().optional(), config: z.record(z.any()).optional(), isActive: z.boolean().optional() }).parse(request.body)
+    const body = z.object({ name: z.string().optional(), config: z.record(z.any()).optional(), isActive: z.boolean().optional(), allowedDomains: z.array(z.string()).optional() }).parse(request.body)
     return { data: await prisma.channel.updateMany({ where: { id, botId, tenantId }, data: body }) }
   })
 
@@ -96,18 +97,37 @@ export async function teamRoutes(app: FastifyInstance) {
 
   // POST /team/invites
   app.post('/invites', async (request, reply) => {
-    const { tenantId, sub: invitedBy } = request.user as JWT
+    const { tenantId, sub: invitedById } = request.user as JWT
     const body = z.object({ email: z.string().email(), role: z.enum(['ADMIN', 'SUPERVISOR', 'AGENT']).default('AGENT') }).safeParse(request.body)
     if (!body.success) return reply.status(400).send({ error: { code: 'VALIDATION', details: body.error.flatten() } })
     // Check if already a member
     const existing = await prisma.user.findFirst({ where: { tenantId, email: body.data.email } })
     if (existing) return reply.status(409).send({ error: { code: 'ALREADY_EXISTS', message: 'User already in workspace' } })
-    // Create pending user
-    const user = await prisma.user.create({ data: { tenantId, email: body.data.email, displayName: body.data.email.split('@')[0] ?? body.data.email } })
-    await prisma.membership.create({ data: { tenantId, userId: user.id, role: body.data.role } })
-    await prisma.activity.create({ data: { tenantId, userId: invitedBy, action: 'user.invited', resource: 'user', resourceId: user.id, metadata: { role: body.data.role } } })
-    // In production: send invite email here
-    return reply.status(201).send({ data: { id: user.id, email: user.email, role: body.data.role, status: 'invited' } })
+    // Create pending user (no passwordHash — they accept via the invite link)
+    const invitedUser = await prisma.user.create({ data: { tenantId, email: body.data.email, displayName: body.data.email.split('@')[0] ?? body.data.email } })
+    await prisma.membership.create({ data: { tenantId, userId: invitedUser.id, role: body.data.role } })
+
+    const invitedByUser = await prisma.user.findUnique({ where: { id: invitedById } })
+    const tenant = await prisma.tenant.findUnique({ where: { id: tenantId } })
+
+    // Generate an invite JWT (no DB storage needed — signed with JWT_SECRET, expires 7d)
+    const inviteToken = (app.jwt as unknown as { sign: (payload: unknown, opts: unknown) => string }).sign(
+      { sub: invitedUser.id, type: 'invite' },
+      { expiresIn: '7d' },
+    )
+    const frontendUrl = process.env['FRONTEND_URL'] ?? 'http://localhost'
+    const inviteUrl = `${frontendUrl}/accept-invite?token=${inviteToken}`
+
+    await sendEmail(inviteEmail({
+      to: invitedUser.email,
+      inviteUrl,
+      invitedBy: invitedByUser?.displayName ?? invitedByUser?.email ?? 'A team member',
+      workspaceName: tenant?.name ?? 'YBot',
+      role: body.data.role,
+    })).catch((e) => { console.error('[email] invite send failed:', e) })
+
+    await prisma.activity.create({ data: { tenantId, userId: invitedById, action: 'user.invited', resource: 'user', resourceId: invitedUser.id, metadata: { role: body.data.role } } })
+    return reply.status(201).send({ data: { id: invitedUser.id, email: invitedUser.email, role: body.data.role, status: 'invited' } })
   })
 
   // PATCH /team/members/:id/role

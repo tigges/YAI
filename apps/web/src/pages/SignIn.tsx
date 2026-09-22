@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { useNavigate } from '@tanstack/react-router'
+import { useNavigate, Link } from '@tanstack/react-router'
 import { Bot, Eye, EyeOff, FlaskConical } from 'lucide-react'
 import { Button, Input, Card } from '@ybot/ui'
 import { useAppStore } from '../store/app'
@@ -180,6 +180,13 @@ export function SignInPage() {
               }
               required
             />
+            {mode === 'login' && !demo && (
+              <div className="text-right -mt-1">
+                <Link to="/forgot-password" className="text-xs text-[var(--text-link)] hover:underline">
+                  Forgot password?
+                </Link>
+              </div>
+            )}
 
             {error && (
               <p className="text-xs text-[var(--error)] rounded bg-[var(--error-muted)] px-3 py-2">
