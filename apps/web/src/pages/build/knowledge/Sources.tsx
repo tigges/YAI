@@ -1,7 +1,7 @@
-import React, { useState } from 'react'
+import React, { useRef, useState } from 'react'
 import {
   BookOpen, Plus, Globe, FileText, Link2, RefreshCw,
-  CheckCircle, AlertCircle, Clock, Trash2, Loader2
+  CheckCircle, AlertCircle, Clock, Trash2, Loader2, Upload,
 } from 'lucide-react'
 import { Button, Badge, EmptyState, Card } from '@ybot/ui'
 import { SubNav } from '../../../components/SubNav'
@@ -10,7 +10,7 @@ import {
   Input,
 } from '@ybot/ui'
 import { cn } from '@ybot/ui'
-import { useSources, useCreateSource, useSyncSource, useDeleteSource } from '../../../lib/hooks'
+import { useSources, useCreateSource, useUploadSource, useSyncSource, useDeleteSource } from '../../../lib/hooks'
 
 const SUBNAV = [
   { label: 'Intents', path: '/build/knowledge/intents' },
@@ -20,76 +20,81 @@ const SUBNAV = [
   { label: 'Training', path: '/build/knowledge/training' },
 ]
 
-interface Source {
-  id: string
-  name: string
-  kind: 'website' | 'url' | 'file'
-  status: 'indexed' | 'processing' | 'failed'
-  chunks: number
-  lastSync: string
-  url?: string
-}
-
-const MOCK_SOURCES: Source[] = [
-  { id: '1', name: 'Product Documentation', kind: 'website', status: 'indexed', chunks: 284, lastSync: '2h ago', url: 'https://docs.acme.com' },
-  { id: '2', name: 'FAQ PDF', kind: 'file', status: 'indexed', chunks: 42, lastSync: '1d ago' },
-  { id: '3', name: 'Return Policy', kind: 'url', status: 'indexed', chunks: 8, lastSync: '3d ago', url: 'https://acme.com/returns' },
-  { id: '4', name: 'Shipping Guide', kind: 'url', status: 'processing', chunks: 0, lastSync: 'syncing…', url: 'https://acme.com/shipping' },
-  { id: '5', name: 'Old Manual', kind: 'file', status: 'failed', chunks: 0, lastSync: 'failed' },
-]
-
-const KIND_ICON: Record<Source['kind'], React.ElementType> = {
+const KIND_ICON: Record<string, React.ElementType> = {
   website: Globe,
   url: Link2,
   file: FileText,
 }
 
-const STATUS_VARIANT: Record<Source['status'], 'success' | 'warning' | 'error'> = {
+const STATUS_VARIANT: Record<string, 'success' | 'warning' | 'error'> = {
   indexed: 'success',
   processing: 'warning',
   failed: 'error',
 }
 
-const STATUS_ICON: Record<Source['status'], React.ElementType> = {
+const STATUS_ICON: Record<string, React.ElementType> = {
   indexed: CheckCircle,
   processing: Clock,
   failed: AlertCircle,
 }
 
+const ACCEPTED = '.pdf,.doc,.docx,.txt,.md,.csv'
+
 export function SourcesPage() {
   const { data: sources = [], isLoading } = useSources()
   const createSource = useCreateSource()
+  const uploadSource = useUploadSource()
   const syncSource = useSyncSource()
   const deleteSource = useDeleteSource()
+
   const [showAdd, setShowAdd] = useState(false)
   const [newUrl, setNewUrl] = useState('')
   const [newName, setNewName] = useState('')
   const [newKind, setNewKind] = useState<'website' | 'url' | 'file'>('url')
   const [addError, setAddError] = useState('')
+  const [dragging, setDragging] = useState(false)
+  const [uploadFile, setUploadFile] = useState<File | null>(null)
+  const fileRef = useRef<HTMLInputElement>(null)
+
+  function handleFileSelect(file: File) {
+    setUploadFile(file)
+    // Pre-fill name from filename
+    setNewName((prev) => prev || file.name.replace(/\.[^.]+$/, '').replace(/[-_]/g, ' '))
+  }
+
+  function handleDrop(e: React.DragEvent) {
+    e.preventDefault()
+    setDragging(false)
+    const file = e.dataTransfer.files[0]
+    if (file) handleFileSelect(file)
+  }
 
   async function addSource() {
     if (!newName.trim()) return
     setAddError('')
     try {
-      await createSource.mutateAsync({
-        name: newName.trim(),
-        kind: newKind,
-        config: newKind !== 'file' ? { url: newUrl.trim() } : {},
-      })
+      if (newKind === 'file') {
+        if (!uploadFile) {
+          setAddError('Please select a file to upload')
+          return
+        }
+        await uploadSource.mutateAsync(uploadFile)
+      } else {
+        await createSource.mutateAsync({
+          name: newName.trim(),
+          kind: newKind,
+          config: { url: newUrl.trim() },
+        })
+      }
       setShowAdd(false)
       setNewUrl('')
       setNewName('')
+      setUploadFile(null)
       setAddError('')
     } catch (e) { setAddError(e instanceof Error ? e.message : 'Failed to add source') }
   }
 
-  function handleDelete(id: string) {
-    deleteSource.mutate(id)
-  }
-
-  function handleResync(id: string) {
-    syncSource.mutate(id)
-  }
+  const isPending = createSource.isPending || uploadSource.isPending
 
   return (
     <div className="flex flex-col h-full">
@@ -111,7 +116,7 @@ export function SourcesPage() {
             <p className="text-2xl font-bold text-[var(--text-primary)] mt-1">{sources.length}</p>
           </Card>
           <Card>
-            <p className="text-xs text-[var(--text-muted)]">Total Chunks</p>
+            <p className="text-xs text-[var(--text-muted)]">Total Docs</p>
             <p className="text-2xl font-bold text-[var(--text-primary)] mt-1">
               {sources.reduce((sum, s) => sum + (s.documents?.length ?? 0), 0)}
             </p>
@@ -119,17 +124,30 @@ export function SourcesPage() {
           <Card>
             <p className="text-xs text-[var(--text-muted)]">Indexed</p>
             <p className="text-2xl font-bold text-[var(--success)] mt-1">
-              {sources.filter((s) => (s.documents ?? []).every((d: {status:string}) => d.status === 'indexed')).length}
+              {sources.filter((s) => s.lastSyncAt).length}
             </p>
           </Card>
         </div>
 
         {/* Sources list */}
+        {isLoading && (
+          <div className="flex justify-center py-12">
+            <Loader2 size={20} className="animate-spin text-[var(--text-muted)]" />
+          </div>
+        )}
+        {!isLoading && sources.length === 0 && (
+          <EmptyState
+            icon={<BookOpen size={28} />}
+            title="No knowledge sources yet"
+            description="Add a website, URL, or upload a document to train your bot."
+            action={<Button size="sm" onClick={() => setShowAdd(true)}><Plus size={13} /> Add Source</Button>}
+          />
+        )}
         <div className="space-y-2">
           {sources.map((src) => {
-            const KindIcon = (KIND_ICON[(src.kind as keyof typeof KIND_ICON)] ?? Globe) as React.ElementType
+            const KindIcon = (KIND_ICON[src.kind] ?? Globe) as React.ElementType
             const status = src.lastSyncAt ? 'indexed' : 'processing'
-            const StatusIcon = STATUS_ICON[status as keyof typeof STATUS_ICON] ?? Clock
+            const StatusIcon = (STATUS_ICON[status] ?? Clock) as React.ElementType
             return (
               <div
                 key={src.id}
@@ -141,25 +159,40 @@ export function SourcesPage() {
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
                     <p className="font-medium text-[var(--text-primary)] text-sm truncate">{src.name}</p>
-                    <Badge variant={STATUS_VARIANT[status as keyof typeof STATUS_VARIANT] ?? 'muted'} dot>{status}</Badge>
+                    <Badge variant={STATUS_VARIANT[status] ?? 'muted'} dot>{status}</Badge>
                   </div>
                   <div className="flex items-center gap-3 mt-0.5">
-                    {(src.config as {url?: string})?.url && <span className="text-xs text-[var(--text-muted)] truncate max-w-[200px]">{String((src.config as {url?: string}).url)}</span>}
-                    {(src.documents?.length ?? 0) > 0 && <span className="text-xs text-[var(--text-muted)]">{src.documents?.length ?? 0} docs</span>}
-                    {src.lastSyncAt && <span className="text-xs text-[var(--text-muted)]">Last sync: {new Date(src.lastSyncAt).toLocaleString()}</span>}
+                    {(src.config as { url?: string })?.url && (
+                      <span className="text-xs text-[var(--text-muted)] truncate max-w-[200px]">
+                        {String((src.config as { url?: string }).url)}
+                      </span>
+                    )}
+                    {(src.config as { filename?: string })?.filename && (
+                      <span className="text-xs text-[var(--text-muted)]">
+                        {String((src.config as { filename?: string }).filename)}
+                      </span>
+                    )}
+                    {(src.documents?.length ?? 0) > 0 && (
+                      <span className="text-xs text-[var(--text-muted)]">{src.documents?.length ?? 0} docs</span>
+                    )}
+                    {src.lastSyncAt && (
+                      <span className="text-xs text-[var(--text-muted)]">
+                        Indexed {new Date(src.lastSyncAt).toLocaleString()}
+                      </span>
+                    )}
                   </div>
                 </div>
                 <div className="flex items-center gap-1 shrink-0">
                   <Button
                     variant="ghost"
                     size="icon-sm"
-                    onClick={() => handleResync(src.id)}
-                    title="Re-sync"
+                    onClick={() => syncSource.mutate(src.id)}
+                    title="Re-sync / Re-index"
                     disabled={syncSource.isPending}
                   >
                     <RefreshCw size={13} className={cn(syncSource.isPending && 'animate-spin')} />
                   </Button>
-                  <Button variant="ghost" size="icon-sm" onClick={() => handleDelete(src.id)} title="Delete">
+                  <Button variant="ghost" size="icon-sm" onClick={() => deleteSource.mutate(src.id)} title="Delete">
                     <Trash2 size={13} />
                   </Button>
                 </div>
@@ -170,7 +203,7 @@ export function SourcesPage() {
       </div>
 
       {/* Add Source Dialog */}
-      <Dialog open={showAdd} onOpenChange={setShowAdd}>
+      <Dialog open={showAdd} onOpenChange={(o) => { setShowAdd(o); if (!o) { setUploadFile(null); setNewName(''); setNewUrl(''); setAddError('') } }}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Add Knowledge Source</DialogTitle>
@@ -181,11 +214,11 @@ export function SourcesPage() {
                 <label className="text-xs font-medium text-[var(--text-secondary)]">Source type</label>
                 <div className="mt-1 flex gap-2">
                   {(['url', 'website', 'file'] as const).map((k) => {
-                    const Icon = KIND_ICON[k]
+                    const Icon = KIND_ICON[k] ?? Globe
                     return (
                       <button
                         key={k}
-                        onClick={() => setNewKind(k)}
+                        onClick={() => { setNewKind(k); setUploadFile(null); setNewName(''); setAddError('') }}
                         className={cn(
                           'flex flex-1 flex-col items-center gap-1 rounded-[var(--radius)] border p-3 text-xs transition-colors',
                           newKind === k
@@ -200,22 +233,67 @@ export function SourcesPage() {
                   })}
                 </div>
               </div>
-              <Input label="Name" placeholder="Product Documentation" value={newName} onChange={(e) => setNewName(e.target.value)} />
+
+              {newKind !== 'file' && (
+                <Input label="Name" placeholder="Product Documentation" value={newName} onChange={(e) => setNewName(e.target.value)} />
+              )}
+
               {newKind !== 'file' && (
                 <Input label="URL" placeholder="https://docs.example.com" value={newUrl} onChange={(e) => setNewUrl(e.target.value)} />
               )}
+
               {newKind === 'file' && (
                 <div>
-                  <label className="text-xs font-medium text-[var(--text-secondary)]">Upload file</label>
-                  <div className="mt-1 flex items-center justify-center rounded border-2 border-dashed border-[var(--border)] p-8 hover:border-[var(--accent)]/50 hover:bg-[var(--accent-muted)] transition-colors cursor-pointer">
-                    <div className="text-center">
-                      <FileText size={24} className="mx-auto mb-2 text-[var(--text-muted)]" />
-                      <p className="text-sm text-[var(--text-muted)]">Drop PDF, DOCX, or TXT here</p>
-                      <p className="text-xs text-[var(--text-muted)] mt-0.5">or click to browse</p>
-                    </div>
+                  <label className="text-xs font-medium text-[var(--text-secondary)] mb-1.5 block">Upload file</label>
+                  {/* Hidden real file input */}
+                  <input
+                    ref={fileRef}
+                    type="file"
+                    accept={ACCEPTED}
+                    className="hidden"
+                    onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFileSelect(f) }}
+                  />
+                  <div
+                    className={cn(
+                      'flex flex-col items-center justify-center rounded border-2 border-dashed p-8 transition-colors cursor-pointer',
+                      dragging
+                        ? 'border-[var(--accent)] bg-[var(--accent-muted)]'
+                        : uploadFile
+                          ? 'border-[var(--success)] bg-[var(--success)]/5'
+                          : 'border-[var(--border)] hover:border-[var(--accent)]/50 hover:bg-[var(--accent-muted)]',
+                    )}
+                    onClick={() => fileRef.current?.click()}
+                    onDragOver={(e) => { e.preventDefault(); setDragging(true) }}
+                    onDragLeave={() => setDragging(false)}
+                    onDrop={handleDrop}
+                  >
+                    {uploadFile ? (
+                      <>
+                        <FileText size={24} className="mx-auto mb-2 text-[var(--success)]" />
+                        <p className="text-sm font-medium text-[var(--text-primary)]">{uploadFile.name}</p>
+                        <p className="text-xs text-[var(--text-muted)] mt-0.5">{(uploadFile.size / 1024).toFixed(1)} KB · click to change</p>
+                      </>
+                    ) : (
+                      <>
+                        <Upload size={24} className="mx-auto mb-2 text-[var(--text-muted)]" />
+                        <p className="text-sm text-[var(--text-muted)]">Drop PDF, DOCX, TXT, or CSV here</p>
+                        <p className="text-xs text-[var(--text-muted)] mt-0.5">or click to browse</p>
+                      </>
+                    )}
                   </div>
+                  {uploadFile && (
+                    <div className="mt-2">
+                      <Input
+                        label="Source name (auto-filled)"
+                        value={newName}
+                        onChange={(e) => setNewName(e.target.value)}
+                        placeholder="e.g. Product Manual"
+                      />
+                    </div>
+                  )}
                 </div>
               )}
+
               {addError && (
                 <p className="text-xs text-[var(--danger)] bg-[var(--danger)]/10 rounded px-3 py-2">{addError}</p>
               )}
@@ -223,9 +301,12 @@ export function SourcesPage() {
           </DialogBody>
           <DialogFooter>
             <Button variant="secondary" onClick={() => setShowAdd(false)}>Cancel</Button>
-            <Button onClick={addSource} disabled={!newName.trim() || createSource.isPending}>
-              {createSource.isPending ? <Loader2 size={13} className="animate-spin mr-1" /> : null}
-              Add Source
+            <Button
+              onClick={addSource}
+              disabled={(newKind === 'file' ? !uploadFile : !newName.trim()) || isPending}
+            >
+              {isPending ? <Loader2 size={13} className="animate-spin mr-1" /> : null}
+              {newKind === 'file' ? 'Upload & Index' : 'Add Source'}
             </Button>
           </DialogFooter>
         </DialogContent>

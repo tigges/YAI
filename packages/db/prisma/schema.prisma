@@ -120,6 +120,7 @@ model Bot {
   id          String   @id @default(cuid())
   tenantId    String
   name        String
+  personaName String?
   description String?
   avatarUrl   String?
   status      String   @default("active")
@@ -491,6 +492,7 @@ model Contact {
   email       String?
   phone       String?
   avatarUrl   String?
+  tags        String[]  @default([])
   metadata    Json      @default("{}")
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
@@ -514,6 +516,7 @@ model Campaign {
   status      String    @default("draft")
   subject     String?
   body        String?
+  filters     Json      @default("{}")  // { hasEmail, hasPhone, channel, tags }
   scheduledAt DateTime?
   sentAt      DateTime?
   createdAt   DateTime  @default(now())

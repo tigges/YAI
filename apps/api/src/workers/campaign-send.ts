@@ -1,17 +1,48 @@
 /**
- * Campaign send worker — fans out a campaign to all contacts, creates
- * CampaignDelivery records, and optionally sends emails via SendGrid
- * (if SENDGRID_API_KEY is set) or a configured SMTP server.
+ * Campaign send worker — fans out a campaign to contacts matching the campaign
+ * audience filters, creates CampaignDelivery records, and optionally sends
+ * emails via SendGrid (if SENDGRID_API_KEY is set).
  *
- * Without external credentials the worker marks deliveries as "sent"
- * after a short simulated delay so the UI shows real delivery counts.
+ * Audience filters (stored as campaign.filters JSON):
+ *   hasEmail  – only contacts with an email address (default true for email channel)
+ *   hasPhone  – only contacts with a phone number
+ *   channel   – only contacts who first came via this channel kind
+ *   tags      – contact must have ALL of these tags
+ *
+ * Without external credentials the worker marks deliveries as "simulated".
  */
 
-import { PrismaClient } from '@ybot/db'
+import { PrismaClient, type Prisma } from '@ybot/db'
 
 const prisma = new PrismaClient()
 let cuidCounter = 0
 function createId() { return `cmp_${Date.now()}_${++cuidCounter}` }
+
+interface CampaignFilters {
+  hasEmail?: boolean
+  hasPhone?: boolean
+  channel?: string
+  tags?: string[]
+}
+
+// ── Build Prisma where clause from filters ─────────────────────────────────────
+function buildContactWhere(tenantId: string, filters: CampaignFilters): Prisma.ContactWhereInput {
+  const where: Prisma.ContactWhereInput = { tenantId }
+
+  if (filters.hasEmail) where.email = { not: null }
+  if (filters.hasPhone) where.phone = { not: null }
+  if (filters.tags && filters.tags.length > 0) {
+    where.tags = { hasEvery: filters.tags }
+  }
+  if (filters.channel) {
+    // Filter by contacts who have at least one conversation through the given channel kind
+    where.conversations = {
+      some: { channel: { kind: filters.channel } },
+    }
+  }
+
+  return where
+}
 
 // ── Optional SendGrid integration ─────────────────────────────────────────────
 async function trySendEmail(to: string, subject: string, html: string): Promise<boolean> {
@@ -47,16 +78,26 @@ export async function processCampaignSend(payload: {
   const subject = campaign.subject ?? campaign.name
   const bodyHtml = campaign.body ?? `<p>${campaign.name}</p>`
 
-  // Load all contacts with an email address for this tenant
+  // Parse audience filters — default to requiring email for email campaigns
+  const rawFilters = (campaign.filters ?? {}) as CampaignFilters
+  const filters: CampaignFilters = {
+    hasEmail: rawFilters.hasEmail ?? (campaign.channel === 'email' ? true : undefined),
+    hasPhone: rawFilters.hasPhone,
+    channel: rawFilters.channel,
+    tags: rawFilters.tags?.length ? rawFilters.tags : undefined,
+  }
+
+  const contactWhere = buildContactWhere(tenantId, filters)
+
   const contacts = await prisma.contact.findMany({
-    where: { tenantId, email: { not: null } },
+    where: contactWhere,
     take: 5000,
     select: { id: true, email: true, displayName: true },
   })
 
   if (contacts.length === 0) {
-    // No contacts yet — mark campaign as completed with 0 sends
     await prisma.campaign.updateMany({ where: { id: campaignId }, data: { status: 'completed' } })
+    console.log(`[campaign-send] Campaign ${campaignId} — no contacts matched filters`)
     return
   }
 
@@ -94,7 +135,6 @@ export async function processCampaignSend(payload: {
         data: { status: 'failed', error: err instanceof Error ? err.message : 'Unknown' },
       })
     }
-    // Small delay to avoid overwhelming external APIs
     await new Promise((r) => setTimeout(r, 50))
   }
 

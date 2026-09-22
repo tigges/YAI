@@ -7,7 +7,7 @@ import type {
   Flow, FlowVersion, Intent, Entity, Faq, KnowledgeSource,
   Conversation, Message, Contact, Campaign, Template,
   Webhook, TeamMember, AnalyticsOverview, ConversationTrend, AuditEvent,
-  LlmConfig, SystemStatus, SystemConfig,
+  LlmConfig, SystemStatus, SystemConfig, Channel,
 } from './api'
 
 // ── Flows ─────────────────────────────────────────────────────────────────────
@@ -103,6 +103,12 @@ export const DEMO_FAQS: Faq[] = [
 export const DEMO_SOURCES: KnowledgeSource[] = [
   { id: 's1', name: 'acme.com/help', kind: 'website', config: { url: 'https://acme.com/help', depth: 3 }, lastSyncAt: new Date(Date.now() - 2 * 3600_000).toISOString(), documents: [{ id: 'd1', status: 'indexed' }, { id: 'd2', status: 'indexed' }, { id: 'd3', status: 'indexed' }] },
   { id: 's2', name: 'Product Manual v3.pdf', kind: 'file', config: { filename: 'product-manual-v3.pdf', size_bytes: 2_450_000 }, lastSyncAt: new Date(Date.now() - 24 * 3600_000).toISOString(), documents: [{ id: 'd4', status: 'indexed' }] },
+]
+
+export const DEMO_CHANNELS: Channel[] = [
+  { id: 'ch_demo_web', name: 'Website Chat', kind: 'web', config: { accentColor: '#6366f1', title: 'Chat with us' }, isActive: true, botId: 'demo', createdAt: new Date(Date.now() - 7 * 86400_000).toISOString() },
+  { id: 'ch_demo_wa', name: 'WhatsApp Business', kind: 'whatsapp', config: { phoneNumberId: '15550001234' }, isActive: true, botId: 'demo', createdAt: new Date(Date.now() - 14 * 86400_000).toISOString() },
+  { id: 'ch_demo_email', name: 'Support Email', kind: 'email', config: { address: 'support@acme.com' }, isActive: false, botId: 'demo', createdAt: new Date(Date.now() - 30 * 86400_000).toISOString() },
 ]
 
 export const DEMO_TRAINING: LlmConfig = {

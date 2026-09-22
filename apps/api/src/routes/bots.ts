@@ -56,4 +56,25 @@ export async function botsRoutes(app: FastifyInstance) {
 
     return reply.status(201).send({ data: bot })
   })
+
+  app.patch('/:botId', async (request, reply) => {
+    const { tenantId } = request.user as JwtPayload
+    const { botId } = request.params as { botId: string }
+    const body = request.body as { name?: string; personaName?: string | null; description?: string | null; avatarUrl?: string | null }
+
+    const bot = await prisma.bot.findFirst({ where: { id: botId, tenantId } })
+    if (!bot) return reply.status(404).send({ error: { code: 'NOT_FOUND', message: 'Bot not found' } })
+
+    const updated = await prisma.bot.update({
+      where: { id: botId },
+      data: {
+        ...(body.name !== undefined      && { name: body.name }),
+        ...(body.personaName !== undefined && { personaName: body.personaName ?? null }),
+        ...(body.description !== undefined && { description: body.description ?? null }),
+        ...(body.avatarUrl !== undefined   && { avatarUrl: body.avatarUrl ?? null }),
+      },
+      include: { environments: true },
+    })
+    return { data: updated }
+  })
 }

@@ -2,7 +2,7 @@ import React, { useState } from 'react'
 import {
   Plus, Search, Filter, MoreHorizontal, Megaphone,
   Calendar, Users, BarChart2, Play, Pause, CheckCircle2,
-  Clock, AlertCircle, Send, Loader2,
+  Clock, AlertCircle, Send, Loader2, Tag, X,
 } from 'lucide-react'
 import { Avatar, Badge, Button, Input } from '@ybot/ui'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogBody, DialogFooter } from '@ybot/ui'
@@ -12,7 +12,7 @@ import {
 } from '@ybot/ui'
 import { SubNav } from '../../components/SubNav'
 import { cn } from '@ybot/ui'
-import { useCampaigns, useCreateCampaign, useUpdateCampaign, useLaunchCampaign, usePauseCampaign, useDeleteCampaign, useCampaignDeliveries } from '../../lib/hooks'
+import { useCampaigns, useCreateCampaign, useUpdateCampaign, useLaunchCampaign, usePauseCampaign, useDeleteCampaign, useCampaignDeliveries, useAudienceCount } from '../../lib/hooks'
 
 const SUBNAV = [
   { label: 'Campaigns', path: '/engage/campaigns' },
@@ -34,17 +34,8 @@ interface Campaign {
   scheduledAt?: string
   createdAt: string
   template?: string
+  filters?: { hasEmail?: boolean; hasPhone?: boolean; channel?: string; tags?: string[] }
 }
-
-const MOCK_CAMPAIGNS: Campaign[] = [
-  { id: 'C-001', name: 'Black Friday 2026 — Email blast', status: 'scheduled', channel: 'email', audience: 12450, scheduledAt: 'Nov 27, 9:00 AM', createdAt: '2d ago', template: 'Black Friday Sale' },
-  { id: 'C-002', name: 'WhatsApp re-engagement — Inactive 30d', status: 'running', channel: 'whatsapp', audience: 3200, sent: 1842, opened: 1220, clicked: 345, createdAt: '1d ago', template: 'Re-engagement Nudge' },
-  { id: 'C-003', name: 'Product launch SMS — Early access', status: 'completed', channel: 'sms', audience: 820, sent: 820, opened: 820, clicked: 210, createdAt: '5d ago' },
-  { id: 'C-004', name: 'Onboarding drip — New signups', status: 'running', channel: 'email', audience: 5600, sent: 4300, opened: 2900, clicked: 980, createdAt: '1w ago', template: 'Onboarding Welcome' },
-  { id: 'C-005', name: 'Cart abandonment — 24h reminder', status: 'paused', channel: 'email', audience: 2100, sent: 700, opened: 420, clicked: 88, createdAt: '1w ago', template: 'Cart Recovery' },
-  { id: 'C-006', name: 'Cyber Monday push — Web channel', status: 'draft', channel: 'web', audience: 0, createdAt: '3h ago', template: 'Promo Banner' },
-  { id: 'C-007', name: 'Survey — NPS Q3 2026', status: 'failed', channel: 'email', audience: 8000, sent: 120, createdAt: '3d ago' },
-]
 
 const STATUS_CONFIG: Record<CampaignStatus, { label: string; variant: 'info' | 'success' | 'error' | 'warning' | 'muted'; icon: React.ReactNode }> = {
   draft: { label: 'Draft', variant: 'muted', icon: <Clock size={11} /> },
@@ -60,6 +51,122 @@ function pct(a?: number, b?: number): string {
   return `${((a / b) * 100).toFixed(1)}%`
 }
 
+interface AudienceFilters {
+  hasEmail: boolean
+  hasPhone: boolean
+  channel: string
+  tags: string[]
+}
+
+const DEFAULT_FILTERS: AudienceFilters = { hasEmail: false, hasPhone: false, channel: '', tags: [] }
+
+function AudiencePicker({
+  value,
+  onChange,
+}: {
+  value: AudienceFilters
+  onChange: (f: AudienceFilters) => void
+}) {
+  const [tagInput, setTagInput] = useState('')
+  const { data: count, isLoading: counting } = useAudienceCount({
+    hasEmail: value.hasEmail || undefined,
+    hasPhone: value.hasPhone || undefined,
+    channel: value.channel || undefined,
+    tags: value.tags.length ? value.tags : undefined,
+  })
+
+  function addTag() {
+    const t = tagInput.trim()
+    if (t && !value.tags.includes(t)) onChange({ ...value, tags: [...value.tags, t] })
+    setTagInput('')
+  }
+
+  function removeTag(t: string) {
+    onChange({ ...value, tags: value.tags.filter((x) => x !== t) })
+  }
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center justify-between">
+        <label className="text-xs font-medium text-[var(--text-muted)]">Audience segment</label>
+        <span className="text-xs text-[var(--text-muted)]">
+          {counting
+            ? <span className="flex items-center gap-1"><Loader2 size={10} className="animate-spin" /> counting…</span>
+            : count !== undefined
+              ? <span className="font-medium text-[var(--text-primary)]"><Users size={11} className="inline mr-1" />{count.toLocaleString()} contacts match</span>
+              : <span className="text-[var(--text-muted)]">All contacts</span>
+          }
+        </span>
+      </div>
+
+      {/* Contact requirements */}
+      <div className="flex gap-3">
+        <label className="flex items-center gap-1.5 text-sm cursor-pointer">
+          <input
+            type="checkbox"
+            checked={value.hasEmail}
+            onChange={(e) => onChange({ ...value, hasEmail: e.target.checked })}
+            className="accent-[var(--accent)]"
+          />
+          <span className="text-[var(--text-secondary)]">Has email</span>
+        </label>
+        <label className="flex items-center gap-1.5 text-sm cursor-pointer">
+          <input
+            type="checkbox"
+            checked={value.hasPhone}
+            onChange={(e) => onChange({ ...value, hasPhone: e.target.checked })}
+            className="accent-[var(--accent)]"
+          />
+          <span className="text-[var(--text-secondary)]">Has phone</span>
+        </label>
+      </div>
+
+      {/* Channel filter */}
+      <div>
+        <label className="text-xs font-medium text-[var(--text-muted)] mb-1.5 block">First contact via channel</label>
+        <select
+          value={value.channel}
+          onChange={(e) => onChange({ ...value, channel: e.target.value })}
+          className="w-full rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--bg-overlay)] px-3 py-2 text-sm text-[var(--text-primary)] focus:outline-none"
+        >
+          <option value="">Any channel</option>
+          <option value="email">Email</option>
+          <option value="whatsapp">WhatsApp</option>
+          <option value="sms">SMS</option>
+          <option value="web">Web chat</option>
+        </select>
+      </div>
+
+      {/* Tags filter */}
+      <div>
+        <label className="text-xs font-medium text-[var(--text-muted)] mb-1.5 block">Contact tags (must have all)</label>
+        <div className="flex gap-2">
+          <input
+            className="flex-1 rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--bg-overlay)] px-3 py-2 text-sm text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--accent)]/40"
+            placeholder="Type tag and press Enter…"
+            value={tagInput}
+            onChange={(e) => setTagInput(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addTag() } }}
+          />
+          <Button size="sm" variant="secondary" onClick={addTag} disabled={!tagInput.trim()}>
+            <Tag size={12} /> Add
+          </Button>
+        </div>
+        {value.tags.length > 0 && (
+          <div className="flex flex-wrap gap-1.5 mt-2">
+            {value.tags.map((t) => (
+              <span key={t} className="flex items-center gap-1 text-xs bg-[var(--accent)]/15 text-[var(--accent)] rounded-full px-2 py-0.5 font-medium">
+                {t}
+                <button onClick={() => removeTag(t)} className="hover:text-[var(--danger)]"><X size={9} /></button>
+              </span>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
 export function CampaignsPage() {
   const { data: rawCampaigns = [], isLoading } = useCampaigns()
   const createCampaign = useCreateCampaign()
@@ -73,8 +180,8 @@ export function CampaignsPage() {
   const [newChannel, setNewChannel] = useState('email')
   const [newSubject, setNewSubject] = useState('')
   const [newBody, setNewBody] = useState('')
-  const [newTemplate, setNewTemplate] = useState('')
   const [newSchedule, setNewSchedule] = useState('immediate')
+  const [newFilters, setNewFilters] = useState<AudienceFilters>(DEFAULT_FILTERS)
   const [formError, setFormError] = useState('')
   const [viewDeliveries, setViewDeliveries] = useState<string | null>(null)
 
@@ -82,12 +189,19 @@ export function CampaignsPage() {
   const [editCampaign, setEditCampaign] = useState<Campaign | null>(null)
   const [editName, setEditName] = useState('')
   const [editChannel, setEditChannel] = useState('email')
+  const [editFilters, setEditFilters] = useState<AudienceFilters>(DEFAULT_FILTERS)
   const [editError, setEditError] = useState('')
 
   function openEdit(c: Campaign) {
     setEditCampaign(c)
     setEditName(c.name)
     setEditChannel(c.channel ?? 'email')
+    setEditFilters({
+      hasEmail: c.filters?.hasEmail ?? false,
+      hasPhone: c.filters?.hasPhone ?? false,
+      channel: c.filters?.channel ?? '',
+      tags: c.filters?.tags ?? [],
+    })
     setEditError('')
   }
 
@@ -95,6 +209,7 @@ export function CampaignsPage() {
     setEditCampaign(null)
     setEditName('')
     setEditChannel('email')
+    setEditFilters(DEFAULT_FILTERS)
     setEditError('')
   }
 
@@ -102,20 +217,36 @@ export function CampaignsPage() {
     if (!editCampaign || !editName.trim()) return
     setEditError('')
     try {
-      await updateCampaign.mutateAsync({ id: editCampaign.id, name: editName.trim(), channel: editChannel })
+      const filters = {
+        hasEmail: editFilters.hasEmail || undefined,
+        hasPhone: editFilters.hasPhone || undefined,
+        channel: editFilters.channel || undefined,
+        tags: editFilters.tags.length ? editFilters.tags : undefined,
+      }
+      await updateCampaign.mutateAsync({ id: editCampaign.id, name: editName.trim(), channel: editChannel, filters })
       closeEdit()
     } catch (e) { setEditError(e instanceof Error ? e.message : 'Failed to save') }
   }
 
   function resetForm() {
-    setNewName(''); setNewChannel('email'); setNewTemplate(''); setNewSchedule('immediate'); setFormError('')
+    setNewName(''); setNewChannel('email'); setNewSchedule('immediate')
+    setNewSubject(''); setNewBody(''); setNewFilters(DEFAULT_FILTERS); setFormError('')
+  }
+
+  function buildFilters() {
+    return {
+      hasEmail: newFilters.hasEmail || undefined,
+      hasPhone: newFilters.hasPhone || undefined,
+      channel: newFilters.channel || undefined,
+      tags: newFilters.tags.length ? newFilters.tags : undefined,
+    }
   }
 
   async function handleSaveDraft() {
     if (!newName.trim()) return
     setFormError('')
     try {
-      await createCampaign.mutateAsync({ name: newName.trim(), channel: newChannel, subject: newSubject.trim() || undefined, body: newBody.trim() || undefined, status: 'draft' })
+      await createCampaign.mutateAsync({ name: newName.trim(), channel: newChannel, subject: newSubject.trim() || undefined, body: newBody.trim() || undefined, status: 'draft', filters: buildFilters() })
       setShowNew(false); resetForm()
     } catch (e) { setFormError(e instanceof Error ? e.message : 'Failed to save') }
   }
@@ -124,7 +255,7 @@ export function CampaignsPage() {
     if (!newName.trim()) return
     setFormError('')
     try {
-      await createCampaign.mutateAsync({ name: newName.trim(), channel: newChannel, subject: newSubject.trim() || undefined, body: newBody.trim() || undefined, status: 'running' })
+      await createCampaign.mutateAsync({ name: newName.trim(), channel: newChannel, subject: newSubject.trim() || undefined, body: newBody.trim() || undefined, status: 'running', filters: buildFilters() })
       setShowNew(false); resetForm()
     } catch (e) { setFormError(e instanceof Error ? e.message : 'Failed to launch') }
   }
@@ -290,40 +421,23 @@ export function CampaignsPage() {
                 </select>
               </div>
               <div>
-                <label className="text-xs font-medium text-[var(--text-muted)] mb-1.5 block">Template</label>
+                <label className="text-xs font-medium text-[var(--text-muted)] mb-1.5 block">Schedule</label>
                 <select
-                  value={newTemplate}
-                  onChange={(e) => setNewTemplate(e.target.value)}
-                  className="w-full rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--bg-overlay)] px-3 py-2 text-sm text-[var(--text-primary)] focus:outline-none"
+                  value={newSchedule}
+                  onChange={(e) => setNewSchedule(e.target.value)}
+                  className="rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--bg-overlay)] px-3 py-2 text-sm text-[var(--text-primary)] focus:outline-none w-full"
                 >
-                  <option value="">Select template…</option>
-                  <option value="black-friday">Black Friday Sale</option>
-                  <option value="cart-recovery">Cart Recovery</option>
-                  <option value="re-engagement">Re-engagement Nudge</option>
-                  <option value="onboarding">Onboarding Welcome</option>
+                  <option value="immediate">Send immediately</option>
+                  <option value="later">Schedule for later</option>
                 </select>
               </div>
             </div>
-            <div>
-              <label className="text-xs font-medium text-[var(--text-muted)] mb-1.5 block">Audience segment</label>
-              <select className="w-full rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--bg-overlay)] px-3 py-2 text-sm text-[var(--text-primary)] focus:outline-none">
-                <option>All contacts</option>
-                <option>Active last 30 days</option>
-                <option>Inactive 30–90 days</option>
-                <option>VIP customers</option>
-              </select>
+
+            {/* Audience segment picker */}
+            <div className="rounded-[var(--radius-md)] border border-[var(--border)] p-3 bg-[var(--bg-overlay)] space-y-3">
+              <AudiencePicker value={newFilters} onChange={setNewFilters} />
             </div>
-            <div>
-              <label className="text-xs font-medium text-[var(--text-muted)] mb-1.5 block">Schedule</label>
-              <select
-                value={newSchedule}
-                onChange={(e) => setNewSchedule(e.target.value)}
-                className="rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--bg-overlay)] px-3 py-2 text-sm text-[var(--text-primary)] focus:outline-none"
-              >
-                <option value="immediate">Send immediately</option>
-                <option value="later">Schedule for later</option>
-              </select>
-            </div>
+
             <div>
               <label className="text-xs font-medium text-[var(--text-muted)] mb-1.5 block">Email subject</label>
               <input
@@ -367,6 +481,7 @@ export function CampaignsPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
       {/* Edit campaign dialog */}
       <Dialog open={!!editCampaign} onOpenChange={(o) => { if (!o) closeEdit() }}>
         <DialogContent size="md">
@@ -397,6 +512,10 @@ export function CampaignsPage() {
                 <option value="sms">SMS</option>
                 <option value="web">Web</option>
               </select>
+            </div>
+            {/* Audience picker */}
+            <div className="rounded-[var(--radius-md)] border border-[var(--border)] p-3 bg-[var(--bg-overlay)]">
+              <AudiencePicker value={editFilters} onChange={setEditFilters} />
             </div>
             {editCampaign && (
               <p className="text-xs text-[var(--text-muted)]">
@@ -469,3 +588,4 @@ function DeliveriesDialog({ campaignId, onClose }: { campaignId: string | null; 
     </Dialog>
   )
 }
+

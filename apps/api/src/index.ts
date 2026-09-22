@@ -3,6 +3,7 @@ import cors from '@fastify/cors'
 import cookie from '@fastify/cookie'
 import jwt from '@fastify/jwt'
 import wsPlugin from '@fastify/websocket'
+import multipart from '@fastify/multipart'
 import { authRoutes } from './routes/auth.js'
 import { meRoutes } from './routes/me.js'
 import { botsRoutes } from './routes/bots.js'
@@ -49,6 +50,10 @@ await app.register(cors, {
 
 await app.register(cookie, {
   secret: JWT_SECRET,
+})
+
+await app.register(multipart, {
+  limits: { fileSize: 25 * 1024 * 1024 }, // 25 MB
 })
 
 await app.register(jwt, {

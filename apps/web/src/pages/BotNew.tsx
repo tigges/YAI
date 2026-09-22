@@ -11,6 +11,7 @@ export function BotNewPage() {
   const navigate = useNavigate()
   const { setBots, bots } = useAppStore()
   const [name, setName] = useState('')
+  const [personaName, setPersonaName] = useState('')
   const [description, setDescription] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -36,10 +37,17 @@ export function BotNewPage() {
     }
 
     try {
-      await apiFetch<{ data: Bot }>('/bots', {
+      const created = await apiFetch<{ data: Bot }>('/bots', {
         method: 'POST',
         body: JSON.stringify({ name, description }),
       })
+      // Set personaName separately if provided (PATCH after create)
+      if (personaName.trim() && created?.data?.id) {
+        await apiFetch(`/bots/${created.data.id}`, {
+          method: 'PATCH',
+          body: JSON.stringify({ personaName: personaName.trim() }),
+        }).catch(() => {})
+      }
       const botsRes = await apiFetch<{ data: Bot[] }>('/bots')
       setBots(botsRes.data)
       navigate({ to: '/overview' })
@@ -57,15 +65,23 @@ export function BotNewPage() {
         <Card>
           <form onSubmit={handleSubmit} className="flex flex-col gap-4">
             <Input
-              label="Bot name"
-              placeholder="Customer Support Bot"
+              label="Internal name"
+              placeholder="Salon Support Bot v2"
               value={name}
               onChange={(e) => setName(e.target.value)}
               required
+              hint="Visible only inside BotStudio"
+            />
+            <Input
+              label="Persona name (customer-facing)"
+              placeholder="Bella"
+              value={personaName}
+              onChange={(e) => setPersonaName(e.target.value)}
+              hint="First name shown to customers: 'Hi, I'm Bella!'"
             />
             <Input
               label="Description (optional)"
-              placeholder="Handles support queries"
+              placeholder="Handles booking queries for Bella Hair Studio"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
             />

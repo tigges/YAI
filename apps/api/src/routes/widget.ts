@@ -71,9 +71,15 @@ const WIDGET_INLINE_JS = /* js */`
   if(script){try{var u=new URL(script.src);API_BASE=u.protocol+'//'+u.host+'/api/v1';}catch(e){}}
   var ACCENT=window.YBotAccentColor||'#6366f1';
   var TITLE=window.YBotTitle||'Chat with us';
+  var BOT_NAME=window.YBotBotName||'';
+  // visitorName is remembered within the same browser tab (sessionStorage).
+  // 'nameAsked' means the bot asked for the name but the user hasn't replied yet.
+  var visitorName=sessionStorage.getItem('ybot_vname')||'';
+  var nameAsked=false;
   var conversationId=null;
   var sessionId='ws_'+Date.now()+'_'+Math.random().toString(36).slice(2);
   var open=false,messages=[],loading=false;
+  var csatState=null;
   function css(el,s){Object.assign(el.style,s);}
   function mk(tag,a){var n=document.createElement(tag);for(var k in a)n.setAttribute(k,a[k]);return n;}
   var root=mk('div');css(root,{position:'fixed',bottom:'24px',right:'24px',zIndex:'2147483647',fontFamily:'system-ui,sans-serif'});
@@ -91,39 +97,65 @@ const WIDGET_INLINE_JS = /* js */`
   var ta=mk('textarea');ta.placeholder='Type a message\u2026';ta.rows=1;css(ta,{flex:'1',resize:'none',border:'1px solid #e5e7eb',borderRadius:'8px',padding:'8px 12px',fontSize:'14px',fontFamily:'inherit',outline:'none',lineHeight:'1.4'});
   var sendB=mk('button');sendB.textContent='\u2191';css(sendB,{background:ACCENT,color:'#fff',border:'none',borderRadius:'8px',width:'36px',height:'36px',cursor:'pointer',fontSize:'18px',fontWeight:'bold',flexShrink:'0',alignSelf:'flex-end'});
   inputRow.append(ta,sendB);panel.append(hdr,msgArea,inputRow);root.append(panel,bubble);document.body.appendChild(root);
+  function renderCsatCard(){
+    if(csatState===null)return;
+    var card=mk('div');css(card,{margin:'8px 0 4px',padding:'12px 14px',background:'#f9fafb',border:'1px solid #e5e7eb',borderRadius:'12px',textAlign:'center'});
+    if(csatState==='pending'){
+      var lbl=mk('p');lbl.textContent='Was this conversation helpful?';css(lbl,{margin:'0 0 10px',fontSize:'13px',color:'#374151',fontWeight:'500'});
+      var btns=mk('div');css(btns,{display:'flex',gap:'8px',justifyContent:'center'});
+      var up=mk('button');up.innerHTML='\uD83D\uDC4D Yes';
+      var dn=mk('button');dn.innerHTML='\uD83D\uDC4E No';
+      [up,dn].forEach(function(b){css(b,{background:'#fff',border:'1px solid #d1d5db',borderRadius:'8px',padding:'6px 16px',cursor:'pointer',fontSize:'13px',color:'#374151',transition:'background .15s'});});
+      up.onmouseover=function(){up.style.background='#dcfce7';};up.onmouseout=function(){up.style.background='#fff';};
+      dn.onmouseover=function(){dn.style.background='#fee2e2';};dn.onmouseout=function(){dn.style.background='#fff';};
+      up.onclick=function(){submitCsat(1);};dn.onclick=function(){submitCsat(-1);};
+      btns.append(up,dn);card.append(lbl,btns);
+    } else {
+      var thanks=mk('p');
+      thanks.textContent=csatState===1?'\uD83D\uDC4D Thanks for the positive feedback!':'\uD83D\uDC4E Thanks for letting us know!';
+      css(thanks,{margin:'0',fontSize:'13px',color:'#6b7280'});card.appendChild(thanks);
+    }
+    msgArea.appendChild(card);
+  }
   function render(){
     msgArea.innerHTML='';
     messages.forEach(function(m){
       var row=mk('div');css(row,{display:'flex',justifyContent:m.role==='user'?'flex-end':'flex-start'});
       var bub=mk('div');css(bub,{maxWidth:'80%',padding:'8px 12px',borderRadius:m.role==='user'?'14px 14px 2px 14px':'14px 14px 14px 2px',background:m.role==='user'?ACCENT:'#f3f4f6',color:m.role==='user'?'#fff':'#111',fontSize:'14px',lineHeight:'1.5',whiteSpace:'pre-wrap',wordBreak:'break-word'});
       bub.textContent=m.text+(m.streaming?'\u258b':'');
-      if(m.showCsat&&!m.csat){
-        var cr=mk('div');css(cr,{display:'flex',gap:'6px',marginTop:'6px'});
-        var up=mk('button');up.textContent='\uD83D\uDC4D';css(up,{background:'none',border:'1px solid #e5e7eb',borderRadius:'8px',padding:'2px 8px',cursor:'pointer',fontSize:'14px'});
-        var dn=mk('button');dn.textContent='\uD83D\uDC4E';css(dn,{background:'none',border:'1px solid #e5e7eb',borderRadius:'8px',padding:'2px 8px',cursor:'pointer',fontSize:'14px'});
-        var idx=messages.indexOf(m);
-        up.onclick=function(){submitCsat(1,idx);};dn.onclick=function(){submitCsat(-1,idx);};
-        cr.append(up,dn);bub.appendChild(cr);
-      }
-      if(m.csat){var c=mk('span');c.textContent=m.csat===1?' \uD83D\uDC4D Thanks!':' \uD83D\uDC4E Thanks for the feedback';css(c,{fontSize:'11px',color:'#6b7280'});bub.appendChild(c);}
       row.appendChild(bub);msgArea.appendChild(row);
     });
+    renderCsatCard();
     msgArea.scrollTop=msgArea.scrollHeight;
   }
   function addMsg(role,text,streaming){messages.push({role:role,text:text,streaming:streaming||false});render();return messages.length-1;}
-  function updMsg(i,text,streaming,showCsat){if(messages[i]){messages[i].text=text;messages[i].streaming=streaming||false;if(showCsat!==undefined)messages[i].showCsat=showCsat;}render();}
-  function submitCsat(rating,idx){
+  function updMsg(i,text,streaming,done){
+    if(messages[i]){messages[i].text=text;messages[i].streaming=streaming||false;}
+    if(done&&messages.filter(function(m){return m.role==='user';}).length>=1&&csatState===null){csatState='pending';}
+    render();
+  }
+  function submitCsat(rating){
     if(!conversationId)return;
-    if(messages[idx])messages[idx].csat=rating;render();
+    csatState=rating;render();
     fetch(API_BASE+'/public/csat/'+channelId,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({conversationId:conversationId,rating:rating})}).catch(function(){});
   }
   async function send(){
     var text=ta.value.trim();if(!text||loading)return;
-    ta.value='';loading=true;sendB.disabled=true;
+    ta.value='';
+    // First reply after asking for name — capture it as the visitor name,
+    // then forward "My name is <name>" to the AI as the opening message.
+    if(nameAsked&&!visitorName){
+      visitorName=text;
+      sessionStorage.setItem('ybot_vname',text);
+      nameAsked=false;
+    }
+    loading=true;sendB.disabled=true;
     var hist=messages.slice(-10).map(function(m){return{role:m.role==='user'?'user':'assistant',content:m.text};});
     addMsg('user',text);var bi=addMsg('bot','',true);
     try{
-      var res=await fetch(API_BASE+'/public/chat/'+channelId,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({message:text,sessionId:sessionId,conversationId:conversationId,history:hist})});
+      var body={message:text,sessionId:sessionId,conversationId:conversationId,history:hist};
+      if(visitorName)body.visitorName=visitorName;
+      var res=await fetch(API_BASE+'/public/chat/'+channelId,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
       if(!res.ok||!res.body){updMsg(bi,'Sorry, something went wrong. ('+res.status+')');loading=false;sendB.disabled=false;return;}
       var reader=res.body.getReader(),dec=new TextDecoder(),buf='',botText='';
       while(true){
@@ -139,9 +171,26 @@ const WIDGET_INLINE_JS = /* js */`
     }catch(e){updMsg(bi,"Couldn\\'t reach the server. Please try again.");}
     finally{loading=false;sendB.disabled=false;}
   }
-  function toggle(force){open=force!==undefined?force:!open;panel.style.display=open?'flex':'none';bubble.innerHTML=open?'&times;':'&#128172;';if(open&&messages.length===0)addMsg('bot','Hello! &#128075; How can I help you today?');if(open)setTimeout(function(){ta.focus();},50);}
+  function toggle(force){
+    open=force!==undefined?force:!open;
+    panel.style.display=open?'flex':'none';
+    bubble.innerHTML=open?'&times;':'&#128172;';
+    if(open&&messages.length===0){
+      if(visitorName){
+        // Returning visitor — greet by name straight away
+        addMsg('bot','Welcome back, '+visitorName+'! 👋 How can I help you today?');
+      } else {
+        // First time — ask for name conversationally, introducing the bot
+        var intro=BOT_NAME?'Hi there, I\'m '+BOT_NAME+'! 👋 What\'s your name?':'Hi there! 👋 What\'s your name?';
+        addMsg('bot',intro);
+        nameAsked=true;
+      }
+    }
+    if(open)setTimeout(function(){ta.focus();},50);
+  }
   bubble.onclick=function(){toggle();};sendB.onclick=send;
   ta.onkeydown=function(e){if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();send();}};
+  window.YBotWidget={open:function(){toggle(true);},close:function(){toggle(false);},toggle:function(){toggle();}};
 })();`
 
 export async function widgetRoutes(app: FastifyInstance) {
@@ -173,11 +222,15 @@ export async function widgetRoutes(app: FastifyInstance) {
   })
 
   // ── GET /widget-test/:channelId — browser test page ────────────────────────
-  app.get<{ Params: { channelId: string } }>('/widget-test/:channelId', async (request, reply) => {
+  app.get<{ Params: { channelId: string }; Querystring: { title?: string; color?: string } }>('/widget-test/:channelId', async (request, reply) => {
     const { channelId } = request.params
     const channel = await prisma.channel.findFirst({ where: { id: channelId, isActive: true }, include: { bot: true } })
-    const botName = channel?.bot?.name ?? 'YBot'
+    const botLabel   = channel?.bot?.name ?? 'YBot'
+    const personaName = channel?.bot?.personaName ?? botLabel
     const origin  = requestOrigin(request)
+    // Allow wizard/embed overrides via query params
+    const titleOverride = request.query.title ? String(request.query.title) : null
+    const colorOverride = request.query.color ? String(request.query.color) : null
 
     return reply
       .header('Content-Type', 'text/html; charset=utf-8')
@@ -186,7 +239,7 @@ export async function widgetRoutes(app: FastifyInstance) {
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>${botName} — Widget Test</title>
+  <title>${botLabel} — Widget Test</title>
   <style>
     *{box-sizing:border-box;margin:0;padding:0}
     body{font-family:system-ui,sans-serif;background:#f8fafc;min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:24px;color:#334155}
@@ -200,12 +253,116 @@ export async function widgetRoutes(app: FastifyInstance) {
 </head>
 <body>
   <div class="card">
-    <h1>🤖 ${botName}</h1>
+    <h1>🤖 ${botLabel}</h1>
     <p>The chat widget is loaded in the bottom-right corner.<br/>Click the 💬 bubble to start a conversation.</p>
     <div class="badge">Channel: ${channelId}</div>
   </div>
   <div class="arrow">👉</div>
-  <script>window.YBotTitle='${botName}';</script>
+  <script>window.YBotTitle='${titleOverride ?? botLabel}';window.YBotBotName='${personaName}';${colorOverride ? `window.YBotAccentColor='${colorOverride}';` : ''}</script>
+  <script src="${origin}/api/v1/widget.js?id=${channelId}" async></script>
+</body>
+</html>`)
+  })
+
+  // ── GET /public/demo/:channelId — hosted demo salon page ──────────────────
+  app.get<{ Params: { channelId: string } }>('/public/demo/:channelId', async (request, reply) => {
+    const { channelId } = request.params
+    const origin = requestOrigin(request)
+    const channel = await prisma.channel.findFirst({ where: { id: channelId, isActive: true }, include: { bot: true } })
+    const personaName = channel?.bot?.personaName ?? channel?.bot?.name ?? ''
+
+    return reply
+      .header('Content-Type', 'text/html; charset=utf-8')
+      .header('Cache-Control', 'public, max-age=60')
+      .send(`<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Bella Hair Studio — Modern Cuts, Colour &amp; Care</title>
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600&family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
+  <style>
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+    :root{--accent:#8b5cf6;--ink:#201b2e;--muted:#6b6780;--bg:#faf8ff}
+    body{font-family:"Inter",system-ui,sans-serif;color:var(--ink);background:var(--bg);line-height:1.6}
+    h1,h2,h3{font-family:"Fraunces",Georgia,serif;font-weight:600;letter-spacing:-.5px}
+    .wrap{max-width:1080px;margin:0 auto;padding:0 24px}
+    header{display:flex;align-items:center;justify-content:space-between;padding:22px 0}
+    .logo{font-family:"Fraunces",serif;font-size:22px;font-weight:600}
+    .logo span{color:var(--accent)}
+    nav a{color:var(--muted);text-decoration:none;margin-left:26px;font-size:15px;font-weight:500}
+    nav a:hover{color:var(--ink)}
+    .hero{display:grid;grid-template-columns:1.1fr 0.9fr;gap:48px;align-items:center;padding:60px 0 80px}
+    .hero h1{font-size:56px;line-height:1.05;margin-bottom:20px}
+    .hero p{font-size:19px;color:var(--muted);max-width:460px;margin-bottom:30px}
+    .btn{display:inline-block;background:var(--accent);color:#fff;padding:14px 26px;border-radius:30px;font-weight:600;text-decoration:none;border:none;cursor:pointer;font-size:16px;transition:transform .15s}
+    .btn:hover{transform:translateY(-2px)}
+    .hero-img{border-radius:24px;height:380px;background:linear-gradient(135deg,rgba(139,92,246,.9),rgba(236,72,153,.85));display:flex;align-items:center;justify-content:center;color:#fff;font-size:90px;box-shadow:0 30px 60px rgba(139,92,246,.3)}
+    .section{padding:60px 0}
+    .section h2{font-size:36px;text-align:center;margin-bottom:12px}
+    .section .lede{text-align:center;color:var(--muted);max-width:520px;margin:0 auto 44px;font-size:17px}
+    .cards{display:grid;grid-template-columns:repeat(3,1fr);gap:22px}
+    .card{background:#fff;border-radius:18px;padding:28px;box-shadow:0 10px 30px rgba(32,27,46,.06);border:1px solid #f0ecfa}
+    .card .emoji{font-size:34px}
+    .card h3{font-size:21px;margin:14px 0 8px}
+    .card p{color:var(--muted);font-size:15px;margin-bottom:12px}
+    .card .price{font-weight:600;color:var(--accent)}
+    .cta{background:linear-gradient(135deg,#2a2140,#3a2b5c);color:#fff;border-radius:28px;padding:56px;text-align:center;margin:40px 0}
+    .cta h2{color:#fff;font-size:34px;margin-bottom:12px}
+    .cta p{color:#d7cff0;margin-bottom:26px;font-size:17px}
+    .cta .btn{background:#fff;color:var(--accent)}
+    footer{text-align:center;color:var(--muted);padding:40px 0;font-size:14px;border-top:1px solid #eee7f8}
+    @media(max-width:800px){.hero{grid-template-columns:1fr;padding:30px 0 50px}.hero h1{font-size:40px}.hero-img{height:240px;font-size:64px}.cards{grid-template-columns:1fr}nav{display:none}}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <div class="logo">Bella<span>.</span>Hair Studio</div>
+      <nav>
+        <a href="#services">Services</a>
+        <a href="#about">About</a>
+        <a href="#book" onclick="openChat();return false">Book</a>
+      </nav>
+    </header>
+    <section class="hero">
+      <div>
+        <h1>Where great hair<br/>begins.</h1>
+        <p>Expert cuts, rich colour and restorative care from stylists who genuinely listen. Book your chair in under a minute.</p>
+        <button class="btn" onclick="openChat()">Book an appointment</button>
+      </div>
+      <div class="hero-img">&#128135;&#8205;&#9792;&#65039;</div>
+    </section>
+    <section class="section" id="services">
+      <h2>Our services</h2>
+      <p class="lede">A full menu of salon services, tailored to you. Not sure what you need? Just ask our receptionist.</p>
+      <div class="cards">
+        <div class="card"><div class="emoji">&#9986;&#65039;</div><h3>Cuts &amp; Styling</h3><p>Precision cuts, blow-dries and finishing that keeps its shape long after you leave.</p><div class="price">from £35</div></div>
+        <div class="card"><div class="emoji">&#127912;</div><h3>Colour &amp; Highlights</h3><p>Full colour, foils, balayage and gloss treatments using gentle, salon-grade products.</p><div class="price">from £70</div></div>
+        <div class="card"><div class="emoji">&#128134;</div><h3>Treatments</h3><p>Deep-conditioning, keratin smoothing and scalp care to bring your hair back to life.</p><div class="price">from £45</div></div>
+        <div class="card"><div class="emoji">&#127800;</div><h3>Balayage</h3><p>Sun-kissed, natural-looking colour that grows out gracefully with minimal upkeep.</p><div class="price">from £90</div></div>
+        <div class="card"><div class="emoji">&#128133;</div><h3>Skin Scrub</h3><p>Revitalising exfoliation and skin treatment to restore your natural glow.</p><div class="price">from £200</div></div>
+        <div class="card"><div class="emoji">&#129452;</div><h3>Keratin Smoothing</h3><p>Frizz-free, sleek hair for up to 3 months with professional keratin treatments.</p><div class="price">from £120</div></div>
+      </div>
+    </section>
+    <section class="cta" id="book">
+      <h2>Ready for your next look?</h2>
+      <p>Chat with our virtual receptionist and lock in a time that suits you.</p>
+      <button class="btn" onclick="openChat()">Start booking</button>
+    </section>
+    <section class="section" id="about">
+      <h2>Visit us</h2>
+      <p class="lede">Open Mon–Sat, 9am–6pm · 14 Rosewood Lane · Walk-ins welcome when we have space.</p>
+    </section>
+  </div>
+  <footer>© Bella Hair Studio · Powered by <a href="${origin}" style="color:inherit">BotStudio</a></footer>
+  <script>
+    window.YBotChannelId='${channelId}';
+    window.YBotTitle='Chat with Bella Hair Studio';
+    window.YBotAccentColor='#8b5cf6';
+    ${personaName ? `window.YBotBotName='${personaName}';` : ''}
+    function openChat(){if(window.YBotWidget)window.YBotWidget.open();}
+  </script>
   <script src="${origin}/api/v1/widget.js?id=${channelId}" async></script>
 </body>
 </html>`)
@@ -219,6 +376,7 @@ export async function widgetRoutes(app: FastifyInstance) {
       message?: string
       sessionId?: string
       conversationId?: string
+      visitorName?: string
       history?: Array<{ role: string; content: string }>
     }
     const userText = (body.message ?? '').trim()
@@ -242,11 +400,15 @@ export async function widgetRoutes(app: FastifyInstance) {
       if (env) {
         // Upsert an anonymous contact keyed by sessionId
         const sessionId = body.sessionId ?? `anon_${Date.now()}`
+        const displayName = (body.visitorName ?? '').trim() || 'Visitor'
         let contact = await prisma.contact.findFirst({ where: { tenantId, externalId: sessionId } })
         if (!contact) {
           contact = await prisma.contact.create({
-            data: { tenantId, externalId: sessionId, displayName: 'Visitor', channelId },
+            data: { tenantId, externalId: sessionId, displayName, channelId },
           })
+        } else if (contact.displayName === 'Visitor' && displayName !== 'Visitor') {
+          // Upgrade "Visitor" to the real name once the user provides it
+          await prisma.contact.update({ where: { id: contact.id }, data: { displayName } })
         }
         const convo = await prisma.conversation.create({
           data: { tenantId, botId, environmentId: env.id, channelId, contactId: contact.id, status: 'active' },
