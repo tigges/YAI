@@ -4,7 +4,7 @@ import { cn } from '@ybot/ui'
 import {
   Play, MessageSquare, HelpCircle, GitBranch, Variable,
   Globe, Workflow, Headphones, CheckCircle, Clock, Mail,
-  Sparkles, Search, Layout, Layers, Zap,
+  Sparkles, Search, Layout, Layers, Zap, FileText,
 } from 'lucide-react'
 import type { NodeKind } from '@ybot/shared'
 
@@ -25,6 +25,14 @@ const ICON_MAP: Record<NodeKind, React.ElementType> = {
   buttons: Layout,
   carousel: Layers,
   quick_replies: Zap,
+  // Backend runtime aliases
+  trigger_start: Play,
+  llm_generate: Sparkles,
+  end_flow: CheckCircle,
+  handover: Headphones,
+  search_knowledge: Search,
+  classify_intent: GitBranch,
+  create_ticket: FileText,
 }
 
 const COLOR_MAP: Record<NodeKind, string> = {
@@ -44,6 +52,24 @@ const COLOR_MAP: Record<NodeKind, string> = {
   buttons: '#3b82f6',
   carousel: '#3b82f6',
   quick_replies: '#3b82f6',
+  // Backend runtime aliases
+  trigger_start: '#22c55e',
+  llm_generate: '#a855f7',
+  end_flow: '#22c55e',
+  handover: '#ec4899',
+  search_knowledge: '#06b6d4',
+  classify_intent: '#f59e0b',
+  create_ticket: '#3b82f6',
+}
+
+function previewValue(value: unknown): string {
+  const text =
+    value == null
+      ? ''
+      : typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean'
+        ? String(value)
+        : JSON.stringify(value)
+  return text.length > 40 ? `${text.slice(0, 40)}…` : text
 }
 
 export interface FlowNodeData {
@@ -58,19 +84,19 @@ export const FlowNode = memo(function FlowNode({ data, selected }: NodeProps) {
   const Icon = ICON_MAP[nodeData.kind] ?? MessageSquare
   const color = COLOR_MAP[nodeData.kind] ?? '#6366f1'
 
-  const hasTarget = nodeData.kind !== 'start'
+  const hasTarget = !['start', 'trigger_start'].includes(nodeData.kind)
   const hasSingleSource =
-    !['condition', 'http_request', 'knowledge_search', 'start'].includes(nodeData.kind) &&
-    nodeData.kind !== 'resolve'
+    !['condition', 'http_request', 'knowledge_search', 'search_knowledge', 'start', 'trigger_start'].includes(nodeData.kind) &&
+    !['resolve', 'end_flow'].includes(nodeData.kind)
   const hasConditionSources = nodeData.kind === 'condition'
   const hasHttpSources = nodeData.kind === 'http_request'
-  const hasKBSources = nodeData.kind === 'knowledge_search'
-  const hasStartSource = nodeData.kind === 'start'
+  const hasKBSources = ['knowledge_search', 'search_knowledge'].includes(nodeData.kind)
+  const hasStartSource = ['start', 'trigger_start'].includes(nodeData.kind)
 
   return (
     <div
       className={cn(
-        'group relative min-w-[160px] rounded-[10px] border-2 bg-[var(--bg-elevated)]',
+        'group relative min-w-[180px] rounded-[10px] border-2 bg-[var(--bg-elevated)]',
         'shadow-[0_4px_12px_rgba(0,0,0,0.4)] transition-all duration-150',
         selected
           ? 'border-[var(--accent)] shadow-[0_0_0_3px_rgba(99,102,241,0.25)]'
@@ -79,35 +105,35 @@ export const FlowNode = memo(function FlowNode({ data, selected }: NodeProps) {
     >
       {/* Header */}
       <div
-        className="flex items-center gap-2 rounded-t-[8px] px-3 py-2"
-        style={{ background: `${color}18`, borderBottom: `1px solid ${color}30` }}
+        className="flex items-center gap-2 rounded-t-[8px] px-3 py-[7px]"
+        style={{ background: `${color}22`, borderBottom: `1px solid ${color}40` }}
       >
         <div
           className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md"
-          style={{ background: `${color}25` }}
+          style={{ background: `${color}30` }}
         >
           <Icon size={13} style={{ color }} />
         </div>
-        <span className="text-xs font-semibold text-[var(--text-primary)] truncate max-w-[110px]">
+        <span className="text-[13px] font-semibold leading-tight truncate max-w-[130px]" style={{ color: 'var(--text-primary, #f1f5f9)' }}>
           {nodeData.label}
         </span>
       </div>
 
       {/* Body */}
-      <div className="px-3 py-2">
+      <div className="px-3 py-[6px]">
         {nodeData.config && Object.keys(nodeData.config).length > 0 ? (
-          <div className="space-y-1">
+          <div className="space-y-[3px]">
             {Object.entries(nodeData.config).slice(0, 2).map(([k, v]) => (
-              <div key={k} className="flex items-center gap-1">
-                <span className="text-[10px] text-[var(--text-muted)]">{k}:</span>
-                <span className="text-[10px] text-[var(--text-secondary)] truncate max-w-[100px]">
-                  {String(v)}
+              <div key={k} className="flex items-start gap-1">
+                <span className="text-[11px] shrink-0" style={{ color: 'var(--text-muted, #94a3b8)' }}>{k}:</span>
+                <span className="text-[11px] font-medium truncate max-w-[110px]" style={{ color: 'var(--text-secondary, #cbd5e1)' }}>
+                  {previewValue(v)}
                 </span>
               </div>
             ))}
           </div>
         ) : (
-          <p className="text-[10px] text-[var(--text-muted)] italic">Click to configure</p>
+          <p className="text-[11px] italic" style={{ color: 'var(--text-muted, #64748b)' }}>Click to configure</p>
         )}
       </div>
 
@@ -212,4 +238,6 @@ export const FlowNode = memo(function FlowNode({ data, selected }: NodeProps) {
 
 export const nodeTypes = {
   flowNode: FlowNode,
+  // Graphs seeded before the canvas rename stored this type string.
+  'flow-node': FlowNode,
 }

@@ -4,7 +4,7 @@ import { NODE_DEFINITIONS, type NodeKind } from '@ybot/shared'
 import {
   Play, MessageSquare, HelpCircle, GitBranch, Variable,
   Globe, Workflow, Headphones, CheckCircle, Clock, Mail,
-  Sparkles, Search, Layout, Layers, Zap,
+  Sparkles, Search, Layout, Layers, Zap, FileText,
 } from 'lucide-react'
 
 const ICON_MAP: Record<NodeKind, React.ElementType> = {
@@ -24,6 +24,14 @@ const ICON_MAP: Record<NodeKind, React.ElementType> = {
   buttons: Layout,
   carousel: Layers,
   quick_replies: Zap,
+  // Backend runtime aliases — not shown in palette (category: runtime_alias)
+  trigger_start: Play,
+  llm_generate: Sparkles,
+  end_flow: CheckCircle,
+  handover: Headphones,
+  search_knowledge: Search,
+  classify_intent: GitBranch,
+  create_ticket: FileText,
 }
 
 const CATEGORIES = [

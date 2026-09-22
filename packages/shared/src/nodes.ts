@@ -15,6 +15,14 @@ export type NodeKind =
   | 'buttons'
   | 'carousel'
   | 'quick_replies'
+  // Backend runtime aliases (kept for backward-compat with saved graphs)
+  | 'trigger_start'
+  | 'llm_generate'
+  | 'end_flow'
+  | 'handover'
+  | 'search_knowledge'
+  | 'classify_intent'
+  | 'create_ticket'
 
 export interface NodePort {
   id: string
@@ -26,7 +34,7 @@ export interface NodeDefinition {
   kind: NodeKind
   label: string
   description: string
-  category: 'trigger' | 'message' | 'logic' | 'action' | 'integration' | 'end'
+  category: 'trigger' | 'message' | 'logic' | 'action' | 'integration' | 'end' | 'runtime_alias'
   icon: string
   color: string
   ports: NodePort[]
@@ -217,6 +225,87 @@ export const NODE_DEFINITIONS: Record<NodeKind, NodeDefinition> = {
     description: 'Fast-select reply chips',
     category: 'message',
     icon: 'zap',
+    color: '#3b82f6',
+    ports: [
+      { id: 'in', type: 'target' },
+      { id: 'out', label: 'Next', type: 'source' },
+    ],
+  },
+
+  // ── Backend runtime node kind aliases ──────────────────────────────────────
+  trigger_start: {
+    kind: 'trigger_start',
+    label: 'Start',
+    description: 'Flow entry point',
+    category: 'runtime_alias',
+    icon: 'play',
+    color: '#22c55e',
+    ports: [{ id: 'out', label: 'Next', type: 'source' }],
+  },
+  llm_generate: {
+    kind: 'llm_generate',
+    label: 'LLM Generate',
+    description: 'Generate AI response',
+    category: 'runtime_alias',
+    icon: 'sparkles',
+    color: '#a855f7',
+    ports: [
+      { id: 'in', type: 'target' },
+      { id: 'out', label: 'Next', type: 'source' },
+    ],
+  },
+  end_flow: {
+    kind: 'end_flow',
+    label: 'End Flow',
+    description: 'Mark conversation as resolved',
+    category: 'runtime_alias',
+    icon: 'check-circle',
+    color: '#22c55e',
+    ports: [{ id: 'in', type: 'target' }],
+  },
+  handover: {
+    kind: 'handover',
+    label: 'Handover to Agent',
+    description: 'Escalate to a human agent',
+    category: 'runtime_alias',
+    icon: 'headphones',
+    color: '#ec4899',
+    ports: [
+      { id: 'in', type: 'target' },
+      { id: 'out', label: 'Next', type: 'source' },
+    ],
+  },
+  search_knowledge: {
+    kind: 'search_knowledge',
+    label: 'Search Knowledge',
+    description: 'Search knowledge base (RAG)',
+    category: 'runtime_alias',
+    icon: 'search',
+    color: '#06b6d4',
+    ports: [
+      { id: 'in', type: 'target' },
+      { id: 'found', label: 'Found', type: 'source' },
+      { id: 'not_found', label: 'Not Found', type: 'source' },
+    ],
+  },
+  classify_intent: {
+    kind: 'classify_intent',
+    label: 'Classify Intent',
+    description: 'Classify user intent via LLM',
+    category: 'runtime_alias',
+    icon: 'git-branch',
+    color: '#f59e0b',
+    ports: [
+      { id: 'in', type: 'target' },
+      { id: 'out', label: 'Next', type: 'source' },
+    ],
+  },
+  create_ticket: {
+    kind: 'create_ticket',
+    label: 'Create Ticket',
+    description: 'Create a support ticket',
+    category: 'runtime_alias',
+    icon: 'file-text',
     color: '#3b82f6',
     ports: [
       { id: 'in', type: 'target' },

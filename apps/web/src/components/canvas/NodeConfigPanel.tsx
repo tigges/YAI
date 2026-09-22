@@ -24,6 +24,7 @@ const CONFIG_FIELDS: Partial<Record<NodeKind, Array<{ key: string; label: string
   ],
   condition: [
     { key: 'expression', label: 'Condition expression', type: 'text', placeholder: '{{user.tier}} == "premium"' },
+    { key: 'conditions', label: 'Conditions (JSON)', type: 'textarea', placeholder: '[{"field":"intent","operator":"equals","value":"order_status"}]' },
     { key: 'description', label: 'Description', type: 'text', placeholder: 'Check user tier' },
   ],
   set_variable: [
@@ -51,8 +52,36 @@ const CONFIG_FIELDS: Partial<Record<NodeKind, Array<{ key: string; label: string
   ],
   llm_prompt: [
     { key: 'prompt', label: 'System prompt', type: 'textarea', placeholder: 'You are a helpful assistant…' },
+    { key: 'systemPrompt', label: 'System prompt', type: 'textarea', placeholder: 'You are a friendly assistant…' },
     { key: 'saveAs', label: 'Save response to', type: 'text', placeholder: 'flow.llmResponse' },
     { key: 'model', label: 'Model override', type: 'text', placeholder: 'Leave empty to use bot default' },
+  ],
+  llm_generate: [
+    { key: 'prompt', label: 'Prompt', type: 'textarea', placeholder: 'The customer asked about: {{topic}}' },
+    { key: 'systemPrompt', label: 'System prompt', type: 'textarea', placeholder: 'You are a friendly assistant…' },
+    { key: 'saveAs', label: 'Save response to', type: 'text', placeholder: 'flow.llmResponse' },
+    { key: 'model', label: 'Model override', type: 'text', placeholder: 'Leave empty to use bot default' },
+  ],
+  handover: [
+    { key: 'team', label: 'Route to team', type: 'text', placeholder: 'Support Team' },
+    { key: 'note', label: 'Handover note', type: 'textarea', placeholder: 'Context for the agent…' },
+    { key: 'priority', label: 'Priority', type: 'text', placeholder: 'normal' },
+  ],
+  search_knowledge: [
+    { key: 'query', label: 'Search query', type: 'text', placeholder: '{{user.message}}' },
+    { key: 'topK', label: 'Top K results', type: 'number', placeholder: '3' },
+    { key: 'saveAs', label: 'Save results to', type: 'text', placeholder: 'flow.kbResults' },
+  ],
+  classify_intent: [
+    { key: 'variable', label: 'Save intent to', type: 'text', placeholder: 'intent' },
+  ],
+  create_ticket: [
+    { key: 'subject', label: 'Subject', type: 'text', placeholder: 'Return request: {{return_reason}}' },
+    { key: 'priority', label: 'Priority', type: 'text', placeholder: 'medium' },
+    { key: 'team', label: 'Team', type: 'text', placeholder: 'returns' },
+  ],
+  trigger_start: [
+    { key: 'event', label: 'Trigger event', type: 'text', placeholder: 'conversation.started' },
   ],
   knowledge_search: [
     { key: 'query', label: 'Search query', type: 'text', placeholder: '{{user.message}}' },
@@ -83,6 +112,38 @@ export function NodeConfigPanel({ node, onUpdate, onDelete, onClose }: NodeConfi
   const data = node!.data as unknown as FlowNodeData
   const def = NODE_DEFINITIONS[data.kind]
   const fields = CONFIG_FIELDS[data.kind] ?? []
+
+  // Unknown node kind — show a safe fallback instead of crashing
+  if (!def) {
+    return (
+      <div className="flex w-[280px] shrink-0 flex-col border-l border-[var(--border)] bg-[var(--bg-surface)]">
+        <div className="flex items-center justify-between border-b border-[var(--border)] px-4 py-3">
+          <span className="text-sm font-semibold text-[var(--text-primary)]">Unknown node</span>
+          <button onClick={onClose} className="text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors">
+            <X size={14} />
+          </button>
+        </div>
+        <div className="p-4 space-y-2">
+          <p className="text-xs text-[var(--text-muted)]">
+            Node kind <code className="font-mono bg-[var(--bg-overlay)] px-1 rounded">{data.kind}</code> is not recognised by the canvas editor.
+          </p>
+          <p className="text-xs text-[var(--text-muted)]">ID: <span className="font-mono">{node.id.slice(0, 12)}</span></p>
+        </div>
+        <div className="border-t border-[var(--border)] p-3">
+          <Button variant="destructive" size="sm" className="w-full" onClick={() => { onDelete(node.id); onClose() }}>
+            Delete node
+          </Button>
+        </div>
+      </div>
+    )
+  }
+
+  function fieldValue(value: unknown): string {
+    if (value == null) return ''
+    if (typeof value === 'string') return value
+    if (typeof value === 'number' || typeof value === 'boolean') return String(value)
+    return JSON.stringify(value, null, 2)
+  }
 
   function updateConfig(key: string, value: string) {
     if (!node) return
@@ -142,7 +203,7 @@ export function NodeConfigPanel({ node, onUpdate, onDelete, onClose }: NodeConfi
           <p className="text-xs text-[var(--text-muted)] italic">No configuration for this node.</p>
         ) : (
           fields.map((field) => {
-            const val = (data.config?.[field.key] as string) ?? ''
+            const val = fieldValue(data.config?.[field.key])
             if (field.type === 'textarea') {
               return (
                 <div key={field.key} className="flex flex-col gap-1">
