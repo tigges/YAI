@@ -9,7 +9,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogBody, DialogFoo
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator } from '@ybot/ui'
 import { SubNav } from '../../components/SubNav'
 import { cn } from '@ybot/ui'
-import { useChannels, useCreateChannel, useDeleteChannel } from '../../lib/hooks'
+import { useChannels, useCreateChannel, useDeleteChannel, useUpdateChannel } from '../../lib/hooks'
 import type { Channel } from '../../lib/api'
 import { useAppStore } from '../../store/app'
 
@@ -54,13 +54,28 @@ export function ChannelsPage() {
   const { data: channels = [], isLoading } = useChannels()
   const createChannel = useCreateChannel()
   const deleteChannel = useDeleteChannel()
+  const updateChannel = useUpdateChannel()
 
   const [selected, setSelected]   = useState<Channel | null>(null)
+  const [editName, setEditName]   = useState('')
+  const [editActive, setEditActive] = useState(true)
   const [showAdd, setShowAdd]     = useState(false)
   const [showEmbed, setShowEmbed] = useState<Channel | null>(null)
   const [addKind, setAddKind]     = useState('web')
   const [addName, setAddName]     = useState('')
   const [copied, setCopied]       = useState(false)
+
+  function openSettings(ch: Channel) {
+    setSelected(ch)
+    setEditName(ch.name)
+    setEditActive(ch.isActive)
+  }
+
+  async function handleSaveSettings() {
+    if (!selected) return
+    await updateChannel.mutateAsync({ id: selected.id, name: editName.trim() || selected.name, isActive: editActive })
+    setSelected(null)
+  }
 
   function copyEmbed(channelId: string) {
     navigator.clipboard?.writeText(getEmbedCode(channelId)).catch(() => {})
@@ -134,7 +149,7 @@ export function ChannelsPage() {
                   'rounded-[var(--radius-lg)] border bg-[var(--bg-surface)] p-5 cursor-pointer hover:border-[var(--accent)]/40 transition-colors group',
                   ch.isActive ? 'border-[var(--border)]' : 'border-[var(--border)] opacity-70',
                 )}
-                onClick={() => setSelected(ch)}
+                onClick={() => openSettings(ch)}
               >
                 <div className="flex items-start justify-between mb-4">
                   <div className={cn(
@@ -172,7 +187,7 @@ export function ChannelsPage() {
                         </button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
-                        <DropdownMenuItem onClick={() => setSelected(ch)}><Pencil size={13} /> Settings</DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => openSettings(ch)}><Pencil size={13} /> Settings</DropdownMenuItem>
                         {ch.kind === 'web' && <DropdownMenuItem onClick={() => window.open(getTestUrl(ch.id), '_blank')}><FlaskConical size={13} /> Test widget</DropdownMenuItem>}
                         {ch.kind === 'web' && <DropdownMenuItem onClick={() => setShowEmbed(ch)}><Code2 size={13} /> Embed code</DropdownMenuItem>}
                         <DropdownMenuSeparator />
@@ -206,14 +221,40 @@ export function ChannelsPage() {
             <DialogContent size="md">
               <DialogHeader><DialogTitle>{meta.label} settings</DialogTitle></DialogHeader>
               <DialogBody className="space-y-4">
-                <div className="flex items-center gap-3 p-3 rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--bg-overlay)]">
-                  <span className={cn('p-2 rounded-[var(--radius-md)]', selected.isActive ? 'bg-[var(--accent-muted)] text-[var(--accent)]' : 'bg-[var(--bg-overlay)] text-[var(--text-muted)]')}>
-                    {meta.icon}
-                  </span>
-                  <div>
-                    <p className="text-sm font-medium text-[var(--text-primary)]">{selected.name}</p>
-                    <p className={cn('text-xs font-medium', selected.isActive ? 'text-[var(--success)]' : 'text-[var(--text-muted)]')}>{selected.isActive ? 'Active' : 'Inactive'}</p>
+
+                {/* Editable name */}
+                <div>
+                  <label className="text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wide mb-1.5 block">Channel name</label>
+                  <input
+                    className="w-full rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--bg-overlay)] px-3 py-2 text-sm text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--accent)]/40"
+                    value={editName}
+                    onChange={(e) => setEditName(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === 'Enter') handleSaveSettings() }}
+                  />
+                </div>
+
+                {/* Active toggle */}
+                <div className="flex items-center justify-between p-3 rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--bg-overlay)]">
+                  <div className="flex items-center gap-3">
+                    <span className={cn('p-2 rounded-[var(--radius-md)]', editActive ? 'bg-[var(--accent-muted)] text-[var(--accent)]' : 'bg-[var(--bg-overlay)] text-[var(--text-muted)]')}>
+                      {meta.icon}
+                    </span>
+                    <div>
+                      <p className="text-sm font-medium text-[var(--text-primary)]">Channel active</p>
+                      <p className="text-xs text-[var(--text-muted)]">{editActive ? 'Accepting new conversations' : 'Paused — widget hides itself'}</p>
+                    </div>
                   </div>
+                  <button
+                    role="switch"
+                    aria-checked={editActive}
+                    onClick={() => setEditActive((v) => !v)}
+                    className={cn(
+                      'relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors focus:outline-none',
+                      editActive ? 'bg-[var(--accent)]' : 'bg-[var(--border)]'
+                    )}
+                  >
+                    <span className={cn('pointer-events-none inline-block h-4 w-4 rounded-full bg-white shadow ring-0 transition-transform', editActive ? 'translate-x-4' : 'translate-x-0')} />
+                  </button>
                 </div>
 
                 {selected.kind === 'web' && (
@@ -235,12 +276,15 @@ export function ChannelsPage() {
                 </div>
               </DialogBody>
               <DialogFooter>
-                <Button variant="ghost" onClick={() => setSelected(null)}>Close</Button>
+                <Button variant="ghost" onClick={() => setSelected(null)}>Cancel</Button>
                 {selected.kind === 'web' && (
                   <Button variant="ghost" className="gap-1.5" onClick={() => { setSelected(null); window.open(getTestUrl(selected.id), '_blank') }}>
                     <FlaskConical size={14} /> Test Widget
                   </Button>
                 )}
+                <Button onClick={handleSaveSettings} disabled={updateChannel.isPending}>
+                  {updateChannel.isPending ? 'Saving…' : 'Save changes'}
+                </Button>
               </DialogFooter>
             </DialogContent>
           )

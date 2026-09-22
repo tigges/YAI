@@ -34,6 +34,9 @@ const JWT_SECRET = process.env['JWT_SECRET'] ?? 'dev-secret-change-me'
 const isDev = process.env['NODE_ENV'] !== 'production'
 
 const app = Fastify({
+  // Trust X-Forwarded-Proto from reverse proxies (Cloudflare Tunnel, nginx, etc.)
+  // so that request.protocol returns "https" when the user reaches us via HTTPS.
+  trustProxy: true,
   logger: isDev
     ? { transport: { target: 'pino-pretty', options: { colorize: true } } }
     : true,
