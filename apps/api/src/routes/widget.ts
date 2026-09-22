@@ -57,6 +57,9 @@ const WIDGET_INLINE_JS = /* js */`
   if(script){try{var u=new URL(script.src);API_BASE=u.protocol+'//'+u.host+'/api/v1';}catch(e){}}
   var ACCENT=window.YBotAccentColor||'#6366f1';
   var TITLE=window.YBotTitle||'Chat with us';
+  // Restore visitor name from sessionStorage so the pre-chat form is skipped
+  // on subsequent opens within the same browser tab.
+  var visitorName=sessionStorage.getItem('ybot_vname')||'';
   var conversationId=null;
   var sessionId='ws_'+Date.now()+'_'+Math.random().toString(36).slice(2);
   var open=false,messages=[],loading=false;
@@ -70,15 +73,47 @@ const WIDGET_INLINE_JS = /* js */`
   bubble.onmouseenter=function(){bubble.style.transform='scale(1.1)'};
   bubble.onmouseleave=function(){bubble.style.transform='scale(1)'};
   var panel=mk('div');css(panel,{position:'absolute',bottom:'72px',right:'0',width:'360px',height:'540px',background:'#fff',borderRadius:'16px',boxShadow:'0 12px 48px rgba(0,0,0,.18)',display:'none',flexDirection:'column',overflow:'hidden'});
+  // ── Header ──────────────────────────────────────────────────────────────────
   var hdr=mk('div');css(hdr,{background:ACCENT,color:'#fff',padding:'14px 16px',display:'flex',alignItems:'center',justifyContent:'space-between',flexShrink:'0'});
   var hTitle=mk('span');hTitle.textContent=TITLE;css(hTitle,{fontWeight:'600',fontSize:'15px'});
   var closeB=mk('button');closeB.innerHTML='&times;';css(closeB,{background:'none',border:'none',color:'#fff',cursor:'pointer',fontSize:'18px',padding:'2px 6px'});
   closeB.onclick=function(){toggle(false);};hdr.append(hTitle,closeB);
-  var msgArea=mk('div');css(msgArea,{flex:'1',overflowY:'auto',padding:'12px',display:'flex',flexDirection:'column',gap:'8px'});
-  var inputRow=mk('div');css(inputRow,{padding:'10px 12px',borderTop:'1px solid #f0f0f0',display:'flex',gap:'8px',flexShrink:'0'});
+  // ── Pre-chat name form ───────────────────────────────────────────────────────
+  var preChat=mk('div');css(preChat,{flex:'1',display:'none',flexDirection:'column',alignItems:'center',justifyContent:'center',padding:'28px 24px',gap:'14px'});
+  var preIcon=mk('div');preIcon.textContent='💬';css(preIcon,{fontSize:'42px',lineHeight:'1'});
+  var preLbl=mk('p');preLbl.textContent='Before we start, what\u2019s your name?';css(preLbl,{fontSize:'14px',color:'#6b7280',textAlign:'center',margin:'0'});
+  var nameIn=mk('input');nameIn.type='text';nameIn.placeholder='Your name';nameIn.maxLength=60;
+  css(nameIn,{width:'100%',border:'1px solid #e5e7eb',borderRadius:'8px',padding:'10px 14px',fontSize:'14px',fontFamily:'inherit',outline:'none',boxSizing:'border-box',transition:'border-color .15s'});
+  nameIn.onfocus=function(){nameIn.style.borderColor=ACCENT;};
+  nameIn.onblur=function(){nameIn.style.borderColor='#e5e7eb';};
+  var startB=mk('button');startB.textContent='Start chat \u2192';
+  css(startB,{width:'100%',background:ACCENT,color:'#fff',border:'none',borderRadius:'8px',padding:'11px',fontSize:'14px',fontWeight:'600',cursor:'pointer',opacity:'1',transition:'opacity .15s'});
+  startB.onmouseover=function(){startB.style.opacity='.85';};
+  startB.onmouseout=function(){startB.style.opacity='1';};
+  preChat.append(preIcon,preLbl,nameIn,startB);
+  // ── Chat messages area + input row ───────────────────────────────────────────
+  var msgArea=mk('div');css(msgArea,{flex:'1',overflowY:'auto',padding:'12px',display:'none',flexDirection:'column',gap:'8px'});
+  var inputRow=mk('div');css(inputRow,{padding:'10px 12px',borderTop:'1px solid #f0f0f0',display:'none',gap:'8px',flexShrink:'0'});
   var ta=mk('textarea');ta.placeholder='Type a message\u2026';ta.rows=1;css(ta,{flex:'1',resize:'none',border:'1px solid #e5e7eb',borderRadius:'8px',padding:'8px 12px',fontSize:'14px',fontFamily:'inherit',outline:'none',lineHeight:'1.4'});
   var sendB=mk('button');sendB.textContent='\u2191';css(sendB,{background:ACCENT,color:'#fff',border:'none',borderRadius:'8px',width:'36px',height:'36px',cursor:'pointer',fontSize:'18px',fontWeight:'bold',flexShrink:'0',alignSelf:'flex-end'});
-  inputRow.append(ta,sendB);panel.append(hdr,msgArea,inputRow);root.append(panel,bubble);document.body.appendChild(root);
+  inputRow.append(ta,sendB);
+  panel.append(hdr,preChat,msgArea,inputRow);root.append(panel,bubble);document.body.appendChild(root);
+  // ── View switchers ───────────────────────────────────────────────────────────
+  function showChatPane(){preChat.style.display='none';msgArea.style.display='flex';inputRow.style.display='flex';}
+  function showPreChatPane(){preChat.style.display='flex';msgArea.style.display='none';inputRow.style.display='none';}
+  // ── Name submission ──────────────────────────────────────────────────────────
+  function submitName(){
+    var n=nameIn.value.trim();
+    if(!n)return;
+    visitorName=n;
+    sessionStorage.setItem('ybot_vname',n);
+    showChatPane();
+    addMsg('bot','Hello, '+n+'! 👋 How can I help you today?');
+    setTimeout(function(){ta.focus();},50);
+  }
+  startB.onclick=submitName;
+  nameIn.onkeydown=function(e){if(e.key==='Enter'){e.preventDefault();submitName();}};
+  // ── CSAT card ────────────────────────────────────────────────────────────────
   function renderCsatCard(){
     if(csatState===null)return;
     var card=mk('div');css(card,{margin:'8px 0 4px',padding:'12px 14px',background:'#f9fafb',border:'1px solid #e5e7eb',borderRadius:'12px',textAlign:'center'});
@@ -121,13 +156,16 @@ const WIDGET_INLINE_JS = /* js */`
     csatState=rating;render();
     fetch(API_BASE+'/public/csat/'+channelId,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({conversationId:conversationId,rating:rating})}).catch(function(){});
   }
+  // ── Send message ─────────────────────────────────────────────────────────────
   async function send(){
     var text=ta.value.trim();if(!text||loading)return;
     ta.value='';loading=true;sendB.disabled=true;
     var hist=messages.slice(-10).map(function(m){return{role:m.role==='user'?'user':'assistant',content:m.text};});
     addMsg('user',text);var bi=addMsg('bot','',true);
     try{
-      var res=await fetch(API_BASE+'/public/chat/'+channelId,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({message:text,sessionId:sessionId,conversationId:conversationId,history:hist})});
+      var body={message:text,sessionId:sessionId,conversationId:conversationId,history:hist};
+      if(visitorName)body.visitorName=visitorName;
+      var res=await fetch(API_BASE+'/public/chat/'+channelId,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
       if(!res.ok||!res.body){updMsg(bi,'Sorry, something went wrong. ('+res.status+')');loading=false;sendB.disabled=false;return;}
       var reader=res.body.getReader(),dec=new TextDecoder(),buf='',botText='';
       while(true){
@@ -143,7 +181,22 @@ const WIDGET_INLINE_JS = /* js */`
     }catch(e){updMsg(bi,"Couldn\\'t reach the server. Please try again.");}
     finally{loading=false;sendB.disabled=false;}
   }
-  function toggle(force){open=force!==undefined?force:!open;panel.style.display=open?'flex':'none';bubble.innerHTML=open?'&times;':'&#128172;';if(open&&messages.length===0)addMsg('bot','Hello! 👋 How can I help you today?');if(open)setTimeout(function(){ta.focus();},50);}
+  // ── Toggle open/close ─────────────────────────────────────────────────────────
+  function toggle(force){
+    open=force!==undefined?force:!open;
+    panel.style.display=open?'flex':'none';
+    bubble.innerHTML=open?'&times;':'&#128172;';
+    if(open&&messages.length===0){
+      if(visitorName){
+        showChatPane();
+        addMsg('bot','Hello, '+visitorName+'! 👋 How can I help you today?');
+        setTimeout(function(){ta.focus();},50);
+      } else {
+        showPreChatPane();
+        setTimeout(function(){nameIn.focus();},50);
+      }
+    }
+  }
   bubble.onclick=function(){toggle();};sendB.onclick=send;
   ta.onkeydown=function(e){if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();send();}};
   window.YBotWidget={open:function(){toggle(true);},close:function(){toggle(false);},toggle:function(){toggle();}};
@@ -325,6 +378,7 @@ export async function widgetRoutes(app: FastifyInstance) {
       message?: string
       sessionId?: string
       conversationId?: string
+      visitorName?: string
       history?: Array<{ role: string; content: string }>
     }
     const userText = (body.message ?? '').trim()
@@ -348,11 +402,15 @@ export async function widgetRoutes(app: FastifyInstance) {
       if (env) {
         // Upsert an anonymous contact keyed by sessionId
         const sessionId = body.sessionId ?? `anon_${Date.now()}`
+        const displayName = (body.visitorName ?? '').trim() || 'Visitor'
         let contact = await prisma.contact.findFirst({ where: { tenantId, externalId: sessionId } })
         if (!contact) {
           contact = await prisma.contact.create({
-            data: { tenantId, externalId: sessionId, displayName: 'Visitor', channelId },
+            data: { tenantId, externalId: sessionId, displayName, channelId },
           })
+        } else if (contact.displayName === 'Visitor' && displayName !== 'Visitor') {
+          // Upgrade "Visitor" to the real name once the user provides it
+          await prisma.contact.update({ where: { id: contact.id }, data: { displayName } })
         }
         const convo = await prisma.conversation.create({
           data: { tenantId, botId, environmentId: env.id, channelId, contactId: contact.id, status: 'active' },
