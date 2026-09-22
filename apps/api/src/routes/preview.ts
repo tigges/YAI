@@ -14,7 +14,7 @@
 
 import type { FastifyInstance } from 'fastify'
 import { PrismaClient } from '@ybot/db'
-import { createLlmAdapter, createEmbeddingAdapter } from '@ybot/llm'
+import { createLlmAdapter, createLlmAdapterForModel, createEmbeddingAdapter } from '@ybot/llm'
 import { z } from 'zod'
 
 const prisma = new PrismaClient()
@@ -77,6 +77,10 @@ export async function previewRoutes(app: FastifyInstance) {
 
     const { message, systemPrompt, history } = body.data
 
+    // Load per-bot model config
+    const cfg = await prisma.botConfig.findUnique({ where: { botId } }).catch(() => null)
+    const botModel = cfg?.model ?? undefined
+
     // SSE headers
     reply.raw.writeHead(200, {
       'Content-Type': 'text/event-stream',
@@ -106,11 +110,11 @@ export async function previewRoutes(app: FastifyInstance) {
         { role: 'user' as const, content: message },
       ]
 
-      await llm.stream({
+      await (botModel ? createLlmAdapterForModel(botModel) : llm).stream({
         messages,
         systemPrompt: activeSystemPrompt + contextBlock,
-        temperature: 0.3,
-        maxTokens: 1024,
+        temperature: cfg?.temperature ?? 0.3,
+        maxTokens: cfg?.maxTokens ?? 1024,
         onChunk: (chunk) => {
           fullText += chunk
           sendEvent('chunk', { text: chunk })

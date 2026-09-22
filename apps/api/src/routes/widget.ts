@@ -9,7 +9,7 @@
 
 import type { FastifyInstance, FastifyRequest } from 'fastify'
 import { PrismaClient } from '@ybot/db'
-import { createLlmAdapter, createEmbeddingAdapter } from '@ybot/llm'
+import { createLlmAdapter, createLlmAdapterForModel, createEmbeddingAdapter } from '@ybot/llm'
 import type { LlmMessage } from '@ybot/llm'
 import { readFile } from 'node:fs/promises'
 import { resolve, dirname } from 'node:path'
@@ -460,7 +460,9 @@ export async function widgetRoutes(app: FastifyInstance) {
 
     let fullText = ''
     try {
-      await llm.stream({
+      // Use model-aware routing: picks the right provider for the saved BotConfig model
+      const adapter = model ? createLlmAdapterForModel(model) : llm
+      await adapter.stream({
         messages, systemPrompt: systemPrompt + contextBlock, model, temperature, maxTokens,
         onChunk: (chunk) => { fullText += chunk; send({ chunk }) },
       })

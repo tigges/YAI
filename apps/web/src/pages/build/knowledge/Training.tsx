@@ -1,7 +1,7 @@
 import React, { useState } from 'react'
 import {
   Dumbbell, Play, CheckCircle, Clock, AlertCircle,
-  Cpu, TrendingUp, RefreshCw, ChevronRight, Settings
+  Cpu, TrendingUp, RefreshCw, Info,
 } from 'lucide-react'
 import { Button, Badge, Card, CardHeader, CardTitle } from '@ybot/ui'
 import { SubNav } from '../../../components/SubNav'
@@ -15,6 +15,69 @@ const SUBNAV = [
   { label: 'Sources', path: '/build/knowledge/sources' },
   { label: 'Training', path: '/build/knowledge/training' },
 ]
+
+// ── Model catalogue ────────────────────────────────────────────────────────
+const MODEL_GROUPS: Array<{
+  label: string
+  envVar: string
+  signupUrl?: string
+  free?: boolean
+  models: Array<{ value: string; label: string; note?: string }>
+}> = [
+  {
+    label: 'Google Gemini',
+    envVar: 'GEMINI_API_KEY',
+    signupUrl: 'https://aistudio.google.com',
+    free: true,
+    models: [
+      { value: 'gemini-2.0-flash',    label: 'Gemini 2.0 Flash',    note: 'Recommended default — fast, capable, free tier' },
+      { value: 'gemini-1.5-flash',    label: 'Gemini 1.5 Flash',    note: 'Free tier, slightly older' },
+      { value: 'gemini-1.5-pro',      label: 'Gemini 1.5 Pro',      note: 'Higher quality, lower RPM on free tier' },
+    ],
+  },
+  {
+    label: 'Groq',
+    envVar: 'GROQ_API_KEY',
+    signupUrl: 'https://console.groq.com',
+    free: true,
+    models: [
+      { value: 'groq/llama-3.3-70b-versatile', label: 'Llama 3.3 70B',   note: 'Best open-source quality, free tier' },
+      { value: 'groq/llama-3.1-8b-instant',    label: 'Llama 3.1 8B',    note: 'Ultra-fast, lower quality' },
+      { value: 'groq/mixtral-8x7b-32768',      label: 'Mixtral 8x7B',    note: 'Good for multilingual' },
+    ],
+  },
+  {
+    label: 'OpenAI',
+    envVar: 'OPENAI_API_KEY',
+    signupUrl: 'https://platform.openai.com',
+    models: [
+      { value: 'gpt-4o',      label: 'GPT-4o',      note: 'Best quality' },
+      { value: 'gpt-4o-mini', label: 'GPT-4o Mini', note: 'Cost-effective' },
+    ],
+  },
+  {
+    label: 'Anthropic',
+    envVar: 'ANTHROPIC_API_KEY',
+    signupUrl: 'https://console.anthropic.com',
+    models: [
+      { value: 'claude-sonnet-4-5',   label: 'Claude Sonnet 4.5', note: 'Latest Sonnet, excellent reasoning' },
+      { value: 'claude-3-5-sonnet',   label: 'Claude 3.5 Sonnet', note: 'Previous Sonnet' },
+      { value: 'claude-3-haiku',      label: 'Claude 3 Haiku',    note: 'Fast and cheap' },
+    ],
+  },
+  {
+    label: 'Local (Ollama)',
+    envVar: 'OLLAMA_BASE_URL',
+    signupUrl: 'https://ollama.ai',
+    models: [
+      { value: 'ollama/llama3.2',  label: 'Llama 3.2 (local)',  note: 'No internet needed' },
+      { value: 'ollama/mistral',   label: 'Mistral (local)',    note: 'Lightweight option' },
+    ],
+  },
+]
+
+const MODEL_TO_GROUP: Record<string, (typeof MODEL_GROUPS)[number]> = {}
+MODEL_GROUPS.forEach((g) => g.models.forEach((m) => { MODEL_TO_GROUP[m.value] = g }))
 
 interface TrainingRun {
   id: string
@@ -39,17 +102,26 @@ export function TrainingPage() {
   const saveTraining = useSaveTraining()
   const [runs, setRuns] = useState(MOCK_RUNS)
   const [training, setTraining] = useState(false)
-  const [selectedModel, setSelectedModel] = useState(config?.model ?? 'gpt-4o-mini')
+  const [saved, setSaved] = useState(false)
+  const [selectedModel, setSelectedModel] = useState(config?.model ?? 'gemini-2.0-flash')
   const [temperature, setTemperature] = useState(String(config?.temperature ?? 0.3))
   const [systemPrompt, setSystemPrompt] = useState(config?.systemPrompt ?? 'You are a helpful customer support assistant.')
 
   React.useEffect(() => {
     if (config) {
-      setSelectedModel(config.model ?? 'gpt-4o-mini')
+      setSelectedModel(config.model ?? 'gemini-2.0-flash')
       setTemperature(String(config.temperature ?? 0.3))
       setSystemPrompt(config.systemPrompt ?? '')
     }
   }, [config])
+
+  async function handleSaveConfig() {
+    try {
+      await saveTraining.mutateAsync({ model: selectedModel, temperature: parseFloat(temperature), systemPrompt })
+      setSaved(true)
+      setTimeout(() => setSaved(false), 2000)
+    } catch { /* demo mode */ }
+  }
 
   async function handleTrain() {
     setTraining(true)
@@ -71,6 +143,8 @@ export function TrainingPage() {
   }
 
   const latestSuccess = runs.find((r) => r.status === 'success')
+  const selectedGroup = MODEL_TO_GROUP[selectedModel]
+  const selectedModelMeta = selectedGroup?.models.find((m) => m.value === selectedModel)
 
   return (
     <div className="flex flex-col h-full">
@@ -106,13 +180,30 @@ export function TrainingPage() {
                   onChange={(e) => setSelectedModel(e.target.value)}
                   className="mt-1 w-full rounded border border-[var(--border)] bg-[var(--bg-overlay)] px-3 py-2 text-sm text-[var(--text-primary)] focus:border-[var(--border-focus)] focus:outline-none"
                 >
-                  <option value="gpt-4o">GPT-4o</option>
-                  <option value="gpt-4o-mini">GPT-4o Mini</option>
-                  <option value="claude-3-5-sonnet">Claude 3.5 Sonnet</option>
-                  <option value="gemini-1.5-flash">Gemini 1.5 Flash (Free)</option>
-                  <option value="groq/llama-3.1-70b">Llama 3.1 70B via Groq (Free)</option>
-                  <option value="ollama/llama3.2">Ollama Llama 3.2 (Local)</option>
+                  {MODEL_GROUPS.map((g) => (
+                    <optgroup key={g.label} label={`${g.label}${g.free ? ' (free)' : ''} · ${g.envVar}`}>
+                      {g.models.map((m) => (
+                        <option key={m.value} value={m.value}>{m.label}</option>
+                      ))}
+                    </optgroup>
+                  ))}
                 </select>
+                {/* Contextual hint for the selected model */}
+                {selectedGroup && (
+                  <p className="mt-1.5 text-[11px] text-[var(--text-muted)] flex items-start gap-1">
+                    <Info size={11} className="shrink-0 mt-0.5" />
+                    <span>
+                      Requires <code className="font-mono bg-[var(--bg-elevated)] px-0.5 rounded">{selectedGroup.envVar}</code>
+                      {selectedGroup.free && <span className="text-[var(--success)] ml-1">· free tier available</span>}
+                      {selectedGroup.signupUrl && (
+                        <a href={selectedGroup.signupUrl} target="_blank" rel="noreferrer" className="ml-1 underline">
+                          Get key ↗
+                        </a>
+                      )}
+                      {selectedModelMeta?.note && <span className="ml-1 text-[var(--text-muted)]">— {selectedModelMeta.note}</span>}
+                    </span>
+                  </p>
+                )}
               </div>
               <div>
                 <label className="text-xs font-medium text-[var(--text-secondary)]">Temperature: {temperature}</label>
@@ -140,7 +231,9 @@ export function TrainingPage() {
               />
             </div>
             <div className="flex justify-end">
-              <Button size="sm" variant="secondary">Save Config</Button>
+              <Button size="sm" variant="secondary" onClick={handleSaveConfig} disabled={saveTraining.isPending}>
+                {saved ? 'Saved!' : saveTraining.isPending ? 'Saving…' : 'Save Config'}
+              </Button>
             </div>
           </div>
         </Card>
