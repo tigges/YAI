@@ -1,8 +1,7 @@
 import type { FastifyInstance } from 'fastify'
-import { PrismaClient } from '@ybot/db'
+import { prisma } from '@ybot/db'
 import { z } from 'zod'
 
-const prisma = new PrismaClient()
 
 interface JwtPayload {
   sub: string

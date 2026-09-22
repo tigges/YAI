@@ -13,11 +13,10 @@
  */
 
 import type { FastifyInstance } from 'fastify'
-import { PrismaClient } from '@ybot/db'
+import { prisma } from '@ybot/db'
 import { createLlmAdapter, createEmbeddingAdapter } from '@ybot/llm'
 import { z } from 'zod'
 
-const prisma = new PrismaClient()
 
 // Shared adapters (module-level singletons)
 const llm = createLlmAdapter()

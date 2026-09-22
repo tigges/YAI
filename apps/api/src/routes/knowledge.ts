@@ -1,9 +1,8 @@
 import type { FastifyInstance } from 'fastify'
-import { PrismaClient } from '@ybot/db'
+import { prisma } from '@ybot/db'
 import { z } from 'zod'
 import { enqueueKnowledgeSync } from '../queues.js'
 
-const prisma = new PrismaClient()
 type JWT = { sub: string; tenantId: string; role: string }
 
 export async function knowledgeRoutes(app: FastifyInstance) {

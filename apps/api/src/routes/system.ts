@@ -1,9 +1,8 @@
 import type { FastifyInstance } from 'fastify'
-import { PrismaClient } from '@ybot/db'
+import { prisma } from '@ybot/db'
 import * as os from 'node:os'
 import * as http from 'node:http'
 
-const prisma = new PrismaClient()
 
 function dockerRequest(path: string): Promise<unknown> {
   return new Promise((resolve) => {

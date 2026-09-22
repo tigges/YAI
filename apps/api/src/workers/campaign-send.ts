@@ -7,9 +7,8 @@
  * after a short simulated delay so the UI shows real delivery counts.
  */
 
-import { PrismaClient } from '@ybot/db'
+import { prisma } from '@ybot/db'
 
-const prisma = new PrismaClient()
 let cuidCounter = 0
 function createId() { return `cmp_${Date.now()}_${++cuidCounter}` }
 

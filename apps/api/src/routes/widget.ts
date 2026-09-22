@@ -8,14 +8,13 @@
  */
 
 import type { FastifyInstance } from 'fastify'
-import { PrismaClient } from '@ybot/db'
+import { prisma } from '@ybot/db'
 import { createLlmAdapter, createEmbeddingAdapter } from '@ybot/llm'
 import type { LlmMessage } from '@ybot/llm'
 import { readFile } from 'node:fs/promises'
 import { resolve, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-const prisma  = new PrismaClient()
 const llm     = createLlmAdapter()
 const embedAI = createEmbeddingAdapter()
 

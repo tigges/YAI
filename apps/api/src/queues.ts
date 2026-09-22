@@ -1,6 +1,8 @@
 // BullMQ queue manager — dynamically loaded so the API starts without Redis
 // In production, call initQueues(REDIS_URL) on startup
 
+import { prisma } from '@ybot/db'
+
 export const QUEUE_KNOWLEDGE_SYNC    = 'knowledge-sync'
 export const QUEUE_CAMPAIGN_SEND     = 'campaign-send'
 export const QUEUE_REPORT_GENERATE   = 'report-generate'
@@ -54,10 +56,7 @@ export async function enqueueConversationAnalysis(payload: { conversationId: str
 export async function dispatchWebhookEvent(tenantId: string, event: string, data: object): Promise<void> {
   if (!webhookQueue) return
   try {
-    const { PrismaClient } = await import('@ybot/db')
-    const prisma = new PrismaClient()
     const hooks = await prisma.webhook.findMany({ where: { tenantId, isActive: true, events: { has: event } } })
     await Promise.all(hooks.map((wh: { url: string; secret: string | null }) => enqueueWebhookDelivery({ url: wh.url, secret: wh.secret ?? undefined, event, data })))
-    await prisma.$disconnect()
   } catch { /* non-critical */ }
 }
