@@ -12,6 +12,7 @@ import {
   Rocket,
   Loader2,
   Circle,
+  CircleHelp,
 } from 'lucide-react'
 import {
   Avatar,
@@ -27,6 +28,7 @@ import {
 import { useAppStore } from '../store/app'
 import { apiFetch } from '../lib/api'
 import { useAgentStatus, useUpdateAgentStatus } from '../lib/hooks'
+import { HELP_TOPICS } from '../pages/help-topics'
 
 interface TopBarProps {
   darkMode: boolean
@@ -135,6 +137,22 @@ export function TopBar({ darkMode, onToggleDark }: TopBarProps) {
 
       {/* Right: theme + user */}
       <div className="flex items-center gap-1">
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="ghost" size="icon-sm" aria-label="Help" title="Help">
+              <CircleHelp size={15} />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuLabel>Help</DropdownMenuLabel>
+            {HELP_TOPICS.map((topic) => (
+              <DropdownMenuItem key={topic.id} onSelect={() => navigate({ to: '/help', hash: topic.id })}>
+                {topic.label}
+              </DropdownMenuItem>
+            ))}
+          </DropdownMenuContent>
+        </DropdownMenu>
+
         <Button
           variant="ghost"
           size="icon-sm"
