@@ -49,9 +49,13 @@ export function WorkflowsPage() {
 
   async function handleCreate() {
     if (!newName.trim()) return
-    await createWorkflow.mutateAsync({ name: newName.trim(), description: newDescription.trim() || undefined, trigger: newTrigger, status: 'draft' })
-    setShowNew(false)
-    resetNew()
+    try {
+      await createWorkflow.mutateAsync({ name: newName.trim(), description: newDescription.trim() || undefined, trigger: newTrigger, status: 'draft' })
+      setShowNew(false)
+      resetNew()
+    } catch {
+      // The dialog stays open and shows createWorkflow.isError.
+    }
   }
 
   async function handleDelete() {

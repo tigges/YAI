@@ -24,23 +24,43 @@ export const DialogOverlay = React.forwardRef<
 ))
 DialogOverlay.displayName = DialogPrimitive.Overlay.displayName
 
+const DIALOG_WIDTH = {
+  sm: 'min(400px, calc(100vw - 2rem))',
+  md: 'min(540px, calc(100vw - 2rem))',
+  lg: 'min(720px, calc(100vw - 2rem))',
+  xl: 'min(900px, calc(100vw - 2rem))',
+} as const
+
 export const DialogContent = React.forwardRef<
   React.ElementRef<typeof DialogPrimitive.Content>,
   React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content> & { size?: 'sm' | 'md' | 'lg' | 'xl' }
->(({ className, children, size = 'md', ...props }, ref) => (
+>(({ className, children, size = 'md', style, ...props }, ref) => {
+  // Geometry is inline on purpose. Tailwind scans apps/web only, so classes that
+  // exist solely in this package never reached the production stylesheet, and the
+  // dialog collapsed into a full-height strip. No transform: that made the footer
+  // unclickable in the browser tests.
+  const width = DIALOG_WIDTH[size]
+  return (
   <DialogPrimitive.Portal>
     <DialogOverlay />
     <DialogPrimitive.Content
       ref={ref}
+      style={{
+        position: 'fixed',
+        zIndex: 50,
+        top: '1rem',
+        left: '50%',
+        width,
+        marginLeft: `calc(${width} / -2)`,
+        height: 'fit-content',
+        maxHeight: 'calc(100dvh - 2rem)',
+        ...style,
+      }}
       className={cn(
-        'fixed inset-x-0 top-0 bottom-0 z-50 m-auto flex h-fit max-h-[min(85vh,100dvh)] flex-col overflow-hidden',
+        'flex flex-col overflow-hidden',
         'rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--bg-elevated)] shadow-[var(--shadow-lg)]',
         'data-[state=open]:animate-in data-[state=closed]:animate-out',
         'data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0',
-        size === 'sm' && 'w-[min(400px,calc(100vw-2rem))]',
-        size === 'md' && 'w-[min(540px,calc(100vw-2rem))]',
-        size === 'lg' && 'w-[min(720px,calc(100vw-2rem))]',
-        size === 'xl' && 'w-[min(900px,calc(100vw-2rem))]',
         className
       )}
       {...props}
@@ -51,7 +71,8 @@ export const DialogContent = React.forwardRef<
       </DialogPrimitive.Close>
     </DialogPrimitive.Content>
   </DialogPrimitive.Portal>
-))
+  )
+})
 DialogContent.displayName = DialogPrimitive.Content.displayName
 
 export function DialogHeader({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) {
@@ -59,7 +80,7 @@ export function DialogHeader({ className, ...props }: React.HTMLAttributes<HTMLD
 }
 
 export function DialogBody({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) {
-  return <div className={cn('min-h-0 flex-1 overflow-y-auto px-6 pb-6', className)} {...props} />
+  return <div className={cn('min-h-0 flex-auto overflow-y-auto px-6 pb-6', className)} {...props} />
 }
 
 export function DialogFooter({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) {
