@@ -31,7 +31,9 @@ type Mode = 'login' | 'register'
 export function SignInPage() {
   const navigate = useNavigate()
   const { setAuth, setBots } = useAppStore()
-  const [mode, setMode] = useState<Mode>('login')
+  const [mode, setMode] = useState<Mode>(() =>
+    new URLSearchParams(window.location.search).get('mode') === 'register' ? 'register' : 'login',
+  )
   const [showPw, setShowPw] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
