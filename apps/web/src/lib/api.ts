@@ -20,14 +20,13 @@ export class ApiError extends Error {
 
 export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
   const token = getToken()
+  const headers = new Headers(init?.headers)
+  if (typeof init?.body === 'string' && !headers.has('Content-Type')) headers.set('Content-Type', 'application/json')
+  if (token && !headers.has('Authorization')) headers.set('Authorization', `Bearer ${token}`)
   const res = await fetch(`${BASE}${path}`, {
-    headers: {
-      'Content-Type': 'application/json',
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      ...init?.headers,
-    },
-    credentials: 'include',
     ...init,
+    headers,
+    credentials: 'include',
   })
   const json = (await res.json().catch(() => ({}))) as T
   if (!res.ok) throw new ApiError(res.status, (json as { error: { code: string; message: string } }).error)
