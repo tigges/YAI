@@ -7,7 +7,6 @@ import { Button, Badge, Card, CardHeader, CardTitle } from '@ybot/ui'
 import { SubNav } from '../../../components/SubNav'
 import { cn } from '@ybot/ui'
 import { useTraining, useSaveTraining, useTrainingRuns } from '../../../lib/hooks'
-import { PlannedBadge } from '../../../components/PlannedFeature'
 import { useQueryClient } from '@tanstack/react-query'
 import { useAppStore } from '../../../store/app'
 
@@ -145,8 +144,7 @@ export function TrainingPage() {
         <div className="flex items-center justify-between px-6 pt-4 pb-0">
           <h1 className="text-base font-semibold text-[var(--text-primary)]">Knowledge</h1>
           <div className="flex items-center gap-2">
-            <PlannedBadge />
-            <Button size="sm" onClick={handleTrain} disabled={training} title="This will become a real feature.">
+            <Button size="sm" onClick={handleTrain} disabled={training} title="Saves the model settings and records a training run from your knowledge.">
             {training ? (
               <><RefreshCw size={13} className="animate-spin" /> Training…</>
             ) : (

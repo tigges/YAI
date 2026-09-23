@@ -11,7 +11,6 @@ import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuIte
 import { SubNav } from '../../components/SubNav'
 import { cn } from '@ybot/ui'
 import { useAuditLog } from '../../lib/hooks'
-import { PlannedNote } from '../../components/PlannedFeature'
 
 const SUBNAV = [
   { label: 'Team', path: '/admin/team' },
@@ -108,8 +107,7 @@ export function AuditPage() {
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
 
   // Map API audit events to display shape (fall back to static mock if API not available)
-  const events: AuditEvent[] = apiEvents.length > 0
-    ? apiEvents.map((e) => ({
+  const events: AuditEvent[] = apiEvents.map((e) => ({
         id: e.id,
         actor: { name: e.user?.displayName ?? 'System', email: e.user?.email ?? '' },
         action: (e.action in ACTION_CFG ? e.action : 'automation.alert') as AuditEvent['action'],
@@ -119,7 +117,6 @@ export function AuditPage() {
         timestamp: formatAuditTime(e.createdAt),
         severity: ('info') as AuditSeverity,
       }))
-    : MOCK_EVENTS
 
   const filtered = events.filter((e) => {
     const matchSearch = !search ||
@@ -149,9 +146,7 @@ export function AuditPage() {
       </div>
 
       {apiEvents.length === 0 && (
-        <div className="px-6 py-3 border-b border-[var(--border)]">
-          <PlannedNote>These audit rows are samples shown because the log is empty.</PlannedNote>
-        </div>
+        <div className="px-6 py-3 border-b border-[var(--border)] text-sm text-[var(--text-muted)]">No audit events yet.</div>
       )}
 
       {/* Toolbar */}

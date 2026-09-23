@@ -2,8 +2,7 @@ import React from 'react'
 import { MessageSquare, Users, CheckCircle, Clock, Loader2 } from 'lucide-react'
 import { Card, CardHeader, CardTitle, Badge } from '@ybot/ui'
 import { useAppStore } from '../store/app'
-import { useAnalyticsOverview, useConversationTrends, useConversations } from '../lib/hooks'
-import { PlannedBadge } from '../components/PlannedFeature'
+import { useAnalyticsOverview, useConversationTrends, useConversations, useAnalyticsChannels } from '../lib/hooks'
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   BarChart, Bar,
@@ -54,6 +53,7 @@ export function OverviewPage() {
   const { data: overview, isLoading: ovLoading } = useAnalyticsOverview()
   const { data: trends = [], isLoading: trendsLoading } = useConversationTrends()
   const { data: recentConvos = [] } = useConversations({ botId: selectedBotId ?? '', limit: '5' })
+  const { data: channels = [] } = useAnalyticsChannels()
 
   // Map trends to chart-friendly format with short day labels
   const chartData = trends.map((t) => ({
@@ -63,13 +63,9 @@ export function OverviewPage() {
     escalated: t.escalated,
   }))
 
-  // Channel breakdown from overview placeholder (analytics/channels endpoint exists but not in hook yet)
-  const channelData = [
-    { name: 'Web', value: overview?.totalConversations ? Math.round(overview.totalConversations * 0.45) : 0 },
-    { name: 'WhatsApp', value: overview?.totalConversations ? Math.round(overview.totalConversations * 0.30) : 0 },
-    { name: 'SMS', value: overview?.totalConversations ? Math.round(overview.totalConversations * 0.15) : 0 },
-    { name: 'Email', value: overview?.totalConversations ? Math.round(overview.totalConversations * 0.10) : 0 },
-  ]
+  const channelData = channels.length
+    ? channels.map((row) => ({ name: row.name || 'Unknown', value: row.total }))
+    : [{ name: 'No channels yet', value: 0 }]
 
   return (
     <div className="flex flex-col h-full">
@@ -152,7 +148,6 @@ export function OverviewPage() {
           <Card padding="none">
             <CardHeader className="px-4 pt-4">
               <CardTitle>By Channel</CardTitle>
-              <PlannedBadge />
             </CardHeader>
             <div className="px-4 pb-4 h-[220px]">
               <ResponsiveContainer width="100%" height="100%">

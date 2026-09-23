@@ -45,7 +45,36 @@ export async function webhooksRoutes(app: FastifyInstance) {
 
   app.get('/', async (request) => {
     const { tenantId } = request.user as JWT
-    return { data: await prisma.webhook.findMany({ where: { tenantId }, orderBy: { createdAt: 'desc' } }) }
+    const [rows, deliveries] = await Promise.all([
+      prisma.webhook.findMany({ where: { tenantId }, orderBy: { createdAt: 'desc' } }),
+      prisma.webhookDelivery.groupBy({ by: ['webhookId', 'success'], where: { tenantId }, _count: true }),
+    ])
+    return {
+      data: rows.map((row) => {
+        const mine = deliveries.filter((d) => d.webhookId === row.id)
+        const total = mine.reduce((sum, d) => sum + d._count, 0)
+        const ok = mine.find((d) => d.success)?._count ?? 0
+        return { ...row, secret: row.secret ? 'set' : null, successRate: total ? Math.round((ok / total) * 1000) / 10 : null }
+      }),
+    }
+  })
+
+  app.post('/probe', async (request, reply) => {
+    const body = z.object({ url: z.string().url() }).safeParse(request.body)
+    if (!body.success) return reply.status(400).send({ error: { code: 'VALIDATION', details: body.error.flatten() } })
+    const start = Date.now()
+    try {
+      const res = await fetch(body.data.url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-YBot-Event': 'webhook.test' },
+        body: JSON.stringify({ event: 'webhook.test', data: { message: 'This is a test delivery from BotStudio.' } }),
+        signal: AbortSignal.timeout(10_000),
+      })
+      return { data: { delivered: res.ok, statusCode: res.status, durationMs: Date.now() - start } }
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Request failed'
+      return { data: { delivered: false, statusCode: 0, durationMs: Date.now() - start, error: msg } }
+    }
   })
 
   app.post('/', async (request, reply) => {
@@ -86,6 +115,9 @@ export async function webhooksRoutes(app: FastifyInstance) {
     }
 
     const start = Date.now()
+    let statusCode = 0
+    let success = false
+    let error: string | undefined
     try {
       const res = await fetch(wh.url, {
         method: 'POST',
@@ -93,17 +125,30 @@ export async function webhooksRoutes(app: FastifyInstance) {
         body: JSON.stringify(payload),
         signal: AbortSignal.timeout(10_000),
       })
-      return { data: { delivered: res.ok, statusCode: res.status, durationMs: Date.now() - start } }
+      statusCode = res.status
+      success = res.ok
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Request failed'
-      return { data: { delivered: false, statusCode: 0, durationMs: Date.now() - start, error: msg } }
+      error = err instanceof Error ? err.message : 'Request failed'
     }
+    const durationMs = Date.now() - start
+    await prisma.webhookDelivery.create({
+      data: { tenantId, webhookId: wh.id, event: 'webhook.test', statusCode, success, durationMs, error },
+    })
+    return { data: { delivered: success, statusCode, durationMs, error } }
+  })
+
+  app.get('/:id/deliveries', async (request, reply) => {
+    const { tenantId } = request.user as JWT
+    const { id } = request.params as { id: string }
+    const wh = await prisma.webhook.findFirst({ where: { id, tenantId } })
+    if (!wh) return reply.status(404).send({ error: { code: 'NOT_FOUND' } })
+    const rows = await prisma.webhookDelivery.findMany({ where: { webhookId: id, tenantId }, orderBy: { createdAt: 'desc' }, take: 50 })
+    return { data: rows }
   })
 }
 
 export async function teamRoutes(app: FastifyInstance) {
   app.addHook('preHandler', app.authenticate)
-  app.addHook('preHandler', requireRole('ADMIN'))
   app.get('/members', async (request) => {
     const { tenantId } = request.user as JWT
     const members = await prisma.user.findMany({
@@ -127,8 +172,20 @@ export async function teamRoutes(app: FastifyInstance) {
     return { data: members }
   })
 
+  app.post('/labels', async (request, reply) => {
+    const { tenantId } = request.user as JWT
+    const body = z.object({ name: z.string().min(1), color: z.string().optional() }).safeParse(request.body)
+    if (!body.success) return reply.status(400).send({ error: { code: 'VALIDATION', details: body.error.flatten() } })
+    const label = await prisma.label.upsert({
+      where: { tenantId_name: { tenantId, name: body.data.name } },
+      create: { tenantId, name: body.data.name, color: body.data.color ?? '#94a3b8' },
+      update: {},
+    })
+    return reply.status(201).send({ data: label })
+  })
+
   // POST /team/invites
-  app.post('/invites', async (request, reply) => {
+  app.post('/invites', { preHandler: requireRole('ADMIN') }, async (request, reply) => {
     const { tenantId, sub: invitedById } = request.user as JWT
     const body = z.object({ email: z.string().email(), role: z.enum(['ADMIN', 'SUPERVISOR', 'AGENT']).default('AGENT') }).safeParse(request.body)
     if (!body.success) return reply.status(400).send({ error: { code: 'VALIDATION', details: body.error.flatten() } })
@@ -163,7 +220,7 @@ export async function teamRoutes(app: FastifyInstance) {
   })
 
   // PATCH /team/members/:id/role
-  app.patch('/members/:id/role', async (request, reply) => {
+  app.patch('/members/:id/role', { preHandler: requireRole('ADMIN') }, async (request, reply) => {
     const { tenantId, sub: changedBy } = request.user as JWT
     const { id } = request.params as { id: string }
     const { role } = request.body as { role: string }
@@ -173,7 +230,7 @@ export async function teamRoutes(app: FastifyInstance) {
   })
 
   // DELETE /team/members/:id
-  app.delete('/members/:id', async (request, reply) => {
+  app.delete('/members/:id', { preHandler: requireRole('ADMIN') }, async (request, reply) => {
     const { tenantId } = request.user as JWT
     const { id } = request.params as { id: string }
     await prisma.membership.deleteMany({ where: { userId: id, tenantId } })

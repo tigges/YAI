@@ -30,6 +30,9 @@ model Tenant {
   bots               Bot[]
   apiKeys            ApiKey[]
   webhooks           Webhook[]
+  cannedReplies      CannedReply[]
+  dataTables         DataTable[]
+  integrations       IntegrationConnection[]
 
   @@map("tenants")
 }
@@ -424,8 +427,9 @@ model StepLog {
 model Ticket {
   id             String    @id @default(cuid())
   tenantId       String
-  conversationId String
+  conversationId String?
   subject        String
+  description    String?
   status         String    @default("open")
   priority       String    @default("medium")
   assignedTo     String?
@@ -435,7 +439,7 @@ model Ticket {
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
 
-  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  conversation Conversation? @relation(fields: [conversationId], references: [id], onDelete: Cascade)
 
   @@map("tickets")
 }
@@ -633,9 +637,85 @@ model Webhook {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenant     Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  deliveries WebhookDelivery[]
 
   @@map("webhooks")
+}
+
+model WebhookDelivery {
+  id         String   @id @default(cuid())
+  tenantId   String
+  webhookId  String
+  event      String
+  statusCode Int      @default(0)
+  success    Boolean  @default(false)
+  durationMs Int      @default(0)
+  error      String?
+  createdAt  DateTime @default(now())
+
+  webhook Webhook @relation(fields: [webhookId], references: [id], onDelete: Cascade)
+
+  @@index([webhookId, createdAt])
+  @@map("webhook_deliveries")
+}
+
+model CannedReply {
+  id        String   @id @default(cuid())
+  tenantId  String
+  shortcut  String
+  title     String
+  text      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, shortcut])
+  @@map("canned_replies")
+}
+
+model DataTable {
+  id        String   @id @default(cuid())
+  tenantId  String
+  name      String
+  columns   Json     @default("[]")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenant  Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  records DataRecord[]
+
+  @@unique([tenantId, name])
+  @@map("data_tables")
+}
+
+model DataRecord {
+  id        String   @id @default(cuid())
+  tenantId  String
+  tableId   String
+  data      Json     @default("{}")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  table DataTable @relation(fields: [tableId], references: [id], onDelete: Cascade)
+
+  @@index([tableId])
+  @@map("data_records")
+}
+
+model IntegrationConnection {
+  id          String   @id @default(cuid())
+  tenantId    String
+  provider    String
+  apiKey      String?
+  connectedAt DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, provider])
+  @@map("integration_connections")
 }
 
 model Activity {

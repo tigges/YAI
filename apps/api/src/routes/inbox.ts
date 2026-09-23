@@ -77,6 +77,7 @@ export async function conversationsRoutes(app: FastifyInstance) {
         ...(q['status'] ? { status: q['status'] } : {}),
         ...(q['assignedTo'] ? { assignedTo: q['assignedTo'] } : {}),
         ...(q['channelId'] ? { channelId: q['channelId'] } : {}),
+        ...(q['contactId'] ? { contactId: q['contactId'] } : {}),
       },
       include: {
         contact: true,
@@ -164,7 +165,14 @@ export async function conversationsRoutes(app: FastifyInstance) {
 
     const direction = body.data.direction ?? (body.data.authorKind === 'user' ? 'inbound' : 'outbound')
     const msg = await prisma.message.create({
-      data: { tenantId, conversationId: id, direction, authorId: userId, authorKind: body.data.authorKind, content: body.data.content },
+      data: {
+        tenantId,
+        conversationId: id,
+        direction,
+        authorId: userId,
+        authorKind: body.data.authorKind,
+        content: { ...body.data.content, internal: body.data.isInternalNote },
+      },
     })
     await prisma.conversation.update({ where: { id }, data: { updatedAt: new Date() } })
     if (direction === 'outbound' && !body.data.isInternalNote) {
@@ -214,9 +222,17 @@ export async function ticketsRoutes(app: FastifyInstance) {
 
   app.post('/', async (request, reply) => {
     const { tenantId } = request.user as JWT
-    const body = z.object({ conversationId: z.string(), subject: z.string().min(1), priority: z.enum(['low', 'medium', 'high', 'critical']).default('medium'), assignedTo: z.string().optional(), tags: z.array(z.string()).default([]) }).safeParse(request.body)
+    const body = z.object({
+      conversationId: z.string().optional(),
+      subject: z.string().min(1),
+      description: z.string().optional(),
+      priority: z.enum(['low', 'normal', 'medium', 'high', 'urgent', 'critical']).default('medium'),
+      assignedTo: z.string().optional(),
+      tags: z.array(z.string()).default([]),
+    }).safeParse(request.body)
     if (!body.success) return reply.status(400).send({ error: { code: 'VALIDATION', details: body.error.flatten() } })
-    return reply.status(201).send({ data: await prisma.ticket.create({ data: { ...body.data, tenantId } }) })
+    const priority = ({ low: 'low', normal: 'medium', medium: 'medium', high: 'high', urgent: 'critical', critical: 'critical' } as const)[body.data.priority]
+    return reply.status(201).send({ data: await prisma.ticket.create({ data: { ...body.data, priority, tenantId } }) })
   })
 
   app.patch('/:id', async (request, reply) => {
@@ -239,6 +255,38 @@ export async function ticketsRoutes(app: FastifyInstance) {
 
 export async function contactsRoutes(app: FastifyInstance) {
   app.addHook('preHandler', app.authenticate)
+
+  app.get('/export', async (request, reply) => {
+    const { tenantId } = request.user as JWT
+    const rows = await prisma.contact.findMany({ where: { tenantId }, orderBy: { displayName: 'asc' } })
+    const csv = ['name,email,phone', ...rows.map((r) => [r.displayName, r.email, r.phone].map((value) => {
+      const text = value ?? ''
+      return /[",\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text
+    }).join(','))].join('\n')
+    reply.header('Content-Type', 'text/csv; charset=utf-8')
+    return reply.send(csv)
+  })
+
+  app.post('/import', async (request, reply) => {
+    const { tenantId } = request.user as JWT
+    const body = z.object({
+      contacts: z.array(z.object({
+        displayName: z.string().min(1),
+        email: z.string().email().optional().or(z.literal('')),
+        phone: z.string().optional(),
+      })).min(1),
+    }).safeParse(request.body)
+    if (!body.success) return reply.status(400).send({ error: { code: 'VALIDATION', details: body.error.flatten() } })
+    const created = await prisma.contact.createMany({
+      data: body.data.contacts.map((row) => ({
+        tenantId,
+        displayName: row.displayName,
+        email: row.email || undefined,
+        phone: row.phone || undefined,
+      })),
+    })
+    return reply.status(201).send({ data: { created: created.count } })
+  })
 
   app.get('/', async (request) => {
     const { tenantId } = request.user as JWT

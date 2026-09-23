@@ -11,7 +11,7 @@ import {
   Bot, Zap, Sparkles,
 } from 'lucide-react'
 import { cn } from '@ybot/ui'
-import { PlannedBadge } from '../components/PlannedFeature'
+import { useUpdateProfile } from '../lib/hooks'
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 
@@ -217,7 +217,8 @@ function BotIdentityTab() {
   const { bots, selectedBotId, setBots } = useAppStore()
   const selectedBot = bots.find((b) => b.id === selectedBotId) ?? null
   const [personaName, setPersonaName] = useState(selectedBot?.personaName ?? '')
-  const [agentAlias, setAgentAlias] = useState('')
+  const [agentAlias, setAgentAlias] = useState(useAppStore.getState().user?.displayName ?? '')
+  const updateProfile = useUpdateProfile()
   const [saved, setSaved] = useState(false)
   const [saving, setSaving] = useState(false)
 
@@ -284,7 +285,7 @@ function BotIdentityTab() {
             <User size={14} className="text-[var(--success)]" />
           </div>
           <div>
-            <h3 className="text-sm font-semibold text-[var(--text-primary)] flex items-center gap-2">Human agent aliases <PlannedBadge /></h3>
+            <h3 className="text-sm font-semibold text-[var(--text-primary)]">Human agent aliases</h3>
             <p className="text-xs text-[var(--text-muted)] mt-0.5">
               Each agent's <strong>display name</strong> in their profile is shown to customers when they handle a conversation.
               Use culturally relevant first names — e.g. <em>Sofia</em> for Spanish-speaking markets,
@@ -298,8 +299,19 @@ function BotIdentityTab() {
             placeholder="e.g. Sofia"
             value={agentAlias}
             onChange={(e) => setAgentAlias(e.target.value)}
-            hint="Set the full alias in Team → your profile"
+            hint="Customers see this name when you reply."
           />
+          <div className="flex justify-end">
+            <Button size="sm" disabled={updateProfile.isPending || !agentAlias.trim()} onClick={() => {
+              const name = agentAlias.trim()
+              updateProfile.mutate(name, {
+                onSuccess: () => {
+                  const current = useAppStore.getState().user
+                  if (current) useAppStore.getState().setAuth({ ...current, displayName: name }, useAppStore.getState().token ?? '')
+                },
+              })
+            }}>Save alias</Button>
+          </div>
         </div>
         <div className="mt-3 rounded-[var(--radius)] bg-[var(--bg-overlay)] p-3 text-[11px] text-[var(--text-muted)] space-y-1">
           <p className="font-medium text-[var(--text-secondary)]">Recommended naming convention</p>
@@ -375,10 +387,18 @@ export function SettingsPage() {
   const [tab, setTab] = useState<Tab>('profile')
   const [displayName, setDisplayName] = useState(user?.displayName ?? '')
   const [saved, setSaved] = useState(false)
+  const updateProfile = useUpdateProfile()
 
   function handleSave() {
-    setSaved(true)
-    setTimeout(() => setSaved(false), 2000)
+    const name = displayName.trim()
+    if (!name || !user) return
+    updateProfile.mutate(name, {
+      onSuccess: () => {
+        useAppStore.getState().setAuth({ ...user, displayName: name }, useAppStore.getState().token ?? '')
+        setSaved(true)
+        setTimeout(() => setSaved(false), 2000)
+      },
+    })
   }
 
   const TABS: { id: Tab; label: string; icon: React.ElementType }[] = [
@@ -433,8 +453,7 @@ export function SettingsPage() {
                 <Input label="Email" value={user?.email ?? ''} disabled />
               </div>
               <div className="mt-4 flex items-center justify-end gap-2">
-                <PlannedBadge />
-                <Button size="md" onClick={handleSave} title="This will become a real feature.">{saved ? 'Saved!' : 'Save changes'}</Button>
+                <Button size="md" onClick={handleSave} disabled={updateProfile.isPending}>{saved ? 'Saved!' : 'Save changes'}</Button>
               </div>
             </Card>
           </div>

@@ -17,7 +17,9 @@ import { cn } from '@ybot/ui'
 import { useConversations, useConversation, useSendMessage, useAssignConversation, useResolveConversation, useCreateConversation } from '../../lib/hooks'
 import { useConversationWS, useTenantWS } from '../../lib/ws'
 import { useAppStore } from '../../store/app'
-import { PlannedBadge } from '../../components/PlannedFeature'
+import * as api from '../../lib/api'
+import { useQueryClient } from '@tanstack/react-query'
+import { useCannedReplies, useTeamMembers, useLabels, useCreateLabel, useCreateTicket } from '../../lib/hooks'
 
 const SUBNAV = [
   { label: 'Chats', path: '/inbox/chats' },
@@ -40,6 +42,8 @@ interface Convo {
   status: ConvoStatus
   unread: number
   channel: 'web' | 'whatsapp' | 'sms' | 'email'
+  contactId?: string
+  assigneeId?: string | null
   assignee: string | null
   sla?: string
   labels?: string[]
@@ -115,6 +119,13 @@ export function ChatsPage() {
   const [showNewConvo, setShowNewConvo] = useState(false)
   const [newConvoMessage, setNewConvoMessage] = useState('')
   const selectedBotId = useAppStore((s: { selectedBotId: string | null }) => s.selectedBotId)
+  const currentUserId = useAppStore((s) => s.user?.id)
+  const { data: members = [] } = useTeamMembers()
+  const { data: canned = [] } = useCannedReplies()
+  const { data: labelRows = [] } = useLabels()
+  const createLabel = useCreateLabel()
+  const createTicketMutation = useCreateTicket()
+  const qc = useQueryClient()
 
   // Connect to WS on mount (establishes tenant-level connection)
   useTenantWS()
@@ -155,7 +166,9 @@ export function ChatsPage() {
     status: (c.status as ConvoStatus) ?? 'active',
     unread: c.messages?.filter((m) => m.direction === 'inbound').length ?? 0,
     channel: (c.channel?.kind ?? 'web') as Convo['channel'],
-    assignee: c.assignedTo ?? null,
+    contactId: c.contact?.id,
+    assigneeId: c.assignedTo ?? null,
+    assignee: members.find((m) => m.id === c.assignedTo)?.displayName ?? null,
     sla: c.sla ?? undefined,
     labels: c.labels?.map((l) => l.label?.name ?? '') ?? [],
     email: c.contact?.email,
@@ -168,19 +181,19 @@ export function ChatsPage() {
     name: m.authorKind === 'user' ? selectedConvo!.contact?.displayName ?? 'User' : m.authorKind === 'bot' ? 'YBot' : 'Agent',
     text: m.content?.text ?? '',
     time: new Date(m.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-    isNote: (m as unknown as { isNote?: boolean }).isNote,
+    isNote: Boolean(m.content?.internal),
   }))
 
   const selected = convos.find((c) => c.id === selectedId) ?? convos[0]
 
   const filteredConvos = convos.filter((c) => {
-    if (view === 'mine') return c.assignee === 'Sarah K'
+    if (view === 'mine') return c.assigneeId === currentUserId
     if (view === 'unassigned') return !c.assignee
     if (view === 'escalated') return c.status === 'escalated'
     return true
   })
 
-  const filteredCanned = CANNED_RESPONSES.filter((r) =>
+  const filteredCanned = canned.filter((r) =>
     r.shortcut.includes(cannedFilter) || r.text.toLowerCase().includes(cannedFilter.toLowerCase())
   )
 
@@ -206,7 +219,7 @@ export function ChatsPage() {
   async function sendReply() {
     if (!reply.trim() || !selectedId) return
     try {
-      await sendMessage.mutateAsync({ conversationId: selectedId, text: reply })
+      await sendMessage.mutateAsync({ conversationId: selectedId, text: reply, internal: noteType === 'note' })
     } catch { /* demo mode — no-op */ }
     setReply('')
     setShowCanned(false)
@@ -217,14 +230,18 @@ export function ChatsPage() {
     try { await resolveConversation.mutateAsync(selectedId) } catch { /* demo */ }
   }
 
-  async function assignTo(agent: string) {
+  async function assignTo(agentId: string | null) {
     if (!selectedId) return
-    try { await assignConversation.mutateAsync({ id: selectedId, assignedTo: agent === 'Unassigned' ? null : agent }) } catch { /* demo */ }
+    try { await assignConversation.mutateAsync({ id: selectedId, assignedTo: agentId }) } catch { /* demo */ }
     setShowAssign(false)
+    setShowTransfer(false)
   }
 
-  function createTicket() {
-    if (!ticketTitle.trim()) return
+  async function createTicket() {
+    if (!ticketTitle.trim() || !selectedId) return
+    try {
+      await createTicketMutation.mutateAsync({ subject: ticketTitle.trim(), priority: 'normal', conversationId: selectedId })
+    } catch { /* keep the dialog open on failure */ return }
     setShowTicketDialog(false)
     setTicketTitle('')
   }
@@ -359,20 +376,20 @@ export function ChatsPage() {
               {/* Assign */}
               <DropdownMenu open={showAssign} onOpenChange={setShowAssign}>
                 <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" size="sm" className="gap-1.5" title="This will become a real feature.">
+                  <Button variant="ghost" size="sm" className="gap-1.5">
                     <UserPlus size={13} />
                     {selected.assignee ?? 'Assign'}
                     <ChevronDown size={11} />
-                    <PlannedBadge />
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
                   <DropdownMenuLabel>Assign to agent</DropdownMenuLabel>
-                  {AGENTS.map((a) => (
-                    <DropdownMenuItem key={a} onClick={() => assignTo(a)}>
-                      <Avatar name={a} size="xs" />
-                      {a}
-                      {selected.assignee === a && <CheckCheck size={13} className="ml-auto text-[var(--accent)]" />}
+                  <DropdownMenuItem onClick={() => assignTo(null)}>Unassigned</DropdownMenuItem>
+                  {members.map((member) => (
+                    <DropdownMenuItem key={member.id} onClick={() => assignTo(member.id)}>
+                      <Avatar name={member.displayName} size="xs" />
+                      {member.displayName}
+                      {selected.assigneeId === member.id && <CheckCheck size={13} className="ml-auto text-[var(--accent)]" />}
                     </DropdownMenuItem>
                   ))}
                 </DropdownMenuContent>
@@ -508,7 +525,7 @@ export function ChatsPage() {
                     : 'text-[var(--text-muted)] hover:bg-[var(--bg-hover)]'
                 )}
               >
-                <StickyNote size={12} /> Internal note <PlannedBadge />
+                <StickyNote size={12} /> Internal note
               </button>
             </div>
 
@@ -516,7 +533,7 @@ export function ChatsPage() {
             {showCanned && filteredCanned.length > 0 && (
               <div className="mx-4 mb-2 rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--bg-elevated)] overflow-hidden shadow-[var(--shadow-lg)] max-h-44 overflow-y-auto">
                 <div className="px-3 py-1.5 bg-[var(--bg-overlay)] border-b border-[var(--border)]">
-                  <p className="text-[11px] text-[var(--text-muted)] font-medium flex items-center gap-2">Canned responses <PlannedBadge /></p>
+                  <p className="text-[11px] text-[var(--text-muted)] font-medium">Canned responses</p>
                 </div>
                 {filteredCanned.map((r) => (
                   <button
@@ -651,25 +668,28 @@ export function ChatsPage() {
 
           {rightPanelSection === 'history' && (
             <div className="p-4">
-              <p className="text-[11px] text-[var(--text-muted)] mb-3 flex items-center gap-2">
-                <PlannedBadge />
-                {selected.previousConvos ?? 0} previous conversation{selected.previousConvos !== 1 ? 's' : ''}
-              </p>
-              {(selected.previousConvos ?? 0) > 0 ? (
-                <div className="space-y-2">
-                  {Array.from({ length: Math.min(selected.previousConvos ?? 0, 4) }, (_, i) => (
-                    <div key={i} className="rounded-[var(--radius-md)] border border-[var(--border)] p-2.5 hover:bg-[var(--bg-hover)] cursor-pointer transition-colors">
-                      <div className="flex items-center justify-between mb-1">
-                        <Badge variant="muted" className="text-[10px]">#{1000 + i}</Badge>
-                        <span className="text-[10px] text-[var(--text-muted)]">{i + 1}d ago</span>
+              {(() => {
+                const earlier = convos.filter((c) => c.contactId && c.contactId === selected.contactId && c.id !== selected.id)
+                return (
+                  <>
+                    <p className="text-[11px] text-[var(--text-muted)] mb-3">
+                      {earlier.length} other conversation{earlier.length === 1 ? '' : 's'} with this contact
+                    </p>
+                    {earlier.length > 0 ? (
+                      <div className="space-y-2">
+                        {earlier.slice(0, 6).map((c) => (
+                          <button key={c.id} onClick={() => setSelectedId(c.id)} className="w-full text-left rounded-[var(--radius-md)] border border-[var(--border)] p-2.5 hover:bg-[var(--bg-hover)] transition-colors">
+                            <p className="text-xs text-[var(--text-secondary)] truncate">{c.message || 'No message yet'}</p>
+                            <p className="text-[10px] text-[var(--text-muted)] mt-1">{c.time}</p>
+                          </button>
+                        ))}
                       </div>
-                      <p className="text-xs text-[var(--text-secondary)] truncate">Previous conversation {i + 1}</p>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <p className="text-xs text-[var(--text-muted)]">No previous conversations</p>
-              )}
+                    ) : (
+                      <p className="text-xs text-[var(--text-muted)]">No other conversations</p>
+                    )}
+                  </>
+                )
+              })()}
             </div>
           )}
 
@@ -704,22 +724,21 @@ export function ChatsPage() {
       <Dialog open={showTransfer} onOpenChange={setShowTransfer}>
         <DialogContent size="sm">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">Transfer conversation <PlannedBadge /></DialogTitle>
+            <DialogTitle>Transfer conversation</DialogTitle>
           </DialogHeader>
           <DialogBody className="space-y-2">
             <p className="text-sm text-[var(--text-secondary)] mb-3">Select an agent or team to transfer this conversation to.</p>
-            {AGENTS.filter((a) => a !== 'Unassigned').map((a) => (
+            {members.map((member) => (
               <button
-                key={a}
-                onClick={() => { assignTo(a); setShowTransfer(false) }}
+                key={member.id}
+                onClick={() => assignTo(member.id)}
                 className="flex items-center gap-3 w-full p-3 rounded-[var(--radius-md)] border border-[var(--border)] hover:bg-[var(--bg-hover)] transition-colors text-left"
               >
-                <Avatar name={a} size="sm" />
+                <Avatar name={member.displayName} size="sm" />
                 <div>
-                  <p className="text-sm font-medium text-[var(--text-primary)]">{a}</p>
-                  <p className="text-xs text-[var(--text-muted)]">Support team · Online</p>
+                  <p className="text-sm font-medium text-[var(--text-primary)]">{member.displayName}</p>
+                  <p className="text-xs text-[var(--text-muted)]">{member.email}</p>
                 </div>
-                <Circle size={8} className="ml-auto text-[var(--success)] fill-[var(--success)]" />
               </button>
             ))}
           </DialogBody>
@@ -730,7 +749,7 @@ export function ChatsPage() {
       <Dialog open={showTicketDialog} onOpenChange={setShowTicketDialog}>
         <DialogContent size="sm">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">Create ticket <PlannedBadge /></DialogTitle>
+            <DialogTitle>Create ticket</DialogTitle>
           </DialogHeader>
           <DialogBody className="space-y-4">
             <div>
@@ -754,7 +773,8 @@ export function ChatsPage() {
             <div>
               <label className="text-xs font-medium text-[var(--text-muted)] mb-1.5 block">Assign to</label>
               <select className="w-full rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--bg-overlay)] px-3 py-2 text-sm text-[var(--text-primary)] focus:outline-none">
-                {AGENTS.map((a) => <option key={a}>{a}</option>)}
+                <option value="">Unassigned</option>
+                {members.map((member) => <option key={member.id} value={member.id}>{member.displayName}</option>)}
               </select>
             </div>
           </DialogBody>
@@ -769,18 +789,22 @@ export function ChatsPage() {
       <Dialog open={showLabelDialog} onOpenChange={setShowLabelDialog}>
         <DialogContent size="sm">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">Manage labels <PlannedBadge /></DialogTitle>
+            <DialogTitle>Manage labels</DialogTitle>
           </DialogHeader>
           <DialogBody>
             <div className="flex flex-wrap gap-2">
-              {LABELS_OPTIONS.map((l) => {
+              {(labelRows.length ? labelRows.map((row) => row.name) : LABELS_OPTIONS).map((l) => {
                 const active = selected?.labels?.includes(l) ?? false
+                const label = labelRows.find((row) => row.name === l)
                 return (
                   <button
                     key={l}
-                    onClick={() => {
-                      // Label updates require API call — skip in demo mode
-                      void l
+                    onClick={async () => {
+                      if (!selectedId) return
+                      const row = label ?? await createLabel.mutateAsync(l)
+                      if (active) await api.conversations.labels.remove(selectedId, row.id).catch(() => {})
+                      else await api.conversations.labels.add(selectedId, row.id).catch(() => {})
+                      void qc.invalidateQueries({ queryKey: ['conversations'] })
                     }}
                     className={cn(
                       'px-3 py-1.5 rounded-full text-sm border transition-colors',

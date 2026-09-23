@@ -3,8 +3,7 @@ import { Tag, Plus, Trash2, ChevronRight, Search, X, CheckCircle, Save } from 'l
 import { Button, Input, Badge, EmptyState, Skeleton } from '@ybot/ui'
 import { cn } from '@ybot/ui'
 import { SubNav } from '../../../components/SubNav'
-import { useEntities, useCreateEntity, useDeleteEntity } from '../../../lib/hooks'
-import { PlannedBadge } from '../../../components/PlannedFeature'
+import { useEntities, useCreateEntity, useDeleteEntity, useUpdateEntity } from '../../../lib/hooks'
 
 const SUBNAV = [
   { label: 'Intents', path: '/build/knowledge/intents' },
@@ -51,6 +50,7 @@ export function EntitiesPage() {
   const { data: entities = [], isLoading } = useEntities()
   const createEntity = useCreateEntity()
   const deleteEntity = useDeleteEntity()
+  const updateEntity = useUpdateEntity()
 
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [localEdits, setLocalEdits] = useState<Record<string, Partial<typeof entities[0]>>>({})
@@ -142,12 +142,14 @@ export function EntitiesPage() {
                   <span className="text-xs text-[var(--text-muted)]">{(selected.values ?? []).length} values</span>
                 </div>
               </div>
-              <div className="flex items-center gap-2">
-                <PlannedBadge />
-                <Button size="sm" onClick={() => setSaved(true)} title="This will become a real feature.">
-                  {saved ? <><CheckCircle size={13} /> Saved</> : <><Save size={13} /> Save</>}
-                </Button>
-              </div>
+              <Button size="sm" onClick={() => {
+                if (!selected) return
+                updateEntity.mutate({ id: selected.id, name: selected.name, kind: selected.kind, values: selected.values }, {
+                  onSuccess: () => setSaved(true),
+                })
+              }}>
+                {saved ? <><CheckCircle size={13} /> Saved</> : <><Save size={13} /> Save</>}
+              </Button>
             </div>
 
             <div className="space-y-3">

@@ -14,8 +14,11 @@ import {
 } from '@ybot/ui'
 import { SubNav } from '../../components/SubNav'
 import { cn } from '@ybot/ui'
-import { useContacts, useCreateContact, useUpdateContact, useDeleteContact, useContactConversations } from '../../lib/hooks'
-import { PlannedBadge } from '../../components/PlannedFeature'
+import { useContacts, useCreateContact, useUpdateContact, useDeleteContact, useContactConversations, useCreateConversation, useCreateTicket } from '../../lib/hooks'
+import { useAppStore } from '../../store/app'
+import { useNavigate } from '@tanstack/react-router'
+import { useQueryClient } from '@tanstack/react-query'
+import * as api from '../../lib/api'
 
 const SUBNAV = [
   { label: 'Chats', path: '/inbox/chats' },
@@ -157,6 +160,13 @@ export function ContactsPage() {
   const [newEmail, setNewEmail] = useState('')
   const [newPhone, setNewPhone] = useState('')
   const [createError, setCreateError] = useState('')
+  const [emailOnly, setEmailOnly] = useState(false)
+  const fileRef = React.useRef<HTMLInputElement>(null)
+  const navigate = useNavigate()
+  const qc = useQueryClient()
+  const botId = useAppStore((s) => s.selectedBotId)
+  const createConversation = useCreateConversation()
+  const createTicket = useCreateTicket()
 
   // Map API contact shape to local Contact shape
   const filtered: Contact[] = rawContacts.map((c) => ({
@@ -170,7 +180,7 @@ export function ContactsPage() {
     channel: 'web' as Contact['channel'],
     lastSeen: formatRelativeContact((c as { createdAt?: string }).createdAt),
     conversations: (c as { _count?: { conversations: number } })._count?.conversations ?? 0,
-  }))
+  })).filter((c) => !emailOnly || Boolean(c.email))
 
   async function handleCreate() {
     if (!newName.trim()) return
@@ -203,12 +213,33 @@ export function ContactsPage() {
           onChange={(e) => setSearch(e.target.value)}
           className="w-72"
         />
-        <Button variant="ghost" size="sm" className="gap-1.5" title="This will become a real feature."><Filter size={13} /> Filter</Button>
-        <PlannedBadge />
+        <Button variant="ghost" size="sm" className="gap-1.5" onClick={() => setEmailOnly((v) => !v)}><Filter size={13} /> {emailOnly ? 'With email' : 'Filter'}</Button>
+        <input ref={fileRef} type="file" accept=".csv,text/csv" className="hidden" onChange={(e) => {
+          const file = e.target.files?.[0]
+          if (!file) return
+          void file.text().then(async (text) => {
+            const rows = text.split(/\r?\n/).slice(1).flatMap((line) => {
+              const [displayName = '', email = '', phone = ''] = line.split(',').map((part) => part.trim().replace(/^"|"$/g, ''))
+              if (!displayName) return []
+              return [{ displayName, email: email || undefined, phone: phone || undefined }]
+            })
+            if (rows.length) await api.contacts.importRows(rows)
+            void qc.invalidateQueries({ queryKey: ['contacts'] })
+          })
+          e.target.value = ''
+        }} />
         <div className="ml-auto flex items-center gap-2">
-          <Button variant="ghost" size="sm" className="gap-1.5" title="This will become a real feature."><Upload size={13} /> Import</Button>
-          <Button variant="ghost" size="sm" className="gap-1.5" title="This will become a real feature."><Download size={13} /> Export</Button>
-          <PlannedBadge />
+          <Button variant="ghost" size="sm" className="gap-1.5" onClick={() => fileRef.current?.click()}><Upload size={13} /> Import</Button>
+          <Button variant="ghost" size="sm" className="gap-1.5" onClick={() => {
+            void api.contacts.exportCsv().then((csv) => {
+              const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }))
+              const link = document.createElement('a')
+              link.href = url
+              link.download = 'contacts.csv'
+              link.click()
+              URL.revokeObjectURL(url)
+            })
+          }}><Download size={13} /> Export</Button>
           <Button size="sm" className="gap-1.5" onClick={() => setShowNew(true)}>
             <Plus size={14} /> New Contact
           </Button>
@@ -285,8 +316,13 @@ export function ContactsPage() {
                     </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
                       <DropdownMenuItem onClick={() => setSelected(c)}>View profile</DropdownMenuItem>
-                      <DropdownMenuItem title="This will become a real feature.">Start conversation <PlannedBadge /></DropdownMenuItem>
-                      <DropdownMenuItem title="This will become a real feature.">Create ticket <PlannedBadge /></DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => { if (botId) void createConversation.mutateAsync({ botId, contactId: c.id }).then(() => navigate({ to: '/inbox/chats' })) }}>Start conversation</DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => {
+                        if (!botId) return
+                        void createConversation.mutateAsync({ botId, contactId: c.id }).then((convo) =>
+                          createTicket.mutateAsync({ subject: `Ticket for ${c.name}`, priority: 'normal', conversationId: convo.id })
+                        )
+                      }}>Create ticket</DropdownMenuItem>
                       <DropdownMenuSeparator />
                       <DropdownMenuItem destructive onClick={() => handleDelete(c.id)}>Delete contact</DropdownMenuItem>
                     </DropdownMenuContent>

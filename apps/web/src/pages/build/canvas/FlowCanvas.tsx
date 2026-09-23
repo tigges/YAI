@@ -118,14 +118,19 @@ const EDGE_STYLE = {
   strokeWidth: 1.5,
 }
 
-import { useFlows, useSaveCanvas, useFlowCanvas } from '../../../lib/hooks'
-import { PlannedBadge } from '../../../components/PlannedFeature'
+import { useFlows, useSaveCanvas, useFlowCanvas, usePublishFlow } from '../../../lib/hooks'
 import { useAppStore } from '../../../store/app'
 
 export function FlowCanvasPage() {
   const navigate = useNavigate()
   const { flowId } = useParams({ from: '/app/build/flows/$flowId' })
   const selectedBotId = useAppStore((s) => s.selectedBotId) ?? 'demo'
+  const selectedEnv = useAppStore((s) => s.selectedEnv)
+  const environmentId = useAppStore((s) => s.bots.find((b) => b.id === s.selectedBotId)?.environments.find((e) => e.kind === s.selectedEnv)?.id ?? '')
+  const publishFlow = usePublishFlow()
+  const historyPast = useRef<Array<{ nodes: Node[]; edges: Edge[] }>>([])
+  const historyFuture = useRef<Array<{ nodes: Node[]; edges: Edge[] }>>([])
+  const applyingHistory = useRef(false)
   const [nodes, setNodes, onNodesChange] = useNodesState(INITIAL_NODES)
   const [edges, setEdges, onEdgesChange] = useEdgesState(INITIAL_EDGES)
   const [selectedNode, setSelectedNode] = useState<Node | null>(null)
@@ -151,8 +156,37 @@ export function FlowCanvasPage() {
   const dragKindRef = useRef<{ kind: NodeKind; label: string } | null>(null)
   const reactFlowWrapper = useRef<HTMLDivElement>(null)
 
+  function remember() {
+    if (applyingHistory.current) return
+    historyPast.current.push({ nodes, edges })
+    if (historyPast.current.length > 50) historyPast.current.shift()
+    historyFuture.current = []
+  }
+
+  function undo() {
+    const prev = historyPast.current.pop()
+    if (!prev) return
+    historyFuture.current.push({ nodes, edges })
+    applyingHistory.current = true
+    setNodes(prev.nodes)
+    setEdges(prev.edges)
+    applyingHistory.current = false
+  }
+
+  function redo() {
+    const next = historyFuture.current.pop()
+    if (!next) return
+    historyPast.current.push({ nodes, edges })
+    applyingHistory.current = true
+    setNodes(next.nodes)
+    setEdges(next.edges)
+    applyingHistory.current = false
+  }
+
   const onConnect = useCallback(
-    (params: Connection) =>
+    (params: Connection) => {
+      historyPast.current.push({ nodes, edges })
+      historyFuture.current = []
       setEdges((eds) =>
         addEdge(
           {
@@ -163,8 +197,9 @@ export function FlowCanvasPage() {
           },
           eds
         )
-      ),
-    [setEdges]
+      )
+    },
+    [nodes, edges, setEdges]
   )
 
   function handleDragStart(kind: NodeKind, label: string) {
@@ -174,6 +209,7 @@ export function FlowCanvasPage() {
   function handleDrop(e: React.DragEvent) {
     e.preventDefault()
     if (!dragKindRef.current || !reactFlowWrapper.current) return
+    remember()
 
     const bounds = reactFlowWrapper.current.getBoundingClientRect()
     const position = {
@@ -213,6 +249,7 @@ export function FlowCanvasPage() {
   }
 
   function handleDeleteNode(nodeId: string) {
+    remember()
     setNodes((ns) => ns.filter((n) => n.id !== nodeId))
     setEdges((es) => es.filter((e) => e.source !== nodeId && e.target !== nodeId))
   }
@@ -231,8 +268,20 @@ export function FlowCanvasPage() {
   }
 
   async function handlePublish() {
-    await handleSave()
-    setStatus('published')
+    if (!environmentId) return
+    setSaving(true)
+    try {
+      await saveCanvas.mutateAsync({
+        flowId: flowId ?? '',
+        version: canvasVersion,
+        graph: { nodes: nodes as unknown as import('../../../lib/api').FlowNode[], edges: edges as unknown as import('../../../lib/api').FlowEdge[] },
+      })
+      await publishFlow.mutateAsync({ flowId: flowId ?? '', environmentId })
+      setStatus('published')
+    } catch {
+      setStatus('saved')
+    }
+    setSaving(false)
   }
 
   return (
@@ -261,9 +310,8 @@ export function FlowCanvasPage() {
         </div>
 
         <div className="flex items-center gap-2">
-          <Button variant="ghost" size="icon-sm" title="Undo. This will become a real feature."><Undo2 size={14} /></Button>
-          <Button variant="ghost" size="icon-sm" title="Redo. This will become a real feature."><Redo2 size={14} /></Button>
-          <PlannedBadge />
+          <Button variant="ghost" size="icon-sm" title={`Undo (${selectedEnv})`} onClick={undo}><Undo2 size={14} /></Button>
+          <Button variant="ghost" size="icon-sm" title="Redo" onClick={redo}><Redo2 size={14} /></Button>
           <div className="h-4 w-px bg-[var(--border)]" />
           <Button variant="ghost" size="sm" onClick={handleSave} disabled={saving}>
             <Save size={13} /> {saving ? 'Saving…' : 'Save'}
@@ -275,10 +323,9 @@ export function FlowCanvasPage() {
           >
             <Play size={13} /> {showTestPanel ? 'Hide Test' : 'Test Bot'}
           </Button>
-          <Button size="sm" onClick={handlePublish} disabled={saving} title="This will become a real feature.">
+          <Button size="sm" onClick={handlePublish} disabled={saving || !environmentId}>
             <Share2 size={13} /> Publish
           </Button>
-          <PlannedBadge />
         </div>
       </div>
 

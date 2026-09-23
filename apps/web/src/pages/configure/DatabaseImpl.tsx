@@ -9,7 +9,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogBody, DialogFoo
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator } from '@ybot/ui'
 import { SubNav } from '../../components/SubNav'
 import { cn } from '@ybot/ui'
-import { PlannedNote } from '../../components/PlannedFeature'
+import { useDataTables, useCreateDataTable, useDataRecords, useAddDataRecord } from '../../lib/hooks'
 
 const SUBNAV = [
   { label: 'Channels', path: '/configure/channels' },
@@ -101,15 +101,27 @@ const MOCK_RECORDS: Record<string, Record<string, string>[]> = {
 }
 
 export function DatabasePage() {
-  const [tables] = useState<Table[]>(MOCK_TABLES)
-  const [activeTable, setActiveTable] = useState<Table>(MOCK_TABLES[0]!)
+  const { data: loaded = [] } = useDataTables()
+  const tables: Table[] = loaded.map((table) => ({
+    id: table.id,
+    name: table.name,
+    rows: table.rows,
+    updatedAt: new Date(table.updatedAt).toLocaleString(),
+    columns: (Array.isArray(table.columns) ? table.columns : []) as Column[],
+  }))
+  const [activeId, setActiveId] = useState('')
+  const activeTable = tables.find((table) => table.id === activeId) ?? tables[0] ?? { id: '', name: 'No tables yet', rows: 0, columns: [{ name: 'name', type: 'text' as const, nullable: true }], updatedAt: '' }
+  const { data: loadedRecords = [] } = useDataRecords(activeTable.id)
+  const createTable = useCreateDataTable()
+  const addRecord = useAddDataRecord(activeTable.id)
   const [view, setView] = useState<'schema' | 'records'>('records')
   const [search, setSearch] = useState('')
   const [showNew, setShowNew] = useState(false)
   const [newTableName, setNewTableName] = useState('')
+  const [rowName, setRowName] = useState('')
 
-  const records = (MOCK_RECORDS[activeTable.id] ?? []).filter((r) =>
-    !search || Object.values(r).some((v) => v.toLowerCase().includes(search.toLowerCase()))
+  const records = loadedRecords.filter((r) =>
+    !search || Object.values(r).some((v) => String(v).toLowerCase().includes(search.toLowerCase()))
   )
 
   return (
@@ -124,9 +136,9 @@ export function DatabasePage() {
         <SubNav items={SUBNAV} />
       </div>
 
-      <div className="px-6 py-3 border-b border-[var(--border)] bg-[var(--bg-surface)] shrink-0">
-        <PlannedNote>Tables and rows on this page stay in the browser.</PlannedNote>
-      </div>
+      {tables.length === 0 && (
+        <div className="px-6 py-3 border-b border-[var(--border)] text-sm text-[var(--text-muted)]">No tables yet. Create one to store rows for this workspace.</div>
+      )}
 
       <div className="flex flex-1 overflow-hidden">
         {/* Tables list sidebar */}
@@ -138,7 +150,7 @@ export function DatabasePage() {
             {tables.map((t) => (
               <button
                 key={t.id}
-                onClick={() => setActiveTable(t)}
+                onClick={() => setActiveId(t.id)}
                 className={cn(
                   'flex items-center gap-2.5 w-full px-3 py-2.5 text-left transition-colors',
                   activeTable.id === t.id ? 'bg-[var(--bg-selected)]' : 'hover:bg-[var(--bg-hover)]'
@@ -175,7 +187,13 @@ export function DatabasePage() {
               ))}
             </div>
             {view === 'records' && (
-              <Input placeholder="Search records…" leftIcon={<Search size={12} />} value={search} onChange={(e) => setSearch(e.target.value)} className="w-52" />
+              <>
+                <Input placeholder="Search records…" leftIcon={<Search size={12} />} value={search} onChange={(e) => setSearch(e.target.value)} className="w-52" />
+                <Input placeholder="New row name" value={rowName} onChange={(e) => setRowName(e.target.value)} className="w-40" />
+                <Button size="sm" disabled={!activeTable.id || !rowName.trim() || addRecord.isPending} onClick={() => {
+                  void addRecord.mutateAsync({ name: rowName.trim() }).then(() => setRowName(''))
+                }}>Add row</Button>
+              </>
             )}
             <Button variant="ghost" size="sm" className="gap-1.5 shrink-0"><Download size={13} /> Export</Button>
           </div>
@@ -250,7 +268,13 @@ export function DatabasePage() {
           </DialogBody>
           <DialogFooter>
             <Button variant="ghost" onClick={() => setShowNew(false)}>Cancel</Button>
-            <Button disabled={!newTableName.trim()} onClick={() => setShowNew(false)}>Create table</Button>
+            <Button disabled={!newTableName.trim() || createTable.isPending} onClick={() => {
+              void createTable.mutateAsync(newTableName.trim()).then((table) => {
+                setActiveId(table.id)
+                setNewTableName('')
+                setShowNew(false)
+              })
+            }}>Create table</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

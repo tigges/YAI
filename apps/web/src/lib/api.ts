@@ -149,8 +149,8 @@ export const conversations = {
     apiFetch<{ data: unknown }>(`/conversations/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
   messages: {
     list: (id: string) => apiFetch<{ data: Message[] }>(`/conversations/${id}/messages`),
-    send: (id: string, content: { text: string }, authorKind = 'agent') =>
-      apiFetch<{ data: Message }>(`/conversations/${id}/messages`, { method: 'POST', body: JSON.stringify({ content, authorKind }) }),
+    send: (id: string, content: { text: string }, authorKind = 'agent', isInternalNote = false) =>
+      apiFetch<{ data: Message }>(`/conversations/${id}/messages`, { method: 'POST', body: JSON.stringify({ content, authorKind, isInternalNote }) }),
   },
   labels: {
     add: (id: string, labelId: string) => apiFetch<{ data: unknown }>(`/conversations/${id}/labels`, { method: 'POST', body: JSON.stringify({ labelId }) }),
@@ -161,7 +161,7 @@ export const conversations = {
 // ── Tickets ───────────────────────────────────────────────────────────────────
 export const tickets = {
   list: (params?: Record<string, string>) => apiFetch<{ data: Ticket[] }>(`/tickets?${new URLSearchParams(params ?? {})}`),
-  create: (body: { conversationId?: string; subject: string; priority?: string; assignedTo?: string; tags?: string[] }) =>
+  create: (body: { conversationId?: string; subject: string; description?: string; priority?: string; assignedTo?: string; tags?: string[] }) =>
     apiFetch<{ data: Ticket }>('/tickets', { method: 'POST', body: JSON.stringify(body) }),
   update: (id: string, body: Partial<{ status: string; priority: string; assignedTo: string | null; tags: string[] }>) =>
     apiFetch<{ data: unknown }>(`/tickets/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
@@ -174,6 +174,14 @@ export const contacts = {
     apiFetch<{ data: Contact }>('/contacts', { method: 'POST', body: JSON.stringify(body) }),
   update: (id: string, body: Partial<Contact>) => apiFetch<{ data: unknown }>(`/contacts/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
   delete: (id: string) => apiFetch<void>(`/contacts/${id}`, { method: 'DELETE' }),
+  exportCsv: async () => {
+    const token = getToken()
+    const res = await fetch(`${BASE}/contacts/export`, { headers: token ? { Authorization: `Bearer ${token}` } : {}, credentials: 'include' })
+    if (!res.ok) throw new ApiError(res.status, { code: 'EXPORT_FAILED', message: 'Could not export contacts' })
+    return res.text()
+  },
+  importRows: (contacts: Array<{ displayName: string; email?: string; phone?: string }>) =>
+    apiFetch<{ data: { created: number } }>('/contacts/import', { method: 'POST', body: JSON.stringify({ contacts }) }),
 }
 
 // ── Campaigns + Templates ──────────────────────────────────────────────────────
@@ -226,10 +234,45 @@ export const webhooks = {
   list: () => apiFetch<{ data: Webhook[] }>('/webhooks'),
   create: (body: { url: string; events: string[]; secret?: string }) =>
     apiFetch<{ data: Webhook }>('/webhooks', { method: 'POST', body: JSON.stringify(body) }),
-  update: (id: string, body: { isActive?: boolean; events?: string[] }) =>
+  update: (id: string, body: { isActive?: boolean; events?: string[]; url?: string }) =>
     apiFetch<{ data: unknown }>(`/webhooks/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
   delete: (id: string) => apiFetch<void>(`/webhooks/${id}`, { method: 'DELETE' }),
-  test: (id: string) => apiFetch<{ data: { delivered: boolean; statusCode: number; durationMs: number } }>(`/webhooks/${id}/test`, { method: 'POST' }),
+  test: (id: string) => apiFetch<{ data: { delivered: boolean; statusCode: number; durationMs: number; error?: string } }>(`/webhooks/${id}/test`, { method: 'POST' }),
+  probe: (url: string) => apiFetch<{ data: { delivered: boolean; statusCode: number; durationMs: number; error?: string } }>('/webhooks/probe', { method: 'POST', body: JSON.stringify({ url }) }),
+  deliveries: (id: string) => apiFetch<{ data: WebhookDelivery[] }>(`/webhooks/${id}/deliveries`),
+}
+
+export const cannedReplies = {
+  list: () => apiFetch<{ data: CannedReply[] }>('/canned-replies'),
+  create: (body: { shortcut: string; title: string; text: string }) =>
+    apiFetch<{ data: CannedReply }>('/canned-replies', { method: 'POST', body: JSON.stringify(body) }),
+  update: (id: string, body: Partial<{ shortcut: string; title: string; text: string }>) =>
+    apiFetch<{ data: unknown }>(`/canned-replies/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
+  delete: (id: string) => apiFetch<void>(`/canned-replies/${id}`, { method: 'DELETE' }),
+}
+
+export const reports = {
+  list: (botId: string) => apiFetch<{ data: SavedReport[] }>(`/bots/${botId}/reports`),
+  create: (botId: string, body: { name: string; type?: string; format?: string; frequency?: string; recipients?: string[] }) =>
+    apiFetch<{ data: SavedReport }>(`/bots/${botId}/reports`, { method: 'POST', body: JSON.stringify(body) }),
+  run: (botId: string, id: string) => apiFetch<{ data: SavedReport }>(`/bots/${botId}/reports/${id}/run`, { method: 'POST' }),
+  remove: (botId: string, id: string) => apiFetch<void>(`/bots/${botId}/reports/${id}`, { method: 'DELETE' }),
+}
+
+export const database = {
+  tables: () => apiFetch<{ data: DataTable[] }>('/database/tables'),
+  createTable: (name: string) => apiFetch<{ data: DataTable }>('/database/tables', { method: 'POST', body: JSON.stringify({ name }) }),
+  records: (id: string) => apiFetch<{ data: Array<Record<string, string>> }>(`/database/tables/${id}/records`),
+  addRecord: (id: string, data: Record<string, string>) =>
+    apiFetch<{ data: Record<string, string> }>(`/database/tables/${id}/records`, { method: 'POST', body: JSON.stringify({ data }) }),
+  deleteTable: (id: string) => apiFetch<void>(`/database/tables/${id}`, { method: 'DELETE' }),
+}
+
+export const integrations = {
+  list: () => apiFetch<{ data: IntegrationConnection[] }>('/integrations'),
+  connect: (provider: string, apiKey: string) =>
+    apiFetch<{ data: { provider: string; status: string } }>(`/integrations/${provider}/connect`, { method: 'POST', body: JSON.stringify({ apiKey }) }),
+  disconnect: (provider: string) => apiFetch<void>(`/integrations/${provider}`, { method: 'DELETE' }),
 }
 
 export const team = {
@@ -238,6 +281,7 @@ export const team = {
   updateRole: (id: string, role: string) => apiFetch<{ data: unknown }>(`/team/members/${id}/role`, { method: 'PATCH', body: JSON.stringify({ role }) }),
   remove: (id: string) => apiFetch<void>(`/team/members/${id}`, { method: 'DELETE' }),
   labels: () => apiFetch<{ data: Label[] }>('/team/labels'),
+  createLabel: (name: string) => apiFetch<{ data: Label }>('/team/labels', { method: 'POST', body: JSON.stringify({ name }) }),
 }
 
 export const analytics = {
@@ -334,14 +378,20 @@ export interface Faq { id: string; question: string; answer: string; tags: strin
 export interface KnowledgeSource { id: string; name: string; kind: string; config: Record<string, unknown>; lastSyncAt?: string; documents: Array<{ id: string; status: string }> }
 export interface LlmConfig { model: string; temperature: number; maxTokens: number; systemPrompt: string }
 export interface Conversation { id: string; status: string; assignedTo?: string; contact?: Contact; channel?: { id: string; name: string; kind: string }; messages: Message[]; labels: Array<{ label: Label }>; updatedAt: string; sla?: string | null }
-export interface Message { id: string; direction: string; authorKind: string; content: { text: string }; createdAt: string }
-export interface Ticket { id: string; subject: string; status: string; priority: string; assignedTo?: string; tags: string[]; createdAt: string; conversation?: { contact?: Contact } }
+export interface Message { id: string; direction: string; authorKind: string; content: { text: string; internal?: boolean }; createdAt: string }
+export interface Ticket { id: string; subject: string; description?: string | null; status: string; priority: string; assignedTo?: string; tags: string[]; createdAt: string; conversation?: { contact?: Contact } }
 export interface Contact { id: string; displayName?: string; email?: string; phone?: string; metadata: Record<string, unknown>; createdAt: string }
 export interface Campaign { id: string; name: string; channel: string; status: string; direction: string; subject?: string; body?: string; scheduledAt?: string; sentAt?: string; sent?: number; delivered?: number }
 export interface CampaignDelivery { id: string; contactId: string; email?: string; status: string; sentAt?: string; error?: string }
 export interface Template { id: string; name: string; channel: string; approvalStatus: string; content: Record<string, unknown>; variables: string[] }
 export interface Channel { id: string; name: string; kind: string; config: Record<string, unknown>; isActive: boolean; botId: string; createdAt: string }
-export interface Webhook { id: string; url: string; events: string[]; isActive: boolean; createdAt: string }
+export interface Webhook { id: string; url: string; events: string[]; isActive: boolean; createdAt: string; successRate?: number | null; secret?: string | null }
+export interface WebhookDelivery { id: string; event: string; statusCode: number; success: boolean; durationMs: number; error?: string | null; createdAt: string }
+export interface CannedReply { id: string; shortcut: string; title: string; text: string }
+export interface SavedReport { id: string; name: string; type: string; format: string; frequency: string; status: string; recipients: string[]; lastRunAt: string | null; createdAt: string }
+export interface DataColumn { name: string; type: string; nullable?: boolean }
+export interface DataTable { id: string; name: string; columns: DataColumn[]; rows: number; updatedAt: string }
+export interface IntegrationConnection { id: string; name: string; description: string; category: string; status: 'connected' | 'available' | 'coming_soon'; connectedAt?: string | null; hasKey?: boolean }
 export interface Label { id: string; name: string; color: string }
 export interface TeamMember { id: string; displayName: string; email: string; memberships: Array<{ role: string }>; agentProfile?: { status: string } }
 export interface AnalyticsOverview { totalConversations: number; resolvedConversations: number; resolutionRate: number; escalationRate: number; totalContacts: number; csatScore: number; avgResponseTimeMs: number | null; botHandledPct: number }
