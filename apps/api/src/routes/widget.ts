@@ -410,7 +410,9 @@ export async function widgetRoutes(app: FastifyInstance) {
     }
 
     if (!conversationId) {
-      const env = await prisma.environment.findFirst({ where: { botId } })
+      const env = channel.environmentId
+        ? await prisma.environment.findFirst({ where: { id: channel.environmentId, botId } })
+        : await prisma.environment.findFirst({ where: { botId }, orderBy: { createdAt: 'asc' } })
       if (env) {
         // Upsert an anonymous contact keyed by sessionId
         const sessionId = body.sessionId ?? `anon_${Date.now()}`
@@ -424,10 +426,18 @@ export async function widgetRoutes(app: FastifyInstance) {
           // Upgrade "Visitor" to the real name once the user provides it
           await prisma.contact.update({ where: { id: contact.id }, data: { displayName } })
         }
-        const convo = await prisma.conversation.create({
-          data: { tenantId, botId, environmentId: env.id, channelId, contactId: contact.id, status: 'active' },
+        const open = await prisma.conversation.findFirst({
+          where: { tenantId, channelId, contactId: contact.id, status: 'active' },
+          orderBy: { updatedAt: 'desc' },
         })
-        conversationId = convo.id
+        if (open) {
+          conversationId = open.id
+        } else {
+          const convo = await prisma.conversation.create({
+            data: { tenantId, botId, environmentId: env.id, channelId, contactId: contact.id, status: 'active' },
+          })
+          conversationId = convo.id
+        }
       }
     }
 
@@ -460,19 +470,9 @@ export async function widgetRoutes(app: FastifyInstance) {
     // Emit conversationId first so client can persist it
     if (conversationId) send({ conversationId })
 
-    // One away reply per conversation when the message arrives outside working hours.
+    // Working hours start the SLA clock. They do not replace the bot's answer.
     if (conversationId) {
-      const away = await onInboundCustomerMessage({ conversationId, botId }).catch(() => null)
-      if (away) {
-        send({ chunk: away })
-        await prisma.message.create({
-          data: { tenantId, conversationId, direction: 'outbound', authorKind: 'bot', content: { text: away } },
-        }).catch(() => {})
-        await onOutboundReply(conversationId).catch(() => {})
-        send({ done: true })
-        reply.raw.end()
-        return
-      }
+      await onInboundCustomerMessage({ conversationId, botId }).catch(() => null)
     }
 
     // ── Try published flow first ──────────────────────────────────────────

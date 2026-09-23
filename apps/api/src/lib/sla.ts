@@ -6,7 +6,8 @@
  *
  * First response is met by the first outbound reply (bot, agent, or the away message).
  * Resolution is met when the conversation is resolved or closed before resolutionDueAt.
- * Outside working hours, the first inbound message of a conversation gets one away reply.
+ * Outside working hours the SLA clock still starts. The bot keeps answering;
+ * the away sentence is for a human handover, not a substitute for the bot.
  */
 
 import { prisma } from '@ybot/db'
@@ -105,7 +106,7 @@ export function slaLabel(input: {
   return formatRemaining(target.getTime() - input.now.getTime())
 }
 
-/** Start clocks on the first inbound message. Returns an away reply the caller must send, once. */
+/** Start clocks on the first inbound message. The away string is optional for a human notice. Bot routes ignore it and keep answering. */
 export async function onInboundCustomerMessage(opts: {
   conversationId: string
   botId: string
