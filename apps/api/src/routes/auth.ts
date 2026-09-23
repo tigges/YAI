@@ -97,52 +97,52 @@ export async function authRoutes(app: FastifyInstance) {
 
     const passwordHash = await bcrypt.hash(body.data.password, 10)
 
-    // Create tenant + user in one transaction.
-    const tenant = await prisma.tenant.create({
-      data: {
-        name: body.data.tenantName,
-        slug: body.data.tenantSlug,
-        users: {
-          create: {
+    // Membership cannot be nested with an empty tenant id: that value is a
+    // foreign key and the database rejects it. Create the rows in order.
+    let tenant: { id: string }
+    let user: { id: string; email: string; displayName: string; avatarUrl: string | null }
+    try {
+      const created = await prisma.$transaction(async (tx) => {
+        const nextTenant = await tx.tenant.create({
+          data: {
+            name: body.data.tenantName,
+            slug: body.data.tenantSlug,
+          },
+        })
+        const nextUser = await tx.user.create({
+          data: {
+            tenantId: nextTenant.id,
             email: body.data.email,
             displayName: body.data.displayName,
             passwordHash,
-            // Membership tenantId is a placeholder — updated below after the
-            // tenant ID is known (Prisma's nested create can't self-reference).
-            memberships: {
-              create: { role: 'ADMIN', tenantId: '' },
+          },
+        })
+        await tx.membership.create({
+          data: { tenantId: nextTenant.id, userId: nextUser.id, role: 'ADMIN' },
+        })
+        await tx.bot.create({
+          data: {
+            tenantId: nextTenant.id,
+            name: `${body.data.tenantName} Bot`,
+            environments: {
+              create: [
+                { tenantId: nextTenant.id, kind: 'sandbox', name: 'Sandbox' },
+                { tenantId: nextTenant.id, kind: 'production', name: 'Production' },
+              ],
+            },
+            config: {
+              create: { tenantId: nextTenant.id },
             },
           },
-        },
-      },
-      include: { users: { include: { memberships: true } } },
-    })
-
-    const user = tenant.users[0]!
-
-    // Fix the membership tenantId now that we have the real tenant ID.
-    await prisma.membership.updateMany({
-      where: { userId: user.id },
-      data: { tenantId: tenant.id },
-    })
-
-    // Seed the default bot + two environments + default BotConfig.
-    const bot = await prisma.bot.create({
-      data: {
-        tenantId: tenant.id,
-        name: `${body.data.tenantName} Bot`,
-        environments: {
-          create: [
-            { tenantId: tenant.id, kind: 'sandbox', name: 'Sandbox' },
-            { tenantId: tenant.id, kind: 'production', name: 'Production' },
-          ],
-        },
-      },
-    })
-
-    await prisma.botConfig.create({
-      data: { tenantId: tenant.id, botId: bot.id },
-    })
+        })
+        return { tenant: nextTenant, user: nextUser }
+      })
+      tenant = created.tenant
+      user = created.user
+    } catch (err) {
+      request.log.error({ err }, 'register failed')
+      return reply.status(500).send({ error: { code: 'REGISTER_FAILED', message: 'Could not create this workspace. Please try again.' } })
+    }
 
     const token = app.jwt.sign({ sub: user.id, tenantId: tenant.id, role: 'ADMIN' }, { expiresIn: '7d' })
 

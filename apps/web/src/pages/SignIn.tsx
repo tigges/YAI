@@ -154,7 +154,7 @@ export function SignInPage() {
                   placeholder="acme-corp"
                   value={form.tenantSlug}
                   onChange={(e) => update('tenantSlug', e.target.value)}
-                  hint="ybot.ai/acme-corp"
+                  hint="Letters, numbers, and hyphens"
                   required
                 />
               </>
