@@ -1,0 +1,114 @@
+import React, { useEffect } from 'react'
+import { useRouterState } from '@tanstack/react-router'
+import { HELP_TOPICS } from './help-topics'
+
+function shot(file: string) {
+  const base = import.meta.env.BASE_URL ?? '/'
+  return `${base.endsWith('/') ? base : `${base}/`}help/${file}`
+}
+
+function Figure({ file, alt }: { file: string; alt: string }) {
+  return (
+    <img
+      src={shot(file)}
+      alt={alt}
+      className="mt-3 w-full rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--bg-surface)]"
+    />
+  )
+}
+
+export function HelpPage() {
+  const hash = useRouterState({ select: (state) => state.location.hash })
+
+  useEffect(() => {
+    const id = (hash || window.location.hash).replace(/^#/, '')
+    const node = id ? document.getElementById(id) : null
+    const scroller = node?.closest('main')
+    if (!node || !(scroller instanceof HTMLElement)) return
+    const go = () => {
+      const top = node.getBoundingClientRect().top - scroller.getBoundingClientRect().top + scroller.scrollTop - 16
+      scroller.scrollTo({ top })
+    }
+    go()
+    const images = [...scroller.querySelectorAll('img')]
+    for (const img of images) {
+      if (!img.complete) img.addEventListener('load', go, { once: true })
+    }
+    return () => {
+      for (const img of images) img.removeEventListener('load', go)
+    }
+  }, [hash])
+
+  return (
+    <div className="mx-auto flex w-full max-w-5xl gap-8 p-6">
+      <nav className="sticky top-6 hidden h-fit w-44 shrink-0 md:block">
+        <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]">Help</p>
+        <div className="flex flex-col gap-1">
+          {HELP_TOPICS.map((topic) => (
+            <a
+              key={topic.id}
+              href={`#${topic.id}`}
+              className="rounded px-2 py-1.5 text-sm text-[var(--text-secondary)] hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]"
+            >
+              {topic.label}
+            </a>
+          ))}
+        </div>
+      </nav>
+
+      <article className="min-w-0 flex-1 space-y-10 pb-16">
+        <header>
+          <h1 className="text-xl font-semibold text-[var(--text-primary)]">Help</h1>
+          <p className="mt-1 text-sm text-[var(--text-secondary)]">
+            The pictures are the same screens the live checks open: overview, flows, the canvas, the inbox, and integrations.
+          </p>
+        </header>
+
+        <section id="start" className="scroll-mt-6 space-y-2">
+          <h2 className="text-base font-semibold text-[var(--text-primary)]">Getting started</h2>
+          <p className="text-sm leading-relaxed text-[var(--text-secondary)]">
+            Sign in, pick a bot in the top bar, then choose Sandbox or Production. Sandbox is where you try a flow. Production is what the website widget uses after you publish. Acme and Bella are the demos you can click through. New records you create for practice belong in QA Lab.
+          </p>
+          <Figure file="overview.jpg" alt="Overview dashboard" />
+        </section>
+
+        <section id="widget" className="scroll-mt-6 space-y-2">
+          <h2 className="text-base font-semibold text-[var(--text-primary)]">Widget to inbox</h2>
+          <p className="text-sm leading-relaxed text-[var(--text-secondary)]">
+            A visitor message on the website widget is answered by the published flow. Working hours start the queue clock for people. They do not replace the bot. The same chat then shows in Inbox and on the overview.
+          </p>
+          <Figure file="widget.jpg" alt="Website widget on the Bella demo page" />
+          <Figure file="inbox.jpg" alt="Inbox chats" />
+        </section>
+
+        <section id="flows" className="scroll-mt-6 space-y-2">
+          <h2 className="text-base font-semibold text-[var(--text-primary)]">Flows</h2>
+          <p className="text-sm leading-relaxed text-[var(--text-secondary)]">
+            Open a flow from the list. Fold the node list to make room for the canvas. Tidy stacks each step from top to bottom. Row and column line the nodes up. Test Bot puts the cursor in the chat box. After a publish succeeds, you return to this list.
+          </p>
+          <p className="text-sm leading-relaxed text-[var(--text-secondary)]">
+            Rename and delete live on this list, next to each flow. Delete asks you to confirm. You can also rename the flow you have open by clicking its name on the canvas.
+          </p>
+          <Figure file="flows.jpg" alt="Flows list" />
+          <Figure file="canvas.jpg" alt="Flow canvas with the node list folded" />
+        </section>
+
+        <section id="inbox" className="scroll-mt-6 space-y-2">
+          <h2 className="text-base font-semibold text-[var(--text-primary)]">Inbox</h2>
+          <p className="text-sm leading-relaxed text-[var(--text-secondary)]">
+            Chats are the conversations. Tickets can be opened from a chat or on their own. Contacts can be imported, exported, and turned into a conversation. Assign and transfer use a teammate, and an internal note stays off the customer widget.
+          </p>
+          <Figure file="inbox.jpg" alt="Inbox chats" />
+        </section>
+
+        <section id="planned" className="scroll-mt-6 space-y-2">
+          <h2 className="text-base font-semibold text-[var(--text-primary)]">Planned features</h2>
+          <p className="text-sm leading-relaxed text-[var(--text-secondary)]">
+            A Planned badge means that control will become a real feature. Stripe on Integrations is the one still marked Planned. Billing, single sign-on, and live SMS, email, and WhatsApp connections are not in the product yet.
+          </p>
+          <Figure file="integrations.jpg" alt="Integrations page with Stripe marked Planned" />
+        </section>
+      </article>
+    </div>
+  )
+}

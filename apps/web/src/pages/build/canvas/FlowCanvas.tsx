@@ -136,7 +136,7 @@ function FitAfterLayout({ tick }: { tick: number }) {
   return null
 }
 
-import { useFlows, useSaveCanvas, useFlowCanvas, usePublishFlow } from '../../../lib/hooks'
+import { useFlows, useSaveCanvas, useFlowCanvas, usePublishFlow, useUpdateFlow } from '../../../lib/hooks'
 import { useAppStore } from '../../../store/app'
 
 export function FlowCanvasPage() {
@@ -146,6 +146,9 @@ export function FlowCanvasPage() {
   const selectedEnv = useAppStore((s) => s.selectedEnv)
   const environmentId = useAppStore((s) => s.bots.find((b) => b.id === s.selectedBotId)?.environments.find((e) => e.kind === s.selectedEnv)?.id ?? '')
   const publishFlow = usePublishFlow()
+  const updateFlow = useUpdateFlow()
+  const [editingName, setEditingName] = useState(false)
+  const [nameDraft, setNameDraft] = useState('')
   const historyPast = useRef<Array<{ nodes: Node[]; edges: Edge[] }>>([])
   const historyFuture = useRef<Array<{ nodes: Node[]; edges: Edge[] }>>([])
   const applyingHistory = useRef(false)
@@ -282,6 +285,15 @@ export function FlowCanvasPage() {
     setEdges((es) => es.filter((e) => e.source !== nodeId && e.target !== nodeId))
   }
 
+  async function commitName() {
+    const next = nameDraft.trim()
+    setEditingName(false)
+    if (!flowId || !next || next === flow?.name) return
+    try {
+      await updateFlow.mutateAsync({ flowId, name: next })
+    } catch { /* keep the previous name when the save does not land */ }
+  }
+
   async function handleSave() {
     setSaving(true)
     try {
@@ -329,7 +341,30 @@ export function FlowCanvasPage() {
           </Button>
           <div className="h-4 w-px bg-[var(--border)]" />
           <div>
-            <p className="text-sm font-semibold text-[var(--text-primary)]">{flow?.name ?? 'Flow'}</p>
+            {editingName ? (
+              <input
+                autoFocus
+                aria-label="Flow name"
+                value={nameDraft}
+                onChange={(e) => setNameDraft(e.target.value)}
+                onBlur={() => void commitName()}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') void commitName()
+                  if (e.key === 'Escape') setEditingName(false)
+                }}
+                className="w-48 rounded border border-[var(--border)] bg-[var(--bg-overlay)] px-2 py-0.5 text-sm font-semibold text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--accent)]/40"
+              />
+            ) : (
+              <button
+                type="button"
+                title="Rename flow"
+                aria-label="Rename flow"
+                className="text-left text-sm font-semibold text-[var(--text-primary)] hover:text-[var(--accent)]"
+                onClick={() => { setNameDraft(flow?.name ?? ''); setEditingName(true) }}
+              >
+                {flow?.name ?? 'Flow'}
+              </button>
+            )}
             <p className="text-xs text-[var(--text-muted)]">{canvasVersion > 0 ? `v${canvasVersion}` : 'Loading…'}</p>
           </div>
           <Badge
