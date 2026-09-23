@@ -64,6 +64,10 @@ export const bots = {
     apiFetch<{ data: BotSummary }>('/bots', { method: 'POST', body: JSON.stringify({ name, description }) }),
   update: (id: string, body: Partial<{ name: string; personaName: string | null; description: string | null; avatarUrl: string | null }>) =>
     apiFetch<{ data: BotSummary }>(`/bots/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
+  renameEnvironment: (botId: string, environmentId: string, name: string) =>
+    apiFetch<{ data: { id: string; name: string; kind: string } }>(`/bots/${botId}/environments/${environmentId}`, { method: 'PATCH', body: JSON.stringify({ name }) }),
+  deleteEnvironment: (botId: string, environmentId: string) =>
+    apiFetch<void>(`/bots/${botId}/environments/${environmentId}`, { method: 'DELETE' }),
 }
 
 // ── Flows ─────────────────────────────────────────────────────────────────────

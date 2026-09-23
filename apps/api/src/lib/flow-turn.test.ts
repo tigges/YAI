@@ -39,6 +39,27 @@ const welcome: FlowGraph = {
   ],
 }
 
+test('an unknown contact name is addressed as there', async () => {
+  const machine = new SessionMachine(services)
+  const named: FlowGraph = {
+    nodes: [
+      { id: 'start', data: { kind: 'trigger_start', label: 'Start', config: {} } },
+      { id: 'hi', data: { kind: 'send_message', label: 'Welcome', config: { text: 'Hi {{contact.name}}! Welcome to Bella Hair Studio.' } } },
+      { id: 'end', data: { kind: 'end_flow', label: 'End', config: {} } },
+    ],
+    edges: [
+      { id: 'e1', source: 'start', target: 'hi' },
+      { id: 'e2', source: 'hi', target: 'end' },
+    ],
+  }
+  const fresh = session('start')
+  fresh.variables.contact = {}
+  const result = await runFlowTurn(machine, fresh, named, 'start', 'hi')
+  const text = result.newMessages.map((message) => message.content.text).join('\n')
+  assert.match(text, /Hi there!/)
+  assert.doesNotMatch(text, /\{\{contact\.name\}\}/)
+})
+
 test('a stuck follow-up starts the welcome flow again', async () => {
   const machine = new SessionMachine(services)
   const waiting = session('ask', 'waiting_input')

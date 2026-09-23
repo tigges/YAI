@@ -6,9 +6,13 @@ import { useAppStore } from '../store/app'
 import { apiFetch } from '../lib/api'
 import type { Bot } from '../store/app'
 
+function savedDarkMode(): boolean {
+  try { return localStorage.getItem('ybot-theme') === 'dark' } catch { return false }
+}
+
 export function AppShell() {
   const [collapsed, setCollapsed] = useState(false)
-  const [darkMode, setDarkMode] = useState(true)
+  const [darkMode, setDarkMode] = useState(savedDarkMode)
   const navigate = useNavigate()
   const { bots, setBots, setBotsLoading, clearAuth } = useAppStore()
 
@@ -33,6 +37,7 @@ export function AppShell() {
 
   React.useEffect(() => {
     document.documentElement.classList.toggle('light', !darkMode)
+    try { localStorage.setItem('ybot-theme', darkMode ? 'dark' : 'light') } catch { /* private mode */ }
   }, [darkMode])
 
   return (

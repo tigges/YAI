@@ -1,16 +1,29 @@
-// Lightweight variable interpolation: "Hello {{contact.name}}" → "Hello Alice"
+const UNKNOWN_NAME = /^(visitor|guest|there)$/i
+
+function lookup(variables: Record<string, unknown>, path: string): unknown {
+  const keys = path.trim().split('.')
+  let val: unknown = variables
+  for (const key of keys) {
+    if (val && typeof val === 'object' && key in (val as Record<string, unknown>)) {
+      val = (val as Record<string, unknown>)[key]
+    } else {
+      return undefined
+    }
+  }
+  return val
+}
+
+// Lightweight variable interpolation: "Hello {{contact.name}}" → "Hello Alice".
+// A missing name is "there", so a greeting never shows the raw placeholder.
 export function interpolate(template: string, variables: Record<string, unknown>): string {
   return template.replace(/\{\{([^}]+)\}\}/g, (_, path: string) => {
-    const keys = path.trim().split('.')
-    let val: unknown = variables
-    for (const k of keys) {
-      if (val && typeof val === 'object') {
-        val = (val as Record<string, unknown>)[k]
-      } else {
-        return `{{${path}}}`
-      }
+    const trimmed = path.trim()
+    const val = lookup(variables, trimmed)
+    if (trimmed === 'contact.name') {
+      const name = typeof val === 'string' ? val.trim() : ''
+      return name && !UNKNOWN_NAME.test(name) ? name : 'there'
     }
-    return val !== undefined && val !== null ? String(val) : `{{${path}}}`
+    return val !== undefined && val !== null && val !== '' ? String(val) : `{{${path}}}`
   })
 }
 
