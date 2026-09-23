@@ -31,7 +31,8 @@
         reverse_proxy ybot-minio:9001
     }
 
-    # SPA fallback — everything else served by the web container
+    # Web container. nginx serves the landing page when the host is
+    # botstudio.uk, and the console for app.botstudio.uk. Pass the Host header.
     handle {
         reverse_proxy ybot-web:80
     }

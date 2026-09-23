@@ -36,9 +36,12 @@ export default defineConfig({
   },
   build: {
     rollupOptions: {
+      input: {
+        main: resolve(__dirname, 'index.html'),
+        landing: resolve(__dirname, 'landing.html'),
+      },
       output: {
         manualChunks: {
-          'vendor-react':   ['react', 'react-dom'],
           'vendor-router':  ['@tanstack/react-router'],
           'vendor-query':   ['@tanstack/react-query'],
           'vendor-charts':  ['recharts'],
