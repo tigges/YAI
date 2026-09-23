@@ -35,9 +35,58 @@ interface TopBarProps {
   onToggleDark: () => void
 }
 
+function envRank(kind: string): number {
+  if (kind === 'sandbox') return 0
+  if (kind === 'production') return 1
+  return 2
+}
+
+function EnvSwitcher() {
+  const { bots, selectedBotId, selectedEnv, setEnv } = useAppStore()
+  const selectedBot = bots.find((b) => b.id === selectedBotId)
+  const environments = [...(selectedBot?.environments ?? [])]
+    .filter((env) => env.kind === 'sandbox' || env.kind === 'production')
+    .sort((a, b) => envRank(a.kind) - envRank(b.kind))
+
+  React.useEffect(() => {
+    if (!selectedBot) return
+    const available = selectedBot.environments.filter((env) => env.kind === 'sandbox' || env.kind === 'production')
+    if (available.some((env) => env.kind === selectedEnv)) return
+    const fallback = [...available].sort((a, b) => envRank(a.kind) - envRank(b.kind))[0]
+    if (fallback) setEnv(fallback.kind as 'sandbox' | 'production')
+  }, [selectedBot, selectedEnv, setEnv])
+
+  if (environments.length === 0) return null
+
+  return (
+    <div className="flex items-center gap-1 rounded-[var(--radius)] bg-[var(--bg-overlay)] p-0.5 border border-[var(--border)]">
+      {environments.map((env) => {
+        const active = selectedEnv === env.kind
+        const sandbox = env.kind === 'sandbox'
+        return (
+          <button
+            key={env.id}
+            onClick={() => setEnv(env.kind as 'sandbox' | 'production')}
+            className={`flex items-center gap-1.5 rounded px-2.5 py-1 text-xs font-medium transition-colors ${
+              active
+                ? sandbox
+                  ? 'bg-[var(--warning-muted)] text-[var(--warning)]'
+                  : 'bg-[var(--success-muted)] text-[var(--success)]'
+                : 'text-[var(--text-muted)] hover:text-[var(--text-secondary)]'
+            }`}
+          >
+            {sandbox ? <Beaker size={12} /> : <Rocket size={12} />}
+            {env.name}
+          </button>
+        )
+      })}
+    </div>
+  )
+}
+
 export function TopBar({ darkMode, onToggleDark }: TopBarProps) {
   const navigate = useNavigate()
-  const { user, bots, botsLoading, selectedBotId, selectedEnv, selectBot, setEnv, clearAuth } = useAppStore()
+  const { user, bots, botsLoading, selectedBotId, selectBot, clearAuth } = useAppStore()
   const { data: agentStatus = 'offline' } = useAgentStatus()
   const updateStatus = useUpdateAgentStatus()
 
@@ -108,31 +157,7 @@ export function TopBar({ darkMode, onToggleDark }: TopBarProps) {
           </DropdownMenuContent>
         </DropdownMenu>
 
-        {/* Env switcher */}
-        <div className="flex items-center gap-1 rounded-[var(--radius)] bg-[var(--bg-overlay)] p-0.5 border border-[var(--border)]">
-          <button
-            onClick={() => setEnv('sandbox')}
-            className={`flex items-center gap-1.5 rounded px-2.5 py-1 text-xs font-medium transition-colors ${
-              selectedEnv === 'sandbox'
-                ? 'bg-[var(--warning-muted)] text-[var(--warning)]'
-                : 'text-[var(--text-muted)] hover:text-[var(--text-secondary)]'
-            }`}
-          >
-            <Beaker size={12} />
-            Sandbox
-          </button>
-          <button
-            onClick={() => setEnv('production')}
-            className={`flex items-center gap-1.5 rounded px-2.5 py-1 text-xs font-medium transition-colors ${
-              selectedEnv === 'production'
-                ? 'bg-[var(--success-muted)] text-[var(--success)]'
-                : 'text-[var(--text-muted)] hover:text-[var(--text-secondary)]'
-            }`}
-          >
-            <Rocket size={12} />
-            Production
-          </button>
-        </div>
+        <EnvSwitcher />
       </div>
 
       {/* Right: theme + user */}

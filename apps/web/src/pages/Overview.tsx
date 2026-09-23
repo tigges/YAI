@@ -74,7 +74,7 @@ export function OverviewPage() {
           <div>
             <h1 className="text-lg font-semibold text-[var(--text-primary)]">Overview</h1>
             <p className="text-sm text-[var(--text-muted)] mt-0.5">
-              {selectedBot?.name ?? 'All bots'} · {selectedEnv === 'sandbox' ? 'Sandbox' : 'Production'}
+              {selectedBot?.name ?? 'All bots'} · {selectedBot?.environments.find((env) => env.kind === selectedEnv)?.name ?? (selectedEnv === 'sandbox' ? 'Sandbox' : 'Production')}
             </p>
           </div>
           <Badge variant="muted">Last 7 days</Badge>

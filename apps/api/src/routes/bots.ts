@@ -78,4 +78,47 @@ export async function botsRoutes(app: FastifyInstance) {
     })
     return { data: updated }
   })
+
+  app.patch('/:botId/environments/:environmentId', { preHandler: canBuild }, async (request, reply) => {
+    const { tenantId } = request.user as JwtPayload
+    const { botId, environmentId } = request.params as { botId: string; environmentId: string }
+    const body = request.body as { name?: string }
+    const name = (body.name ?? '').trim()
+    if (!name || name.length > 40) {
+      return reply.status(400).send({ error: { code: 'INVALID_NAME', message: 'Enter a name up to 40 characters.' } })
+    }
+
+    const env = await prisma.environment.findFirst({ where: { id: environmentId, botId, tenantId } })
+    if (!env) return reply.status(404).send({ error: { code: 'NOT_FOUND', message: 'Environment not found' } })
+
+    const updated = await prisma.environment.update({ where: { id: env.id }, data: { name } })
+    return { data: updated }
+  })
+
+  app.delete('/:botId/environments/:environmentId', { preHandler: canBuild }, async (request, reply) => {
+    const { tenantId } = request.user as JwtPayload
+    const { botId, environmentId } = request.params as { botId: string; environmentId: string }
+
+    const env = await prisma.environment.findFirst({ where: { id: environmentId, botId, tenantId } })
+    if (!env) return reply.status(404).send({ error: { code: 'NOT_FOUND', message: 'Environment not found' } })
+
+    const remaining = await prisma.environment.count({ where: { botId, tenantId } })
+    if (remaining <= 1) {
+      return reply.status(409).send({ error: { code: 'LAST_ENVIRONMENT', message: 'A bot needs at least one environment.' } })
+    }
+
+    const [channels, conversations, flows] = await Promise.all([
+      prisma.channel.count({ where: { environmentId: env.id } }),
+      prisma.conversation.count({ where: { environmentId: env.id } }),
+      prisma.flowVersion.count({ where: { environmentId: env.id } }),
+    ])
+    if (channels + conversations + flows > 0) {
+      return reply.status(409).send({
+        error: { code: 'ENVIRONMENT_IN_USE', message: 'This environment still has a channel, conversation, or published flow.' },
+      })
+    }
+
+    await prisma.environment.delete({ where: { id: env.id } })
+    return reply.status(204).send()
+  })
 }
