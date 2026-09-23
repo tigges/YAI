@@ -119,6 +119,7 @@ const EDGE_STYLE = {
 }
 
 import { useFlows, useSaveCanvas, useFlowCanvas } from '../../../lib/hooks'
+import { PlannedBadge } from '../../../components/PlannedFeature'
 import { useAppStore } from '../../../store/app'
 
 export function FlowCanvasPage() {
@@ -260,8 +261,9 @@ export function FlowCanvasPage() {
         </div>
 
         <div className="flex items-center gap-2">
-          <Button variant="ghost" size="icon-sm" title="Undo"><Undo2 size={14} /></Button>
-          <Button variant="ghost" size="icon-sm" title="Redo"><Redo2 size={14} /></Button>
+          <Button variant="ghost" size="icon-sm" title="Undo. This will become a real feature."><Undo2 size={14} /></Button>
+          <Button variant="ghost" size="icon-sm" title="Redo. This will become a real feature."><Redo2 size={14} /></Button>
+          <PlannedBadge />
           <div className="h-4 w-px bg-[var(--border)]" />
           <Button variant="ghost" size="sm" onClick={handleSave} disabled={saving}>
             <Save size={13} /> {saving ? 'Saving…' : 'Save'}
@@ -273,9 +275,10 @@ export function FlowCanvasPage() {
           >
             <Play size={13} /> {showTestPanel ? 'Hide Test' : 'Test Bot'}
           </Button>
-          <Button size="sm" onClick={handlePublish} disabled={saving}>
+          <Button size="sm" onClick={handlePublish} disabled={saving} title="This will become a real feature.">
             <Share2 size={13} /> Publish
           </Button>
+          <PlannedBadge />
         </div>
       </div>
 

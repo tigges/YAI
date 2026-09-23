@@ -11,6 +11,7 @@ import {
   Bot, Zap, Sparkles,
 } from 'lucide-react'
 import { cn } from '@ybot/ui'
+import { PlannedBadge } from '../components/PlannedFeature'
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 
@@ -283,7 +284,7 @@ function BotIdentityTab() {
             <User size={14} className="text-[var(--success)]" />
           </div>
           <div>
-            <h3 className="text-sm font-semibold text-[var(--text-primary)]">Human agent aliases</h3>
+            <h3 className="text-sm font-semibold text-[var(--text-primary)] flex items-center gap-2">Human agent aliases <PlannedBadge /></h3>
             <p className="text-xs text-[var(--text-muted)] mt-0.5">
               Each agent's <strong>display name</strong> in their profile is shown to customers when they handle a conversation.
               Use culturally relevant first names — e.g. <em>Sofia</em> for Spanish-speaking markets,
@@ -431,8 +432,9 @@ export function SettingsPage() {
                 <Input label="Display name" value={displayName} onChange={(e) => setDisplayName(e.target.value)} />
                 <Input label="Email" value={user?.email ?? ''} disabled />
               </div>
-              <div className="mt-4 flex justify-end">
-                <Button size="md" onClick={handleSave}>{saved ? 'Saved!' : 'Save changes'}</Button>
+              <div className="mt-4 flex items-center justify-end gap-2">
+                <PlannedBadge />
+                <Button size="md" onClick={handleSave} title="This will become a real feature.">{saved ? 'Saved!' : 'Save changes'}</Button>
               </div>
             </Card>
           </div>

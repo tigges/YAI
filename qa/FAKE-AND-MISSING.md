@@ -1,6 +1,6 @@
 # Fake and missing pieces
 
-The night suite saves only where a real API exists. These screens look finished and are not.
+The night suite saves only where a real API exists. Each preview below is marked Planned in the product. The mark means that piece will become a real feature.
 
 ## Local only
 
@@ -16,7 +16,11 @@ The night suite saves only where a real API exists. These screens look finished 
 - **Contact menu.** "Start conversation" and "Create ticket" do nothing. Import and export do nothing.
 - **Publish on the canvas.** Save writes the graph. The Publish button only changes the badge in the browser. Publishing for real is a separate API.
 - **Run training.** The button saves the model, temperature, and prompt. It does not train a model.
-- **Empty-state samples.** If the API returns no tickets, audit events, intents, FAQs, or entities, the page shows built-in sample rows.
+- **Empty-state samples.** If the API returns no tickets or audit events, the page shows built-in sample rows.
+- **Profile name.** Settings → Profile “Save changes” only flashes Saved. The name is not stored.
+- **Agent alias preview.** The alias box on Bot Identity does not save.
+- **FAQ and entity Save.** Those Save buttons only flash Saved. The text stays in the browser.
+- **Webhook test and signing secret.** Test in the add dialog reports a fake 200. The signing secret field is not sent. Success rate on the list is not counted from deliveries.
 
 ## Fixed with this suite
 

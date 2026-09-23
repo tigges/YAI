@@ -38,6 +38,9 @@ test('every screen opens', { tag: '@smoke' }, async ({ page }) => {
     await page.goto(path)
     await expect(page).toHaveURL(new RegExp(path.replaceAll('/', '\\/')))
     await expectNoCrash(page)
+    if (['/overview', '/analytics/reports', '/configure/database', '/configure/integrations', '/configure/webhooks', '/build/knowledge/training', '/inbox/tickets', '/inbox/contacts', '/settings'].includes(path)) {
+      await expect(page.getByText('Planned').first()).toBeVisible()
+    }
   }
   await page.goto('/analytics/reports')
   await expect(page.getByText('Weekly conversation summary')).toBeVisible()

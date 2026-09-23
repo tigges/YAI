@@ -4,6 +4,7 @@ import { Button, Input, Badge, EmptyState, Skeleton } from '@ybot/ui'
 import { cn } from '@ybot/ui'
 import { SubNav } from '../../../components/SubNav'
 import { useEntities, useCreateEntity, useDeleteEntity } from '../../../lib/hooks'
+import { PlannedBadge } from '../../../components/PlannedFeature'
 
 const SUBNAV = [
   { label: 'Intents', path: '/build/knowledge/intents' },
@@ -141,9 +142,12 @@ export function EntitiesPage() {
                   <span className="text-xs text-[var(--text-muted)]">{(selected.values ?? []).length} values</span>
                 </div>
               </div>
-              <Button size="sm" onClick={() => setSaved(true)}>
-                {saved ? <><CheckCircle size={13} /> Saved</> : <><Save size={13} /> Save</>}
-              </Button>
+              <div className="flex items-center gap-2">
+                <PlannedBadge />
+                <Button size="sm" onClick={() => setSaved(true)} title="This will become a real feature.">
+                  {saved ? <><CheckCircle size={13} /> Saved</> : <><Save size={13} /> Save</>}
+                </Button>
+              </div>
             </div>
 
             <div className="space-y-3">

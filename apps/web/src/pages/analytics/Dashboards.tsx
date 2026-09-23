@@ -11,6 +11,7 @@ import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuIte
 import { SubNav } from '../../components/SubNav'
 import { cn } from '@ybot/ui'
 import { useDashboards, useCreateDashboard, useDeleteDashboard } from '../../lib/hooks'
+import { PlannedNote } from '../../components/PlannedFeature'
 import type { Dashboard } from '../../lib/api'
 
 const SUBNAV = [
@@ -273,6 +274,10 @@ export function ReportsPage() {
           </Button>
         </div>
         <SubNav items={SUBNAV} />
+      </div>
+
+      <div className="px-6 py-3 border-b border-[var(--border)] bg-[var(--bg-surface)] shrink-0">
+        <PlannedNote>Reports on this page are sample cards. Creating one is not saved.</PlannedNote>
       </div>
 
       {/* Stats */}

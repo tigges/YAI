@@ -8,6 +8,7 @@ import { Badge, Button, Input } from '@ybot/ui'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogBody, DialogFooter } from '@ybot/ui'
 import { SubNav } from '../../components/SubNav'
 import { cn } from '@ybot/ui'
+import { PlannedBadge, PlannedNote } from '../../components/PlannedFeature'
 
 const SUBNAV = [
   { label: 'Channels', path: '/configure/channels' },
@@ -108,6 +109,7 @@ export function IntegrationsPage() {
       </div>
 
       <div className="flex-1 overflow-auto p-6 space-y-8">
+        <PlannedNote>Connect and disconnect stay on this page. None of these integrations are saved yet.</PlannedNote>
         {connected.length > 0 && (
           <section>
             <h2 className="text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wider mb-3 flex items-center gap-2">
@@ -181,7 +183,7 @@ function IntegrationCard({ integration: int, onConnect, onDisconnect }: {
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
             <p className="text-sm font-semibold text-[var(--text-primary)]">{int.name}</p>
-            {int.status === 'coming_soon' && <Badge variant="muted" className="text-[10px]">Soon</Badge>}
+            {int.status === 'coming_soon' && <><Badge variant="muted" className="text-[10px]">Soon</Badge><PlannedBadge /></>}
           </div>
           <p className="text-xs text-[var(--text-muted)] flex items-center gap-1 mt-0.5">
             {CATEGORY_ICONS[int.category]} {int.category}

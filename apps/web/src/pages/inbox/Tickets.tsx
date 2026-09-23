@@ -13,6 +13,7 @@ import {
 } from '@ybot/ui'
 import { SubNav } from '../../components/SubNav'
 import { useTickets, useCreateTicket, useUpdateTicket } from '../../lib/hooks'
+import { PlannedBadge, PlannedNote } from '../../components/PlannedFeature'
 import * as api from '../../lib/api'
 import { cn } from '@ybot/ui'
 
@@ -189,9 +190,10 @@ export function TicketsPage() {
           onChange={(e) => setSearch(e.target.value)}
           className="w-64"
         />
-        <Button variant="ghost" size="sm" className="gap-1.5">
+        <Button variant="ghost" size="sm" className="gap-1.5" title="This will become a real feature.">
           <Filter size={13} /> Filter
         </Button>
+        <PlannedBadge />
         <div className="ml-auto flex items-center gap-2">
           <div className="flex rounded-[var(--radius-md)] border border-[var(--border)] overflow-hidden">
             <button
@@ -212,6 +214,12 @@ export function TicketsPage() {
           </Button>
         </div>
       </div>
+
+      {apiTickets.length === 0 && !isLoading && (
+        <div className="px-6 py-3 border-b border-[var(--border)]">
+          <PlannedNote>These tickets are samples shown because the inbox has none yet.</PlannedNote>
+        </div>
+      )}
 
       {/* Kanban / List body */}
       {view === 'kanban' ? (
@@ -313,20 +321,20 @@ export function TicketsPage() {
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="text-xs font-medium text-[var(--text-muted)] mb-1.5 block">Priority</label>
+                <label className="text-xs font-medium text-[var(--text-muted)] mb-1.5 flex items-center gap-2">Priority <PlannedBadge /></label>
                 <select className="w-full rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--bg-overlay)] px-3 py-2 text-sm text-[var(--text-primary)] focus:outline-none">
                   <option>Normal</option><option>High</option><option>Urgent</option><option>Low</option>
                 </select>
               </div>
               <div>
-                <label className="text-xs font-medium text-[var(--text-muted)] mb-1.5 block">Assign to</label>
+                <label className="text-xs font-medium text-[var(--text-muted)] mb-1.5 flex items-center gap-2">Assign to <PlannedBadge /></label>
                 <select className="w-full rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--bg-overlay)] px-3 py-2 text-sm text-[var(--text-primary)] focus:outline-none">
                   <option>Unassigned</option><option>Sarah K</option><option>Mike R</option><option>Tom B</option>
                 </select>
               </div>
             </div>
             <div>
-              <label className="text-xs font-medium text-[var(--text-muted)] mb-1.5 block">Description</label>
+              <label className="text-xs font-medium text-[var(--text-muted)] mb-1.5 flex items-center gap-2">Description <PlannedBadge /></label>
               <textarea
                 rows={3}
                 className="w-full resize-none rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--bg-overlay)] px-3 py-2 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:ring-2 focus:ring-[var(--accent)]/40"
