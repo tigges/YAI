@@ -3,36 +3,9 @@ import { requireRole } from '../middleware/auth.js'
 import { prisma } from '@ybot/db'
 import { z } from 'zod'
 import { enqueueKnowledgeSync } from '../queues.js'
-import { Buffer } from 'node:buffer'
+import { extractTextFromBuffer } from '../lib/extract-text.js'
 
 type JWT = { sub: string; tenantId: string; role: string }
-
-// ── Text extraction helpers ────────────────────────────────────────────────────
-async function extractTextFromBuffer(buffer: Buffer, mimetype: string, filename: string): Promise<string> {
-  const ext = filename.split('.').pop()?.toLowerCase() ?? ''
-
-  // PDF
-  if (mimetype === 'application/pdf' || ext === 'pdf') {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const pdfParse = (await import('pdf-parse') as any).default ?? (await import('pdf-parse') as any)
-    const result = await (pdfParse as (buf: Buffer) => Promise<{ text: string }>)(buffer)
-    return result.text
-  }
-
-  // DOCX / DOC
-  if (
-    mimetype === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' ||
-    mimetype === 'application/msword' ||
-    ext === 'docx' || ext === 'doc'
-  ) {
-    const mammoth = await import('mammoth')
-    const result = await mammoth.extractRawText({ buffer })
-    return result.value
-  }
-
-  // Plain text / Markdown / CSV
-  return buffer.toString('utf-8')
-}
 
 export async function knowledgeRoutes(app: FastifyInstance) {
   app.addHook('preHandler', app.authenticate)

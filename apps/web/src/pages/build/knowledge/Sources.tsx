@@ -295,7 +295,7 @@ export function SourcesPage() {
               )}
 
               {addError && (
-                <p className="text-xs text-[var(--danger)] bg-[var(--danger)]/10 rounded px-3 py-2">{addError}</p>
+                <p className="text-xs text-[var(--error)] bg-[var(--error-muted)] rounded px-3 py-2">{addError}</p>
               )}
             </div>
           </DialogBody>
