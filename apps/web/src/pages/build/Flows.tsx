@@ -1,9 +1,9 @@
 import React, { useState } from 'react'
-import { Workflow, Plus, Search, MoreVertical, Play, Copy, Trash2 } from 'lucide-react'
+import { Workflow, Plus, Search, Play, Trash2, Pencil } from 'lucide-react'
 import { Button, Input, Badge, Table, THead, TBody, TR, TH, TD, EmptyState, PageHeader, Skeleton, Dialog, DialogContent, DialogHeader, DialogTitle, DialogBody, DialogFooter } from '@ybot/ui'
 import { SubNav } from '../../components/SubNav'
 import { useNavigate } from '@tanstack/react-router'
-import { useFlows, useCreateFlow, useDeleteFlow } from '../../lib/hooks'
+import { useFlows, useCreateFlow, useDeleteFlow, useUpdateFlow } from '../../lib/hooks'
 
 const SUBNAV = [
   { label: 'Flows', path: '/build/flows' },
@@ -16,9 +16,12 @@ export function FlowsPage() {
   const [showNew, setShowNew] = useState(false)
   const [newName, setNewName] = useState('')
   const [newDesc, setNewDesc] = useState('')
+  const [renaming, setRenaming] = useState<{ id: string; name: string; description: string } | null>(null)
+  const [deleting, setDeleting] = useState<{ id: string; name: string } | null>(null)
 
   const { data: flows = [], isLoading } = useFlows()
   const createFlow = useCreateFlow()
+  const updateFlow = useUpdateFlow()
   const deleteFlow = useDeleteFlow()
 
   const filtered = flows.filter((f) => f.name.toLowerCase().includes(query.toLowerCase()))
@@ -38,6 +41,16 @@ export function FlowsPage() {
     const flow = await createFlow.mutateAsync({ name: newName.trim(), description: newDesc.trim() || undefined })
     setShowNew(false); setNewName(''); setNewDesc('')
     navigate({ to: '/build/flows/$flowId', params: { flowId: flow.id } })
+  }
+
+  async function saveRename() {
+    if (!renaming?.name.trim()) return
+    await updateFlow.mutateAsync({
+      flowId: renaming.id,
+      name: renaming.name.trim(),
+      description: renaming.description.trim(),
+    })
+    setRenaming(null)
   }
 
   return (
@@ -108,8 +121,9 @@ export function FlowsPage() {
                     <TD className="text-[var(--text-muted)]">{relativeTime(flow.updatedAt)}</TD>
                     <TD>
                       <div className="flex items-center gap-1 justify-end" onClick={(e) => e.stopPropagation()}>
-                        <Button variant="ghost" size="icon-sm" title="Open canvas"><Play size={12} /></Button>
-                        <Button variant="ghost" size="icon-sm" title="Delete" onClick={() => deleteFlow.mutate(flow.id)}><Trash2 size={12} /></Button>
+                        <Button variant="ghost" size="icon-sm" title="Rename" onClick={() => setRenaming({ id: flow.id, name: flow.name, description: flow.description ?? '' })}><Pencil size={12} /></Button>
+                        <Button variant="ghost" size="icon-sm" title="Open canvas" onClick={() => navigate({ to: '/build/flows/$flowId', params: { flowId: flow.id } })}><Play size={12} /></Button>
+                        <Button variant="ghost" size="icon-sm" title="Delete" onClick={() => setDeleting({ id: flow.id, name: flow.name })}><Trash2 size={12} /></Button>
                       </div>
                     </TD>
                   </TR>
@@ -137,6 +151,49 @@ export function FlowsPage() {
             <Button variant="ghost" onClick={() => setShowNew(false)}>Cancel</Button>
             <Button disabled={!newName.trim() || createFlow.isPending} onClick={handleCreate}>
               {createFlow.isPending ? 'Creating…' : 'Create flow'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!renaming} onOpenChange={(open) => { if (!open) setRenaming(null) }}>
+        <DialogContent size="sm">
+          <DialogHeader><DialogTitle>Rename flow</DialogTitle></DialogHeader>
+          <DialogBody className="space-y-3">
+            <div>
+              <label className="text-xs font-medium text-[var(--text-muted)] mb-1.5 block">Name *</label>
+              <Input autoFocus value={renaming?.name ?? ''} onChange={(e) => setRenaming((current) => current ? { ...current, name: e.target.value } : current)} onKeyDown={(e) => e.key === 'Enter' && void saveRename()} />
+            </div>
+            <div>
+              <label className="text-xs font-medium text-[var(--text-muted)] mb-1.5 block">Description</label>
+              <Input value={renaming?.description ?? ''} onChange={(e) => setRenaming((current) => current ? { ...current, description: e.target.value } : current)} />
+            </div>
+          </DialogBody>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setRenaming(null)}>Cancel</Button>
+            <Button disabled={!renaming?.name.trim() || updateFlow.isPending} onClick={() => void saveRename()}>
+              {updateFlow.isPending ? 'Saving…' : 'Save'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!deleting} onOpenChange={(open) => { if (!open) setDeleting(null) }}>
+        <DialogContent size="sm">
+          <DialogHeader><DialogTitle>Delete flow</DialogTitle></DialogHeader>
+          <DialogBody>
+            <p className="text-sm text-[var(--text-secondary)]">Delete {deleting?.name}? The canvas for this flow is removed.</p>
+          </DialogBody>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setDeleting(null)}>Cancel</Button>
+            <Button
+              disabled={deleteFlow.isPending}
+              onClick={() => {
+                if (!deleting) return
+                deleteFlow.mutate(deleting.id, { onSuccess: () => setDeleting(null) })
+              }}
+            >
+              {deleteFlow.isPending ? 'Deleting…' : 'Delete'}
             </Button>
           </DialogFooter>
         </DialogContent>
