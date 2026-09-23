@@ -25,6 +25,7 @@ import { startWebhookWorker } from './workers/webhook-deliver.js'
 import { startConversationAnalysisWorker } from './workers/conversation-analysis.js'
 import { startCampaignWorker } from './workers/campaign-send.js'
 import { systemRoutes } from './routes/system.js'
+import { cannedRoutes, reportsRoutes, databaseRoutes, integrationsRoutes } from './routes/studio.js'
 import { authMiddleware } from './middleware/auth.js'
 import { wsRoutes, broadcastToTenant } from './ws.js'
 import { initQueues } from './queues.js'
@@ -111,6 +112,10 @@ await app.register(whatsappRoutes, { prefix: '/api/v1' })
 await app.register(optimizationRoutes, { prefix: '/api/v1/bots' })
 await app.register(workflowsRoutes, { prefix: '/api/v1/bots' })
 await app.register(dashboardsRoutes, { prefix: '/api/v1/bots' })
+await app.register(reportsRoutes, { prefix: '/api/v1/bots' })
+await app.register(cannedRoutes, { prefix: '/api/v1/canned-replies' })
+await app.register(databaseRoutes, { prefix: '/api/v1/database' })
+await app.register(integrationsRoutes, { prefix: '/api/v1/integrations' })
 await app.register(systemRoutes, { prefix: '/api/v1/system' })
 
 try {

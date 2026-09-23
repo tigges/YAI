@@ -10,8 +10,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogBody, DialogFoo
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator } from '@ybot/ui'
 import { SubNav } from '../../components/SubNav'
 import { cn } from '@ybot/ui'
-import { useDashboards, useCreateDashboard, useDeleteDashboard } from '../../lib/hooks'
-import { PlannedNote } from '../../components/PlannedFeature'
+import { useDashboards, useCreateDashboard, useDeleteDashboard, useReports, useCreateReport, useRunReport, useDeleteReport } from '../../lib/hooks'
+import { useAppStore } from '../../store/app'
 import type { Dashboard } from '../../lib/api'
 
 const SUBNAV = [
@@ -260,9 +260,47 @@ const FREQ_CFG: Record<ReportFrequency, string> = {
 }
 
 export function ReportsPage() {
-  const [reports] = useState<Report[]>(MOCK_REPORTS)
+  const { data: saved = [] } = useReports()
+  const createReport = useCreateReport()
+  const runReport = useRunReport()
+  const deleteReport = useDeleteReport()
+  const botId = useAppStore((s) => s.selectedBotId)
+  const reports: Report[] = saved.map((row) => ({
+    id: row.id,
+    name: row.name,
+    type: row.type,
+    frequency: (row.frequency === 'daily' || row.frequency === 'weekly' || row.frequency === 'monthly' ? row.frequency : 'one-time') as ReportFrequency,
+    format: (row.format === 'pdf' || row.format === 'xlsx' ? row.format : 'csv') as ReportFormat,
+    status: (row.status === 'ready' || row.status === 'failed' || row.status === 'running' ? row.status : 'scheduled') as ReportStatus,
+    lastRun: row.lastRunAt ? new Date(row.lastRunAt).toLocaleString() : undefined,
+    recipients: row.recipients.length,
+  }))
   const [showNew, setShowNew] = useState(false)
   const [newName, setNewName] = useState('')
+  const [newType, setNewType] = useState('Conversation')
+  const [newFormat, setNewFormat] = useState('csv')
+  const [newFrequency, setNewFrequency] = useState('one-time')
+
+  async function saveReport(run: boolean) {
+    const created = await createReport.mutateAsync({ name: newName.trim(), type: newType, format: newFormat, frequency: newFrequency })
+    if (run) await runReport.mutateAsync(created.id)
+    setNewName('')
+    setShowNew(false)
+  }
+
+  async function downloadReport(id: string, name: string) {
+    if (!botId) return
+    const raw = localStorage.getItem('ybot-app')
+    const token = raw ? (JSON.parse(raw) as { state?: { token?: string } }).state?.token : ''
+    const res = await fetch(`/api/v1/bots/${botId}/reports/${id}/download`, { headers: token ? { Authorization: `Bearer ${token}` } : {} })
+    if (!res.ok) return
+    const url = URL.createObjectURL(await res.blob())
+    const link = document.createElement('a')
+    link.href = url
+    link.download = `${name}.csv`
+    link.click()
+    URL.revokeObjectURL(url)
+  }
 
   return (
     <div className="flex flex-col h-full">
@@ -276,9 +314,9 @@ export function ReportsPage() {
         <SubNav items={SUBNAV} />
       </div>
 
-      <div className="px-6 py-3 border-b border-[var(--border)] bg-[var(--bg-surface)] shrink-0">
-        <PlannedNote>Reports on this page are sample cards. Creating one is not saved.</PlannedNote>
-      </div>
+      {reports.length === 0 && (
+        <div className="px-6 py-3 border-b border-[var(--border)] text-sm text-[var(--text-muted)]">No reports yet. Create one to save it for this bot.</div>
+      )}
 
       {/* Stats */}
       <div className="flex items-center gap-6 px-6 py-2.5 bg-[var(--bg-overlay)] border-b border-[var(--border)] shrink-0">
@@ -335,7 +373,7 @@ export function ReportsPage() {
                   <td className="px-5 py-3">
                     <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-all">
                       {r.status === 'ready' && (
-                        <button className="p-1.5 rounded hover:bg-[var(--bg-overlay)] text-[var(--accent)] transition-colors" title="Download">
+                        <button className="p-1.5 rounded hover:bg-[var(--bg-overlay)] text-[var(--accent)] transition-colors" title="Download" onClick={() => void downloadReport(r.id, r.name)}>
                           <Download size={13} />
                         </button>
                       )}
@@ -346,11 +384,10 @@ export function ReportsPage() {
                           </button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
-                          <DropdownMenuItem><RefreshCw size={13} /> Run now</DropdownMenuItem>
-                          <DropdownMenuItem><Pencil size={13} /> Edit</DropdownMenuItem>
-                          <DropdownMenuItem><Copy size={13} /> Duplicate</DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => runReport.mutate(r.id)}><RefreshCw size={13} /> Run now</DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => void downloadReport(r.id, r.name)}><Download size={13} /> Download</DropdownMenuItem>
                           <DropdownMenuSeparator />
-                          <DropdownMenuItem destructive><Trash2 size={13} /> Delete</DropdownMenuItem>
+                          <DropdownMenuItem destructive onClick={() => deleteReport.mutate(r.id)}><Trash2 size={13} /> Delete</DropdownMenuItem>
                         </DropdownMenuContent>
                       </DropdownMenu>
                     </div>
@@ -380,15 +417,15 @@ export function ReportsPage() {
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="text-xs font-medium text-[var(--text-muted)] mb-1.5 block">Report type</label>
-                <select className="w-full rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--bg-overlay)] px-3 py-2 text-sm text-[var(--text-primary)] focus:outline-none">
+                <select value={newType} onChange={(e) => setNewType(e.target.value)} className="w-full rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--bg-overlay)] px-3 py-2 text-sm text-[var(--text-primary)] focus:outline-none">
                   <option>Conversation</option><option>CSAT</option><option>Agent performance</option>
                   <option>Bot analytics</option><option>Channel breakdown</option><option>Campaign</option>
                 </select>
               </div>
               <div>
                 <label className="text-xs font-medium text-[var(--text-muted)] mb-1.5 block">Format</label>
-                <select className="w-full rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--bg-overlay)] px-3 py-2 text-sm text-[var(--text-primary)] focus:outline-none">
-                  <option>Excel (.xlsx)</option><option>CSV</option><option>PDF</option>
+                <select value={newFormat} onChange={(e) => setNewFormat(e.target.value)} className="w-full rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--bg-overlay)] px-3 py-2 text-sm text-[var(--text-primary)] focus:outline-none">
+                  <option value="xlsx">Excel (.xlsx)</option><option value="csv">CSV</option><option value="pdf">PDF</option>
                 </select>
               </div>
             </div>
@@ -401,8 +438,8 @@ export function ReportsPage() {
               </div>
               <div>
                 <label className="text-xs font-medium text-[var(--text-muted)] mb-1.5 block">Schedule</label>
-                <select className="w-full rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--bg-overlay)] px-3 py-2 text-sm text-[var(--text-primary)] focus:outline-none">
-                  <option>One-time</option><option>Daily</option><option>Weekly</option><option>Monthly</option>
+                <select value={newFrequency} onChange={(e) => setNewFrequency(e.target.value)} className="w-full rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--bg-overlay)] px-3 py-2 text-sm text-[var(--text-primary)] focus:outline-none">
+                  <option value="one-time">One-time</option><option value="daily">Daily</option><option value="weekly">Weekly</option><option value="monthly">Monthly</option>
                 </select>
               </div>
             </div>
@@ -416,8 +453,8 @@ export function ReportsPage() {
           </DialogBody>
           <DialogFooter>
             <Button variant="ghost" onClick={() => setShowNew(false)}>Cancel</Button>
-            <Button variant="secondary" disabled={!newName.trim()}>Save &amp; schedule</Button>
-            <Button disabled={!newName.trim()} onClick={() => setShowNew(false)}>Run now</Button>
+            <Button variant="secondary" disabled={!newName.trim()} onClick={() => void saveReport(false)}>Save &amp; schedule</Button>
+            <Button disabled={!newName.trim()} onClick={() => void saveReport(true)}>Run now</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

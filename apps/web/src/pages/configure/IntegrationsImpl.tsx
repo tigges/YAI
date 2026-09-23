@@ -8,7 +8,8 @@ import { Badge, Button, Input } from '@ybot/ui'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogBody, DialogFooter } from '@ybot/ui'
 import { SubNav } from '../../components/SubNav'
 import { cn } from '@ybot/ui'
-import { PlannedBadge, PlannedNote } from '../../components/PlannedFeature'
+import { PlannedBadge } from '../../components/PlannedFeature'
+import { useIntegrations, useConnectIntegration, useDisconnectIntegration } from '../../lib/hooks'
 
 const SUBNAV = [
   { label: 'Channels', path: '/configure/channels' },
@@ -28,6 +29,11 @@ interface Integration {
   status: IntegrationStatus
   logo: string
   connectedAt?: string
+}
+
+const LOGOS: Record<string, string> = {
+  hubspot: '🟠', salesforce: '🔵', zendesk: '🟢', jira: '🔷', slack: '💜', teams: '🟣',
+  zapier: '🟡', n8n: '🔴', ga4: '📊', mixpanel: '🎯', shopify: '🛍️', stripe: '💳',
 }
 
 const INTEGRATIONS: Integration[] = [
@@ -55,12 +61,24 @@ const CATEGORY_ICONS: Record<IntegrationCategory, React.ReactNode> = {
 }
 
 export function IntegrationsPage() {
-  const [integrations, setIntegrations] = useState<Integration[]>(INTEGRATIONS)
+  const { data: saved = [] } = useIntegrations()
+  const integrations: Integration[] = (saved.length ? saved : INTEGRATIONS).map((item) => ({
+    id: item.id,
+    name: item.name,
+    description: item.description,
+    category: item.category as IntegrationCategory,
+    status: item.status as IntegrationStatus,
+    logo: LOGOS[item.id] ?? '🔌',
+    connectedAt: item.connectedAt ? new Date(item.connectedAt).toLocaleString() : undefined,
+  }))
+  const connect = useConnectIntegration()
+  const disconnect = useDisconnectIntegration()
   const [search, setSearch] = useState('')
   const [categoryFilter, setCategoryFilter] = useState<IntegrationCategory | 'all'>('all')
   const [connectDialog, setConnectDialog] = useState<Integration | null>(null)
+  const [apiKey, setApiKey] = useState('')
 
-  const categories = ['all', ...Array.from(new Set(INTEGRATIONS.map((i) => i.category)))] as const
+  const categories = ['all', ...Array.from(new Set(integrations.map((i) => i.category)))] as const
 
   const filtered = integrations.filter((i) => {
     const matchSearch = !search || i.name.toLowerCase().includes(search.toLowerCase()) || i.description.toLowerCase().includes(search.toLowerCase())
@@ -69,12 +87,12 @@ export function IntegrationsPage() {
   })
 
   function connectIntegration(id: string) {
-    setIntegrations((prev) => prev.map((i) => i.id === id ? { ...i, status: 'connected', connectedAt: 'Just now' } : i))
-    setConnectDialog(null)
+    if (!apiKey.trim()) return
+    connect.mutate({ provider: id, apiKey: apiKey.trim() }, { onSuccess: () => { setApiKey(''); setConnectDialog(null) } })
   }
 
   function disconnectIntegration(id: string) {
-    setIntegrations((prev) => prev.map((i) => i.id === id ? { ...i, status: 'available', connectedAt: undefined } : i))
+    disconnect.mutate(id)
   }
 
   const connected = filtered.filter((i) => i.status === 'connected')
@@ -109,7 +127,6 @@ export function IntegrationsPage() {
       </div>
 
       <div className="flex-1 overflow-auto p-6 space-y-8">
-        <PlannedNote>Connect and disconnect stay on this page. None of these integrations are saved yet.</PlannedNote>
         {connected.length > 0 && (
           <section>
             <h2 className="text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wider mb-3 flex items-center gap-2">
@@ -156,12 +173,14 @@ export function IntegrationsPage() {
                   type="password"
                   className="w-full rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--bg-overlay)] px-3 py-2 text-sm text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--accent)]/40"
                   placeholder="Paste your API key here…"
+                  value={apiKey}
+                  onChange={(e) => setApiKey(e.target.value)}
                 />
               </div>
             </DialogBody>
             <DialogFooter>
               <Button variant="ghost" onClick={() => setConnectDialog(null)}>Cancel</Button>
-              <Button onClick={() => connectIntegration(connectDialog.id)}>Connect</Button>
+              <Button disabled={!apiKey.trim() || connect.isPending} onClick={() => connectIntegration(connectDialog.id)}>Connect</Button>
             </DialogFooter>
           </DialogContent>
         )}

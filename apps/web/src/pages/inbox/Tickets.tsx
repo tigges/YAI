@@ -12,8 +12,7 @@ import {
   DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator,
 } from '@ybot/ui'
 import { SubNav } from '../../components/SubNav'
-import { useTickets, useCreateTicket, useUpdateTicket } from '../../lib/hooks'
-import { PlannedBadge, PlannedNote } from '../../components/PlannedFeature'
+import { useTickets, useCreateTicket, useUpdateTicket, useTeamMembers } from '../../lib/hooks'
 import * as api from '../../lib/api'
 import { cn } from '@ybot/ui'
 
@@ -133,21 +132,24 @@ export function TicketsPage() {
   const { data: apiTickets = [], isLoading } = useTickets()
   const createTicket = useCreateTicket()
   const updateTicket = useUpdateTicket()
+  const { data: members = [] } = useTeamMembers()
   const [showNew, setShowNew] = useState(false)
   const [newTitle, setNewTitle] = useState('')
+  const [newDescription, setNewDescription] = useState('')
+  const [newAssignee, setNewAssignee] = useState('')
+  const [priorityFilter, setPriorityFilter] = useState<Priority | 'all'>('all')
   const [newPriority, setNewPriority] = useState<Priority>('normal')
   const [view, setView] = useState<'kanban' | 'list'>('kanban')
   const [search, setSearch] = useState('')
 
-  // Map API tickets to local format, falling back to mock data when no real tickets
-  const tickets: Ticket[] = (apiTickets.length > 0 ? apiTickets : MOCK_TICKETS).map((t) => {
+  const tickets: Ticket[] = apiTickets.map((t) => {
     if ('subject' in t) {
       return {
         id: t.id,
         title: (t as api.Ticket).subject,
-        priority: ((t as api.Ticket).priority as Priority) ?? 'normal',
+        priority: (({ medium: 'normal', critical: 'urgent' } as Record<string, Priority>)[(t as api.Ticket).priority] ?? (t as api.Ticket).priority) as Priority,
         status: ((t as api.Ticket).status as TicketStatus) ?? 'open',
-        assignee: (t as api.Ticket).assignedTo ?? null,
+        assignee: members.find((m) => m.id === (t as api.Ticket).assignedTo)?.displayName ?? (t as api.Ticket).assignedTo ?? null,
         contact: (t as api.Ticket).conversation?.contact?.displayName ?? 'Unknown',
         channel: 'web',
         createdAt: new Date((t as api.Ticket).createdAt).toLocaleDateString(),
@@ -158,7 +160,11 @@ export function TicketsPage() {
     return t as Ticket
   })
 
-  const filtered = tickets.filter((t) => !search || t.title.toLowerCase().includes(search.toLowerCase()) || t.id.includes(search))
+  const filtered = tickets.filter((t) => {
+    const matchesSearch = !search || t.title.toLowerCase().includes(search.toLowerCase()) || t.id.includes(search)
+    const matchesPriority = priorityFilter === 'all' || t.priority === priorityFilter
+    return matchesSearch && matchesPriority
+  })
 
   function moveTicket(id: string, status: TicketStatus) {
     updateTicket.mutate({ id, status })
@@ -167,8 +173,15 @@ export function TicketsPage() {
   async function handleCreateTicket() {
     if (!newTitle.trim()) return
     try {
-      await createTicket.mutateAsync({ subject: newTitle.trim(), priority: newPriority })
+      await createTicket.mutateAsync({
+        subject: newTitle.trim(),
+        description: newDescription.trim() || undefined,
+        priority: newPriority,
+        assignedTo: newAssignee || undefined,
+      })
       setNewTitle('')
+      setNewDescription('')
+      setNewAssignee('')
       setShowNew(false)
     } catch { /* ignore */ }
   }
@@ -190,10 +203,9 @@ export function TicketsPage() {
           onChange={(e) => setSearch(e.target.value)}
           className="w-64"
         />
-        <Button variant="ghost" size="sm" className="gap-1.5" title="This will become a real feature.">
-          <Filter size={13} /> Filter
+        <Button variant="ghost" size="sm" className="gap-1.5" onClick={() => setPriorityFilter((current) => current === 'all' ? 'high' : current === 'high' ? 'urgent' : current === 'urgent' ? 'normal' : current === 'normal' ? 'low' : 'all')}>
+          <Filter size={13} /> {priorityFilter === 'all' ? 'Filter' : priorityFilter}
         </Button>
-        <PlannedBadge />
         <div className="ml-auto flex items-center gap-2">
           <div className="flex rounded-[var(--radius-md)] border border-[var(--border)] overflow-hidden">
             <button
@@ -216,9 +228,7 @@ export function TicketsPage() {
       </div>
 
       {apiTickets.length === 0 && !isLoading && (
-        <div className="px-6 py-3 border-b border-[var(--border)]">
-          <PlannedNote>These tickets are samples shown because the inbox has none yet.</PlannedNote>
-        </div>
+        <div className="px-6 py-3 border-b border-[var(--border)] text-sm text-[var(--text-muted)]">No tickets yet.</div>
       )}
 
       {/* Kanban / List body */}
@@ -321,24 +331,27 @@ export function TicketsPage() {
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="text-xs font-medium text-[var(--text-muted)] mb-1.5 flex items-center gap-2">Priority <PlannedBadge /></label>
-                <select className="w-full rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--bg-overlay)] px-3 py-2 text-sm text-[var(--text-primary)] focus:outline-none">
-                  <option>Normal</option><option>High</option><option>Urgent</option><option>Low</option>
+                <label className="text-xs font-medium text-[var(--text-muted)] mb-1.5 block">Priority</label>
+                <select value={newPriority} onChange={(e) => setNewPriority(e.target.value as Priority)} className="w-full rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--bg-overlay)] px-3 py-2 text-sm text-[var(--text-primary)] focus:outline-none">
+                  <option value="normal">Normal</option><option value="high">High</option><option value="urgent">Urgent</option><option value="low">Low</option>
                 </select>
               </div>
               <div>
-                <label className="text-xs font-medium text-[var(--text-muted)] mb-1.5 flex items-center gap-2">Assign to <PlannedBadge /></label>
-                <select className="w-full rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--bg-overlay)] px-3 py-2 text-sm text-[var(--text-primary)] focus:outline-none">
-                  <option>Unassigned</option><option>Sarah K</option><option>Mike R</option><option>Tom B</option>
+                <label className="text-xs font-medium text-[var(--text-muted)] mb-1.5 block">Assign to</label>
+                <select value={newAssignee} onChange={(e) => setNewAssignee(e.target.value)} className="w-full rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--bg-overlay)] px-3 py-2 text-sm text-[var(--text-primary)] focus:outline-none">
+                  <option value="">Unassigned</option>
+                  {members.map((member) => <option key={member.id} value={member.id}>{member.displayName}</option>)}
                 </select>
               </div>
             </div>
             <div>
-              <label className="text-xs font-medium text-[var(--text-muted)] mb-1.5 flex items-center gap-2">Description <PlannedBadge /></label>
+              <label className="text-xs font-medium text-[var(--text-muted)] mb-1.5 block">Description</label>
               <textarea
                 rows={3}
                 className="w-full resize-none rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--bg-overlay)] px-3 py-2 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:ring-2 focus:ring-[var(--accent)]/40"
                 placeholder="Additional details…"
+                value={newDescription}
+                onChange={(e) => setNewDescription(e.target.value)}
               />
             </div>
           </DialogBody>

@@ -3,8 +3,7 @@ import { HelpCircle, Plus, Search, Trash2, ChevronRight, Save, CheckCircle } fro
 import { Button, Input, Badge, EmptyState, Skeleton } from '@ybot/ui'
 import { cn } from '@ybot/ui'
 import { SubNav } from '../../../components/SubNav'
-import { useFaqs, useCreateFaq, useDeleteFaq } from '../../../lib/hooks'
-import { PlannedBadge } from '../../../components/PlannedFeature'
+import { useFaqs, useCreateFaq, useDeleteFaq, useUpdateFaq } from '../../../lib/hooks'
 
 const SUBNAV = [
   { label: 'Intents', path: '/build/knowledge/intents' },
@@ -33,6 +32,7 @@ export function FaqsPage() {
   const { data: faqs = [], isLoading } = useFaqs()
   const createFaq = useCreateFaq()
   const deleteFaq = useDeleteFaq()
+  const updateFaq = useUpdateFaq()
 
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [localEdits, setLocalEdits] = useState<Record<string, {question?:string;answer?:string;tags?:string[]}>>({})
@@ -109,12 +109,14 @@ export function FaqsPage() {
           <div className="flex-1 overflow-auto p-6 max-w-2xl">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-sm font-semibold text-[var(--text-muted)] uppercase tracking-wider">FAQ Editor</h2>
-              <div className="flex items-center gap-2">
-                <PlannedBadge />
-                <Button size="sm" onClick={() => { setSaved(true); setTimeout(() => setSaved(false), 2000) }} title="This will become a real feature.">
-                  {saved ? <><CheckCircle size={13} /> Saved</> : <><Save size={13} /> Save</>}
-                </Button>
-              </div>
+              <Button size="sm" onClick={() => {
+                if (!selectedId) return
+                updateFaq.mutate({ id: selectedId, question: selected.question, answer: selected.answer, tags: selected.tags }, {
+                  onSuccess: () => { setSaved(true); setTimeout(() => setSaved(false), 2000) },
+                })
+              }}>
+                {saved ? <><CheckCircle size={13} /> Saved</> : <><Save size={13} /> Save</>}
+              </Button>
             </div>
 
             <div className="space-y-4">

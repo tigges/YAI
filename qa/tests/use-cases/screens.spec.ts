@@ -38,14 +38,14 @@ test('every screen opens', { tag: '@smoke' }, async ({ page }) => {
     await page.goto(path)
     await expect(page).toHaveURL(new RegExp(path.replaceAll('/', '\\/')))
     await expectNoCrash(page)
-    if (['/overview', '/analytics/reports', '/configure/database', '/configure/integrations', '/configure/webhooks', '/build/knowledge/training', '/inbox/tickets', '/inbox/contacts', '/settings'].includes(path)) {
+    if (path === '/configure/integrations') {
       await expect(page.getByText('Planned').first()).toBeVisible()
     }
   }
   await page.goto('/analytics/reports')
-  await expect(page.getByText('Weekly conversation summary')).toBeVisible()
+  await expect(page.getByRole('button', { name: 'New Report' })).toBeVisible()
   await page.goto('/configure/database')
-  await expect(page.getByText(/customers|orders|users/i).first()).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Create Table' })).toBeVisible()
   await page.goto('/configure/integrations')
   await expect(page.getByText('Stripe', { exact: true })).toBeVisible()
   await expect(page.getByText('Soon').first()).toBeVisible()

@@ -160,6 +160,33 @@ export function useDeleteFaq() {
   })
 }
 
+export function useUpdateFaq() {
+  const qc = useQueryClient(); const bid = botId()
+  return useMutation({
+    mutationFn: ({ id, ...body }: { id: string; question?: string; answer?: string; tags?: string[] }) =>
+      api.knowledge.faqs.update(bid, id, body),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['faqs', bid] }),
+  })
+}
+
+export function useUpdateEntity() {
+  const qc = useQueryClient(); const bid = botId()
+  return useMutation({
+    mutationFn: ({ id, ...body }: { id: string; name?: string; kind?: string; values?: object[] }) =>
+      api.knowledge.entities.update(bid, id, body),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['entities', bid] }),
+  })
+}
+
+export function usePublishFlow() {
+  const qc = useQueryClient(); const bid = botId()
+  return useMutation({
+    mutationFn: ({ flowId, environmentId }: { flowId: string; environmentId: string }) =>
+      api.flows.publish(bid, flowId, environmentId),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['flows', bid] }),
+  })
+}
+
 // ── Sources ───────────────────────────────────────────────────────────────────
 export function useSources() {
   const bid = botId()
@@ -271,8 +298,8 @@ export function useConversation(id: string) {
 export function useSendMessage() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: ({ conversationId, text }: { conversationId: string; text: string }) =>
-      api.conversations.messages.send(conversationId, { text }),
+    mutationFn: ({ conversationId, text, internal }: { conversationId: string; text: string; internal?: boolean }) =>
+      api.conversations.messages.send(conversationId, { text }, 'agent', Boolean(internal)),
     onSuccess: (_d, v) => {
       qc.invalidateQueries({ queryKey: ['conversation', v.conversationId] })
       qc.invalidateQueries({ queryKey: ['conversations'] })
@@ -760,7 +787,7 @@ export function useTickets(params?: Record<string, string>) {
 export function useCreateTicket() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: (body: { subject: string; priority: string; conversationId?: string; assignedTo?: string }) =>
+    mutationFn: (body: { subject: string; priority: string; description?: string; conversationId?: string; assignedTo?: string }) =>
       api.tickets.create(body).then((r) => r.data),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['tickets'] }),
   })
@@ -868,5 +895,129 @@ export function useDeleteDashboard() {
   return useMutation({
     mutationFn: (id: string) => api.dashboards.delete(bid, id),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['dashboards', bid] }),
+  })
+}
+
+export function useCannedReplies() {
+  return useQuery({
+    queryKey: ['canned-replies'],
+    queryFn: () => api.cannedReplies.list().then((r) => r.data),
+  })
+}
+
+export function useLabels() {
+  return useQuery({
+    queryKey: ['labels'],
+    queryFn: () => api.team.labels().then((r) => r.data),
+  })
+}
+
+export function useCreateLabel() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (name: string) => api.team.createLabel(name).then((r) => r.data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['labels'] }),
+  })
+}
+
+export function useReports() {
+  const bid = botId()
+  return useQuery({
+    queryKey: ['reports', bid],
+    queryFn: () => api.reports.list(bid).then((r) => r.data),
+    enabled: !!bid && bid !== 'demo',
+  })
+}
+
+export function useCreateReport() {
+  const qc = useQueryClient()
+  const bid = botId()
+  return useMutation({
+    mutationFn: (body: { name: string; type?: string; format?: string; frequency?: string }) =>
+      api.reports.create(bid, body).then((r) => r.data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['reports', bid] }),
+  })
+}
+
+export function useRunReport() {
+  const qc = useQueryClient()
+  const bid = botId()
+  return useMutation({
+    mutationFn: (id: string) => api.reports.run(bid, id).then((r) => r.data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['reports', bid] }),
+  })
+}
+
+export function useDeleteReport() {
+  const qc = useQueryClient()
+  const bid = botId()
+  return useMutation({
+    mutationFn: (id: string) => api.reports.remove(bid, id),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['reports', bid] }),
+  })
+}
+
+export function useDataTables() {
+  return useQuery({
+    queryKey: ['data-tables'],
+    queryFn: () => api.database.tables().then((r) => r.data),
+  })
+}
+
+export function useCreateDataTable() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (name: string) => api.database.createTable(name).then((r) => r.data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['data-tables'] }),
+  })
+}
+
+export function useDataRecords(tableId: string) {
+  return useQuery({
+    queryKey: ['data-records', tableId],
+    queryFn: () => api.database.records(tableId).then((r) => r.data),
+    enabled: !!tableId,
+  })
+}
+
+export function useAddDataRecord(tableId: string) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (data: Record<string, string>) => api.database.addRecord(tableId, data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['data-records', tableId] })
+      qc.invalidateQueries({ queryKey: ['data-tables'] })
+    },
+  })
+}
+
+export function useIntegrations() {
+  return useQuery({
+    queryKey: ['integrations'],
+    queryFn: () => api.integrations.list().then((r) => r.data),
+  })
+}
+
+export function useConnectIntegration() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ provider, apiKey }: { provider: string; apiKey: string }) => api.integrations.connect(provider, apiKey),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['integrations'] }),
+  })
+}
+
+export function useDisconnectIntegration() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (provider: string) => api.integrations.disconnect(provider),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['integrations'] }),
+  })
+}
+
+export function useUpdateProfile() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (displayName: string) => api.me.update({ displayName }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['me'] }),
   })
 }

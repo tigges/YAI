@@ -102,17 +102,18 @@ export async function flowsRoutes(app: FastifyInstance) {
     const { botId, flowId } = request.params as { botId: string; flowId: string }
     const { environmentId } = request.body as { environmentId: string }
 
-    const draft = await prisma.flowVersion.findFirst({
-      where: { flowId, status: 'draft', flow: { botId, tenantId } },
+    if (!environmentId) return reply.status(400).send({ error: { code: 'VALIDATION', message: 'environmentId is required' } })
+    const latest = await prisma.flowVersion.findFirst({
+      where: { flowId, flow: { botId, tenantId } },
       orderBy: { version: 'desc' },
     })
-    if (!draft) return reply.status(404).send({ error: { code: 'NO_DRAFT', message: 'No draft version found' } })
+    if (!latest) return reply.status(404).send({ error: { code: 'NO_VERSION', message: 'No flow version found' } })
 
     const published = await prisma.flowVersion.update({
-      where: { id: draft.id },
+      where: { id: latest.id },
       data: { status: 'published', environmentId, publishedAt: new Date() },
     })
-    await prisma.activity.create({ data: { tenantId, userId: (request.user as JWT).sub, action: 'flow.published', resource: 'flow', resourceId: flowId, metadata: { version: draft.version, environmentId } } })
+    await prisma.activity.create({ data: { tenantId, userId: (request.user as JWT).sub, action: 'flow.published', resource: 'flow', resourceId: flowId, metadata: { version: latest.version, environmentId } } })
     return reply.status(200).send({ data: published })
   })
 }
