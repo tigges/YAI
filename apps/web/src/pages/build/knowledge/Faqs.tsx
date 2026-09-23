@@ -4,6 +4,7 @@ import { Button, Input, Badge, EmptyState, Skeleton } from '@ybot/ui'
 import { cn } from '@ybot/ui'
 import { SubNav } from '../../../components/SubNav'
 import { useFaqs, useCreateFaq, useDeleteFaq } from '../../../lib/hooks'
+import { PlannedBadge } from '../../../components/PlannedFeature'
 
 const SUBNAV = [
   { label: 'Intents', path: '/build/knowledge/intents' },
@@ -108,9 +109,12 @@ export function FaqsPage() {
           <div className="flex-1 overflow-auto p-6 max-w-2xl">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-sm font-semibold text-[var(--text-muted)] uppercase tracking-wider">FAQ Editor</h2>
-              <Button size="sm" onClick={() => { setSaved(true); setTimeout(() => setSaved(false), 2000) }}>
-                {saved ? <><CheckCircle size={13} /> Saved</> : <><Save size={13} /> Save</>}
-              </Button>
+              <div className="flex items-center gap-2">
+                <PlannedBadge />
+                <Button size="sm" onClick={() => { setSaved(true); setTimeout(() => setSaved(false), 2000) }} title="This will become a real feature.">
+                  {saved ? <><CheckCircle size={13} /> Saved</> : <><Save size={13} /> Save</>}
+                </Button>
+              </div>
             </div>
 
             <div className="space-y-4">

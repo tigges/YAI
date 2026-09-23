@@ -15,6 +15,7 @@ import {
 import { SubNav } from '../../components/SubNav'
 import { cn } from '@ybot/ui'
 import { useContacts, useCreateContact, useUpdateContact, useDeleteContact, useContactConversations } from '../../lib/hooks'
+import { PlannedBadge } from '../../components/PlannedFeature'
 
 const SUBNAV = [
   { label: 'Chats', path: '/inbox/chats' },
@@ -202,10 +203,12 @@ export function ContactsPage() {
           onChange={(e) => setSearch(e.target.value)}
           className="w-72"
         />
-        <Button variant="ghost" size="sm" className="gap-1.5"><Filter size={13} /> Filter</Button>
+        <Button variant="ghost" size="sm" className="gap-1.5" title="This will become a real feature."><Filter size={13} /> Filter</Button>
+        <PlannedBadge />
         <div className="ml-auto flex items-center gap-2">
-          <Button variant="ghost" size="sm" className="gap-1.5"><Upload size={13} /> Import</Button>
-          <Button variant="ghost" size="sm" className="gap-1.5"><Download size={13} /> Export</Button>
+          <Button variant="ghost" size="sm" className="gap-1.5" title="This will become a real feature."><Upload size={13} /> Import</Button>
+          <Button variant="ghost" size="sm" className="gap-1.5" title="This will become a real feature."><Download size={13} /> Export</Button>
+          <PlannedBadge />
           <Button size="sm" className="gap-1.5" onClick={() => setShowNew(true)}>
             <Plus size={14} /> New Contact
           </Button>
@@ -282,8 +285,8 @@ export function ContactsPage() {
                     </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
                       <DropdownMenuItem onClick={() => setSelected(c)}>View profile</DropdownMenuItem>
-                      <DropdownMenuItem>Start conversation</DropdownMenuItem>
-                      <DropdownMenuItem>Create ticket</DropdownMenuItem>
+                      <DropdownMenuItem title="This will become a real feature.">Start conversation <PlannedBadge /></DropdownMenuItem>
+                      <DropdownMenuItem title="This will become a real feature.">Create ticket <PlannedBadge /></DropdownMenuItem>
                       <DropdownMenuSeparator />
                       <DropdownMenuItem destructive onClick={() => handleDelete(c.id)}>Delete contact</DropdownMenuItem>
                     </DropdownMenuContent>

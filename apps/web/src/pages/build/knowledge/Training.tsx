@@ -7,6 +7,7 @@ import { Button, Badge, Card, CardHeader, CardTitle } from '@ybot/ui'
 import { SubNav } from '../../../components/SubNav'
 import { cn } from '@ybot/ui'
 import { useTraining, useSaveTraining, useTrainingRuns } from '../../../lib/hooks'
+import { PlannedBadge } from '../../../components/PlannedFeature'
 import { useQueryClient } from '@tanstack/react-query'
 import { useAppStore } from '../../../store/app'
 
@@ -143,13 +144,16 @@ export function TrainingPage() {
       <div className="border-b border-[var(--border)] bg-[var(--bg-surface)]">
         <div className="flex items-center justify-between px-6 pt-4 pb-0">
           <h1 className="text-base font-semibold text-[var(--text-primary)]">Knowledge</h1>
-          <Button size="sm" onClick={handleTrain} disabled={training}>
+          <div className="flex items-center gap-2">
+            <PlannedBadge />
+            <Button size="sm" onClick={handleTrain} disabled={training} title="This will become a real feature.">
             {training ? (
               <><RefreshCw size={13} className="animate-spin" /> Training…</>
             ) : (
               <><Play size={13} /> Run Training</>
             )}
           </Button>
+          </div>
         </div>
         <SubNav items={SUBNAV} />
       </div>

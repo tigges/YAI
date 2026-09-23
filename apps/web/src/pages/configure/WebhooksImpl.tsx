@@ -10,6 +10,7 @@ import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuIte
 import { SubNav } from '../../components/SubNav'
 import { cn } from '@ybot/ui'
 import { useWebhooks, useCreateWebhook, useDeleteWebhook, useTestWebhook } from '../../lib/hooks'
+import { PlannedBadge, PlannedNote } from '../../components/PlannedFeature'
 
 const SUBNAV = [
   { label: 'Channels', path: '/configure/channels' },
@@ -127,11 +128,12 @@ export function WebhooksPage() {
           { label: 'Total', value: webhooks.length },
           { label: 'Active', value: webhooks.filter((w) => w.status === 'active').length },
           { label: 'Errors', value: webhooks.filter((w) => w.status === 'error').length },
-          { label: 'Avg success rate', value: webhooks.length ? `${(webhooks.reduce((s, w) => s + (w.successRate ?? 0), 0) / webhooks.length).toFixed(1)}%` : '—' },
+          { label: 'Avg success rate', value: webhooks.length ? `${(webhooks.reduce((s, w) => s + (w.successRate ?? 0), 0) / webhooks.length).toFixed(1)}%` : '—', planned: true },
         ].map((s) => (
           <div key={s.label} className="flex items-center gap-2">
             <span className="text-sm font-semibold text-[var(--text-primary)]">{s.value}</span>
             <span className="text-xs text-[var(--text-muted)]">{s.label}</span>
+            {'planned' in s && s.planned ? <PlannedBadge /> : null}
           </div>
         ))}
       </div>
@@ -141,7 +143,9 @@ export function WebhooksPage() {
           <thead className="sticky top-0 bg-[var(--bg-surface)] border-b border-[var(--border)] z-10">
             <tr>
               {['Endpoint', 'Events', 'Status', 'Success rate', 'Last triggered', ''].map((h) => (
-                <th key={h} className="px-5 py-2.5 text-left text-[11px] font-medium text-[var(--text-muted)] uppercase tracking-wide whitespace-nowrap">{h}</th>
+                <th key={h} className="px-5 py-2.5 text-left text-[11px] font-medium text-[var(--text-muted)] uppercase tracking-wide whitespace-nowrap">
+                  <span className="inline-flex items-center gap-1.5">{h}{h === 'Success rate' ? <PlannedBadge /> : null}</span>
+                </th>
               ))}
             </tr>
           </thead>
@@ -199,12 +203,12 @@ export function WebhooksPage() {
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
                           <DropdownMenuItem onClick={() => { /* toggle status would call API */ }}>
-                            <><Pause size={13} /> Pause/Resume</>
+                            <><Pause size={13} /> Pause/Resume <PlannedBadge /></>
                           </DropdownMenuItem>
-                          <DropdownMenuItem><Pencil size={13} /> Edit</DropdownMenuItem>
-                          <DropdownMenuItem><RefreshCw size={13} /> Send test</DropdownMenuItem>
+                          <DropdownMenuItem><Pencil size={13} /> Edit <PlannedBadge /></DropdownMenuItem>
+                          <DropdownMenuItem><RefreshCw size={13} /> Send test <PlannedBadge /></DropdownMenuItem>
                           <DropdownMenuSeparator />
-                          <DropdownMenuItem destructive><Trash2 size={13} /> Delete</DropdownMenuItem>
+                          <DropdownMenuItem destructive><Trash2 size={13} /> Delete <PlannedBadge /></DropdownMenuItem>
                         </DropdownMenuContent>
                       </DropdownMenu>
                     </div>
@@ -221,7 +225,8 @@ export function WebhooksPage() {
         {showLogs && (
           <DialogContent size="lg">
             <DialogHeader><DialogTitle>Delivery log — {showLogs.url.slice(0, 40)}…</DialogTitle></DialogHeader>
-            <DialogBody>
+            <DialogBody className="space-y-3">
+              <PlannedNote>This delivery log is sample data.</PlannedNote>
               <table className="w-full text-xs">
                 <thead>
                   <tr className="border-b border-[var(--border)]">
@@ -268,7 +273,8 @@ export function WebhooksPage() {
                   value={newUrl}
                   onChange={(e) => { setNewUrl(e.target.value); setTestResult(null) }}
                 />
-                <Button variant="secondary" size="sm" disabled={!newUrl.trim()} onClick={testWebhook}>Test</Button>
+                <Button variant="secondary" size="sm" disabled={!newUrl.trim()} onClick={testWebhook} title="This will become a real feature.">Test</Button>
+                <PlannedBadge />
               </div>
               {testResult && (
                 <p className={cn('mt-1.5 text-xs font-medium', testResult.startsWith('✓') ? 'text-[var(--success)]' : 'text-[var(--text-muted)]')}>
@@ -299,7 +305,7 @@ export function WebhooksPage() {
               )}
             </div>
             <div>
-              <label className="text-xs font-medium text-[var(--text-muted)] mb-1.5 block">Signing secret <span className="font-normal">(optional)</span></label>
+              <label className="text-xs font-medium text-[var(--text-muted)] mb-1.5 flex items-center gap-2">Signing secret <span className="font-normal">(optional)</span> <PlannedBadge /></label>
               <input
                 type="password"
                 className="w-full rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--bg-overlay)] px-3 py-2 text-sm font-mono text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--accent)]/40"

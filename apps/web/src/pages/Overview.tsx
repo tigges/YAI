@@ -3,6 +3,7 @@ import { MessageSquare, Users, CheckCircle, Clock, Loader2 } from 'lucide-react'
 import { Card, CardHeader, CardTitle, Badge } from '@ybot/ui'
 import { useAppStore } from '../store/app'
 import { useAnalyticsOverview, useConversationTrends, useConversations } from '../lib/hooks'
+import { PlannedBadge } from '../components/PlannedFeature'
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   BarChart, Bar,
@@ -151,6 +152,7 @@ export function OverviewPage() {
           <Card padding="none">
             <CardHeader className="px-4 pt-4">
               <CardTitle>By Channel</CardTitle>
+              <PlannedBadge />
             </CardHeader>
             <div className="px-4 pb-4 h-[220px]">
               <ResponsiveContainer width="100%" height="100%">

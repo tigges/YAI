@@ -11,7 +11,7 @@ interface JwtPayload {
 
 export async function botsRoutes(app: FastifyInstance) {
   app.addHook('preHandler', app.authenticate)
-  app.addHook('preHandler', requireRole('DEVELOPER', 'SUPERVISOR', 'ADMIN'))
+  const canBuild = requireRole('DEVELOPER', 'SUPERVISOR', 'ADMIN')
 
   app.get('/', async (request) => {
     const { tenantId } = request.user as JwtPayload
@@ -36,7 +36,7 @@ export async function botsRoutes(app: FastifyInstance) {
     return { data: bot }
   })
 
-  app.post('/', async (request, reply) => {
+  app.post('/', { preHandler: canBuild }, async (request, reply) => {
     const { tenantId } = request.user as JwtPayload
     const { name, description } = request.body as { name: string; description?: string }
 
@@ -58,7 +58,7 @@ export async function botsRoutes(app: FastifyInstance) {
     return reply.status(201).send({ data: bot })
   })
 
-  app.patch('/:botId', async (request, reply) => {
+  app.patch('/:botId', { preHandler: canBuild }, async (request, reply) => {
     const { tenantId } = request.user as JwtPayload
     const { botId } = request.params as { botId: string }
     const body = request.body as { name?: string; personaName?: string | null; description?: string | null; avatarUrl?: string | null }

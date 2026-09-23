@@ -10,6 +10,9 @@
  *   charles@bella.com / password123
  *   demo@bella.com    / Demo1234!
  *
+ * QA Lab (created here if missing, used by the night suite only):
+ *   qa@qalab.com      / QaDemo1234!
+ *
  * Running this again does not duplicate chats, does not edit an existing
  * Order Status graph, and does not reset passwords.
  */
@@ -138,7 +141,8 @@ const ACME_CHATS: Array<{ subject: string; lines: Array<{ role: 'user' | 'bot'; 
 export async function ensureDemos() {
   const acme = await ensureAcme()
   const bella = await ensureBella()
-  return { acme, bella }
+  const qaLab = await ensureQaLab()
+  return { acme, bella, qaLab }
 }
 
 async function ensureAcme() {
@@ -156,10 +160,6 @@ async function ensureAcme() {
   }) ?? await prisma.bot.findFirst({ where: { tenantId: tenant.id }, orderBy: { createdAt: 'asc' } })
   if (!bot) return { status: 'partial', tenant: tenant.slug, reason: 'no bot' }
 
-  const flowsAdded = await ensureFlows(tenant.id, bot.id, tenant.name)
-  const hoursSet = await ensureOpeningHours(tenant.id, bot.id)
-  const ruleAdded = await ensureRule(tenant.id, bot.id)
-
   const channel = await prisma.channel.findFirst({
     where: { tenantId: tenant.id, botId: bot.id, kind: 'web' },
     orderBy: { createdAt: 'asc' },
@@ -168,6 +168,11 @@ async function ensureAcme() {
     where: { tenantId: tenant.id, botId: bot.id },
     orderBy: { createdAt: 'asc' },
   })
+  const publishEnv = channel?.environmentId ?? env?.id ?? null
+  const flowsAdded = await ensureFlows(tenant.id, bot.id, tenant.name, publishEnv)
+  const flowsBound = publishEnv ? await bindPublishedFlows(bot.id, publishEnv) : 0
+  const hoursSet = await ensureOpeningHours(tenant.id, bot.id)
+  const ruleAdded = await ensureRule(tenant.id, bot.id)
   const chatsAdded = channel && env
     ? await ensureChats({
         prefix: 'enrich-acme',
@@ -184,6 +189,7 @@ async function ensureAcme() {
     status: 'ok',
     tenant: tenant.slug,
     flowsAdded,
+    flowsBound,
     hoursSet,
     ruleAdded,
     chatsAdded,
@@ -269,7 +275,8 @@ async function ensureBella() {
     },
   })
 
-  const flowsAdded = await ensureFlows(tenant.id, bot.id, BELLA_NAME)
+  const flowsAdded = await ensureFlows(tenant.id, bot.id, BELLA_NAME, env.id)
+  const flowsBound = await bindPublishedFlows(bot.id, env.id)
   const ruleAdded = await ensureRule(tenant.id, bot.id)
   const chatsAdded = await ensureChats({
     prefix: 'enrich-bella',
@@ -281,7 +288,70 @@ async function ensureBella() {
     repeats: 4,
   })
 
-  return { status: 'ok', tenant: tenant.slug, flowsAdded, ruleAdded, chatsAdded }
+  return { status: 'ok', tenant: tenant.slug, flowsAdded, flowsBound, ruleAdded, chatsAdded }
+}
+
+async function ensureQaLab() {
+  const tenant = await prisma.tenant.upsert({
+    where: { slug: 'qa-lab' },
+    update: { name: 'QA Lab' },
+    create: { name: 'QA Lab', slug: 'qa-lab', plan: 'pro', dataRegion: 'eu' },
+  })
+  await ensureUser(tenant.id, 'qa@qalab.com', 'QA', QA_PASSWORD)
+  const bot = await prisma.bot.upsert({
+    where: { id: 'qa-lab-bot' },
+    update: { name: 'QA Lab Bot', personaName: 'QA', status: 'active' },
+    create: {
+      id: 'qa-lab-bot',
+      tenantId: tenant.id,
+      name: 'QA Lab Bot',
+      personaName: 'QA',
+      description: 'Scratch bot for the nightly save and edit suite',
+      status: 'active',
+    },
+  })
+  await prisma.botConfig.upsert({
+    where: { botId: bot.id },
+    update: {},
+    create: {
+      tenantId: tenant.id,
+      botId: bot.id,
+      model: 'gemini-2.0-flash',
+      temperature: 0.3,
+      maxTokens: 512,
+      systemPrompt: 'You are the QA Lab bot. Keep answers short.',
+      inboxConfig: {},
+    },
+  })
+  const env = await prisma.environment.upsert({
+    where: { botId_kind: { botId: bot.id, kind: 'production' } },
+    update: {},
+    create: {
+      id: 'qa-lab-env-production',
+      tenantId: tenant.id,
+      botId: bot.id,
+      kind: 'production',
+      name: 'Production',
+      isActive: true,
+    },
+  })
+  await prisma.channel.upsert({
+    where: { id: 'qa-lab-web' },
+    update: {},
+    create: {
+      id: 'qa-lab-web',
+      tenantId: tenant.id,
+      botId: bot.id,
+      environmentId: env.id,
+      name: 'QA Website Chat',
+      kind: 'web',
+      isActive: true,
+      config: { primaryColor: '#6366f1', greeting: 'QA Lab widget' },
+    },
+  })
+  const flowsAdded = await ensureFlows(tenant.id, bot.id, 'QA Lab', env.id)
+  const flowsBound = await bindPublishedFlows(bot.id, env.id)
+  return { status: 'ok', tenant: tenant.slug, flowsAdded, flowsBound }
 }
 
 async function ensureUser(tenantId: string, email: string, displayName: string, password: string) {
@@ -302,7 +372,15 @@ async function ensureUser(tenantId: string, email: string, displayName: string, 
   return user
 }
 
-async function ensureFlows(tenantId: string, botId: string, companyName: string) {
+async function bindPublishedFlows(botId: string, environmentId: string) {
+  const result = await prisma.flowVersion.updateMany({
+    where: { status: 'published', environmentId: null, flow: { botId } },
+    data: { environmentId },
+  })
+  return result.count
+}
+
+async function ensureFlows(tenantId: string, botId: string, companyName: string, environmentId: string | null) {
   let added = 0
   for (const starter of starterFlows(companyName)) {
     const found = await prisma.flow.findFirst({ where: { tenantId, botId, name: starter.name } })
@@ -323,6 +401,7 @@ async function ensureFlows(tenantId: string, botId: string, companyName: string)
         flowId: flow.id,
         version: 1,
         status: starter.publish ? 'published' : 'draft',
+        environmentId: starter.publish ? environmentId : null,
         graph: starter.graph,
         publishedAt: starter.publish ? new Date() : null,
       },

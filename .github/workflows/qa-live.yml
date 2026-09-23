@@ -91,6 +91,7 @@ jobs:
           QA_PASSWORD: ${{ secrets.QA_ACCOUNT_PASSWORD }}
           BELLA_EMAIL: demo@bella.com
           BELLA_PASSWORD: Demo1234!
+          QA_SUITE: ${{ (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') && 'full' || 'smoke' }}
         run: |
           set -euo pipefail
           if [ -z "$QA_PASSWORD" ]; then

@@ -17,6 +17,7 @@ import { cn } from '@ybot/ui'
 import { useConversations, useConversation, useSendMessage, useAssignConversation, useResolveConversation, useCreateConversation } from '../../lib/hooks'
 import { useConversationWS, useTenantWS } from '../../lib/ws'
 import { useAppStore } from '../../store/app'
+import { PlannedBadge } from '../../components/PlannedFeature'
 
 const SUBNAV = [
   { label: 'Chats', path: '/inbox/chats' },
@@ -358,10 +359,11 @@ export function ChatsPage() {
               {/* Assign */}
               <DropdownMenu open={showAssign} onOpenChange={setShowAssign}>
                 <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" size="sm" className="gap-1.5">
+                  <Button variant="ghost" size="sm" className="gap-1.5" title="This will become a real feature.">
                     <UserPlus size={13} />
                     {selected.assignee ?? 'Assign'}
                     <ChevronDown size={11} />
+                    <PlannedBadge />
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
@@ -506,7 +508,7 @@ export function ChatsPage() {
                     : 'text-[var(--text-muted)] hover:bg-[var(--bg-hover)]'
                 )}
               >
-                <StickyNote size={12} /> Internal note
+                <StickyNote size={12} /> Internal note <PlannedBadge />
               </button>
             </div>
 
@@ -514,7 +516,7 @@ export function ChatsPage() {
             {showCanned && filteredCanned.length > 0 && (
               <div className="mx-4 mb-2 rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--bg-elevated)] overflow-hidden shadow-[var(--shadow-lg)] max-h-44 overflow-y-auto">
                 <div className="px-3 py-1.5 bg-[var(--bg-overlay)] border-b border-[var(--border)]">
-                  <p className="text-[11px] text-[var(--text-muted)] font-medium">Canned responses</p>
+                  <p className="text-[11px] text-[var(--text-muted)] font-medium flex items-center gap-2">Canned responses <PlannedBadge /></p>
                 </div>
                 {filteredCanned.map((r) => (
                   <button
@@ -649,7 +651,8 @@ export function ChatsPage() {
 
           {rightPanelSection === 'history' && (
             <div className="p-4">
-              <p className="text-[11px] text-[var(--text-muted)] mb-3">
+              <p className="text-[11px] text-[var(--text-muted)] mb-3 flex items-center gap-2">
+                <PlannedBadge />
                 {selected.previousConvos ?? 0} previous conversation{selected.previousConvos !== 1 ? 's' : ''}
               </p>
               {(selected.previousConvos ?? 0) > 0 ? (
@@ -701,7 +704,7 @@ export function ChatsPage() {
       <Dialog open={showTransfer} onOpenChange={setShowTransfer}>
         <DialogContent size="sm">
           <DialogHeader>
-            <DialogTitle>Transfer conversation</DialogTitle>
+            <DialogTitle className="flex items-center gap-2">Transfer conversation <PlannedBadge /></DialogTitle>
           </DialogHeader>
           <DialogBody className="space-y-2">
             <p className="text-sm text-[var(--text-secondary)] mb-3">Select an agent or team to transfer this conversation to.</p>
@@ -727,7 +730,7 @@ export function ChatsPage() {
       <Dialog open={showTicketDialog} onOpenChange={setShowTicketDialog}>
         <DialogContent size="sm">
           <DialogHeader>
-            <DialogTitle>Create ticket</DialogTitle>
+            <DialogTitle className="flex items-center gap-2">Create ticket <PlannedBadge /></DialogTitle>
           </DialogHeader>
           <DialogBody className="space-y-4">
             <div>
@@ -766,7 +769,7 @@ export function ChatsPage() {
       <Dialog open={showLabelDialog} onOpenChange={setShowLabelDialog}>
         <DialogContent size="sm">
           <DialogHeader>
-            <DialogTitle>Manage labels</DialogTitle>
+            <DialogTitle className="flex items-center gap-2">Manage labels <PlannedBadge /></DialogTitle>
           </DialogHeader>
           <DialogBody>
             <div className="flex flex-wrap gap-2">

@@ -9,6 +9,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogBody, DialogFoo
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator } from '@ybot/ui'
 import { SubNav } from '../../components/SubNav'
 import { cn } from '@ybot/ui'
+import { PlannedNote } from '../../components/PlannedFeature'
 
 const SUBNAV = [
   { label: 'Channels', path: '/configure/channels' },
@@ -121,6 +122,10 @@ export function DatabasePage() {
           </Button>
         </div>
         <SubNav items={SUBNAV} />
+      </div>
+
+      <div className="px-6 py-3 border-b border-[var(--border)] bg-[var(--bg-surface)] shrink-0">
+        <PlannedNote>Tables and rows on this page stay in the browser.</PlannedNote>
       </div>
 
       <div className="flex flex-1 overflow-hidden">

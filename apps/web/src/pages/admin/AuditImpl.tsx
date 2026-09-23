@@ -11,6 +11,7 @@ import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuIte
 import { SubNav } from '../../components/SubNav'
 import { cn } from '@ybot/ui'
 import { useAuditLog } from '../../lib/hooks'
+import { PlannedNote } from '../../components/PlannedFeature'
 
 const SUBNAV = [
   { label: 'Team', path: '/admin/team' },
@@ -146,6 +147,12 @@ export function AuditPage() {
         <h1 className="text-base font-semibold text-[var(--text-primary)] pb-3">Admin</h1>
         <SubNav items={SUBNAV} />
       </div>
+
+      {apiEvents.length === 0 && (
+        <div className="px-6 py-3 border-b border-[var(--border)]">
+          <PlannedNote>These audit rows are samples shown because the log is empty.</PlannedNote>
+        </div>
+      )}
 
       {/* Toolbar */}
       <div className="flex items-center gap-3 px-6 py-3 border-b border-[var(--border)] bg-[var(--bg-surface)] shrink-0 flex-wrap">

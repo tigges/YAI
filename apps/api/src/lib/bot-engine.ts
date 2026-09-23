@@ -98,14 +98,8 @@ export async function getBotReply(params: BotReplyParams): Promise<BotReplyResul
       data: { tenantId, conversationId, direction: 'inbound', authorKind: 'user', content: { text: userText } },
     }).catch(() => {})
 
-    const away = await onInboundCustomerMessage({ conversationId, botId }).catch(() => null)
-    if (away) {
-      await prisma.message.create({
-        data: { tenantId, conversationId, direction: 'outbound', authorKind: 'bot', content: { text: away } },
-      }).catch(() => {})
-      await onOutboundReply(conversationId).catch(() => {})
-      return { reply: away, conversationId }
-    }
+    // Working hours start the SLA clock. The bot still answers.
+    await onInboundCustomerMessage({ conversationId, botId }).catch(() => null)
   }
 
   // ── LLM config ────────────────────────────────────────────────────────────
