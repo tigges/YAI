@@ -16,7 +16,17 @@ import { SessionMachine } from '@ybot/runtime'
 import type { Session, SessionVariables, FlowGraph } from '@ybot/runtime'
 import { prisma } from '@ybot/db'
 import { createLlmAdapter, createLlmAdapterForModel } from '@ybot/llm'
+import { usableContactName } from './contact-name.js'
 import { runFlowTurn } from './flow-turn.js'
+
+function rememberContactName(variables: SessionVariables, displayName: string | null | undefined): void {
+  const known = usableContactName(displayName)
+  if (!known) return
+  if (!variables.contact || typeof variables.contact !== 'object') variables.contact = {}
+  const current = variables.contact['name']
+  if (typeof current === 'string' && usableContactName(current)) return
+  variables.contact['name'] = known
+}
 
 const defaultLlm = createLlmAdapter({
   provider: (process.env['LLM_PROVIDER'] as 'openai' | 'anthropic' | 'groq' | 'ollama' | 'gemini') ?? 'openai',
@@ -52,7 +62,7 @@ export async function runFlowIfPublished(opts: {
   // ── 1. Find the conversation's environment ─────────────────────────────────
   const convo = await prisma.conversation.findFirst({
     where: { id: conversationId },
-    select: { environmentId: true },
+    select: { environmentId: true, contact: { select: { displayName: true } } },
   })
   const envId = convo?.environmentId
   if (!envId) return { handled: false, messages: [] }
@@ -126,6 +136,8 @@ export async function runFlowIfPublished(opts: {
       updatedAt: fsRecord.updatedAt,
     }
   }
+
+  rememberContactName(session.variables, convo.contact?.displayName)
 
   // ── 4. Build the LLM adapter (respects saved BotConfig model selection) ──────
   const cfg = await prisma.botConfig.findUnique({ where: { botId } }).catch(() => null)

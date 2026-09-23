@@ -14,6 +14,7 @@ import type { LlmMessage } from '@ybot/llm'
 import { readFile } from 'node:fs/promises'
 import { triggerRules } from '../lib/automation-engine.js'
 import { resolve, dirname } from 'node:path'
+import { usableContactName } from '../lib/contact-name.js'
 import { runFlowIfPublished } from '../lib/flow-runner.js'
 import { onInboundCustomerMessage, onOutboundReply } from '../lib/sla.js'
 import { fileURLToPath } from 'node:url'
@@ -75,7 +76,15 @@ const WIDGET_INLINE_JS = /* js */`
   var BOT_NAME=window.YBotBotName||'';
   // visitorName is remembered within the same browser tab (sessionStorage).
   // 'nameAsked' means the bot asked for the name but the user hasn't replied yet.
+  function looksLikeName(text){
+    var t=String(text||'').trim().replace(/\\s+/g,' ');
+    if(!t||t.length>40)return false;
+    if(/^(visitor|guest|there)$/i.test(t))return false;
+    if(/^(hi|hello|hey|hiya|yo|good morning|good afternoon|good evening)[!?.\\s]*$/i.test(t))return false;
+    return /^[\\p{L}][\\p{L}'’.\\-]*(?: [\\p{L}][\\p{L}'’.\\-]*){0,2}$/u.test(t);
+  }
   var visitorName=sessionStorage.getItem('ybot_vname')||'';
+  if(visitorName&&!looksLikeName(visitorName)){visitorName='';sessionStorage.removeItem('ybot_vname');}
   var nameAsked=false;
   var conversationId=null;
   var sessionId='ws_'+Date.now()+'_'+Math.random().toString(36).slice(2);
@@ -146,9 +155,11 @@ const WIDGET_INLINE_JS = /* js */`
     // First reply after asking for name — capture it as the visitor name,
     // then forward "My name is <name>" to the AI as the opening message.
     if(nameAsked&&!visitorName){
-      visitorName=text;
-      sessionStorage.setItem('ybot_vname',text);
       nameAsked=false;
+      if(looksLikeName(text)){
+        visitorName=text.trim().replace(/\s+/g,' ');
+        sessionStorage.setItem('ybot_vname',visitorName);
+      }
     }
     loading=true;sendB.disabled=true;
     var hist=messages.slice(-10).map(function(m){return{role:m.role==='user'?'user':'assistant',content:m.text};});
@@ -416,7 +427,7 @@ export async function widgetRoutes(app: FastifyInstance) {
       if (env) {
         // Upsert an anonymous contact keyed by sessionId
         const sessionId = body.sessionId ?? `anon_${Date.now()}`
-        const displayName = (body.visitorName ?? '').trim() || 'Visitor'
+        const displayName = usableContactName(body.visitorName) ?? 'Visitor'
         let contact = await prisma.contact.findFirst({ where: { tenantId, externalId: sessionId } })
         if (!contact) {
           contact = await prisma.contact.create({
