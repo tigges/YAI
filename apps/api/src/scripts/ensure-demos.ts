@@ -2,9 +2,9 @@
  * Idempotent demo data for the two showcase companies.
  *
  * Acme Corp (already on the live site):
- *   charles@acme.com  / password123     human admin, password left as-is
+ *   charles@acme.com  password set by the account owner, never reset here
  *   demo@acme.com     / Demo1234!        shared demo login
- *   qa@acme.com       / QaDemo1234!      GitHub only (override with QA_ACCOUNT_PASSWORD)
+ *   qa@acme.com       / QaDemo1234!      GitHub live QA admin (override with QA_ACCOUNT_PASSWORD)
  *
  * Bella Hair Studio (created here if missing):
  *   charles@bella.com / password123
