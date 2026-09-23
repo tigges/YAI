@@ -46,6 +46,16 @@ export function useCreateFlow() {
   })
 }
 
+export function useUpdateFlow() {
+  const qc = useQueryClient()
+  const bid = botId()
+  return useMutation({
+    mutationFn: ({ flowId, ...body }: { flowId: string; name?: string; description?: string }) =>
+      api.flows.update(bid, flowId, body),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['flows', bid] }),
+  })
+}
+
 export function useDeleteFlow() {
   const qc = useQueryClient()
   const bid = botId()
