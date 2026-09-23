@@ -3,7 +3,7 @@ import {
   Brain, Plus, Trash2, Save, ChevronRight, Search,
   MessageCircle, X, CheckCircle
 } from 'lucide-react'
-import { Button, Input, Badge, EmptyState, PageHeader, Skeleton } from '@ybot/ui'
+import { Button, Input, Badge, EmptyState } from '@ybot/ui'
 import { cn } from '@ybot/ui'
 import { SubNav } from '../../../components/SubNav'
 import { useIntents, useUpdateIntent, useCreateIntent, useDeleteIntent } from '../../../lib/hooks'
@@ -74,6 +74,8 @@ export function IntentsPage() {
   const [newUtterance, setNewUtterance] = useState('')
   const [newResponse, setNewResponse] = useState('')
   const [saved, setSaved] = useState(false)
+  const [confirmDelete, setConfirmDelete] = useState(false)
+  const [deleteError, setDeleteError] = useState(false)
 
   React.useEffect(() => {
     if (intents.length && !selectedId) setSelectedId(intents[0]?.id ?? null)
@@ -124,6 +126,24 @@ export function IntentsPage() {
     setTimeout(() => setSaved(false), 2000)
   }
 
+  async function handleDelete() {
+    if (!selectedId) return
+    const nextId = intents.find((intent) => intent.id !== selectedId)?.id ?? null
+    try {
+      await deleteIntent.mutateAsync(selectedId)
+      setLocalEdits((edits) => {
+        const copy = { ...edits }
+        delete copy[selectedId]
+        return copy
+      })
+      setSelectedId(nextId)
+      setConfirmDelete(false)
+      setDeleteError(false)
+    } catch {
+      setDeleteError(true)
+    }
+  }
+
   async function addIntent() {
     const name = `new_intent_${Date.now()}`
     try {
@@ -161,7 +181,7 @@ export function IntentsPage() {
             {filtered.map((intent) => (
               <button
                 key={intent.id}
-                onClick={() => setSelectedId(intent.id)}
+                onClick={() => { setSelectedId(intent.id); setConfirmDelete(false); setDeleteError(false) }}
                 className={cn(
                   'flex w-full items-center gap-3 px-4 py-3 text-left transition-colors',
                   selectedId === intent.id ? 'bg-[var(--bg-selected)]' : 'hover:bg-[var(--bg-hover)]'
@@ -193,9 +213,28 @@ export function IntentsPage() {
                   className="text-base font-semibold border-0 bg-transparent p-0 focus:ring-0 h-auto"
                 />
               </div>
-              <Button size="sm" onClick={handleSave}>
-                {saved ? <><CheckCircle size={13} /> Saved</> : <><Save size={13} /> Save</>}
-              </Button>
+              <div className="flex items-center gap-2">
+                {confirmDelete ? (
+                  <>
+                    <span className={deleteError ? 'text-xs text-[var(--danger)]' : 'text-xs text-[var(--text-muted)]'}>
+                      {deleteError ? 'Could not delete this intent.' : 'Delete this intent?'}
+                    </span>
+                    <Button variant="ghost" size="sm" onClick={() => { setConfirmDelete(false); setDeleteError(false) }}>Cancel</Button>
+                    <Button variant="destructive" size="sm" disabled={deleteIntent.isPending} onClick={() => void handleDelete()}>
+                      {deleteIntent.isPending ? 'Deleting…' : 'Delete'}
+                    </Button>
+                  </>
+                ) : (
+                  <>
+                    <Button variant="ghost" size="sm" onClick={() => { setDeleteError(false); setConfirmDelete(true) }}>
+                      <Trash2 size={13} /> Delete
+                    </Button>
+                    <Button size="sm" onClick={handleSave}>
+                      {saved ? <><CheckCircle size={13} /> Saved</> : <><Save size={13} /> Save</>}
+                    </Button>
+                  </>
+                )}
+              </div>
             </div>
 
             <div className="flex-1 overflow-auto p-6 space-y-8">
@@ -304,6 +343,7 @@ export function IntentsPage() {
           </div>
         )}
       </div>
+
     </div>
   )
 }
