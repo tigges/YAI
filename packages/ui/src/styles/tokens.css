@@ -4,6 +4,7 @@
    ─────────────────────────────────────────────────────────────────────────── */
 
 :root {
+  color-scheme: dark;
   /* ── Colour: Background ── */
   --bg-base:        #0d0d10;
   --bg-surface:     #17171c;
@@ -98,6 +99,7 @@
 
 /* Light mode overrides */
 .light {
+  color-scheme: light;
   --bg-base:        #f8f9fb;
   --bg-surface:     #ffffff;
   --bg-elevated:    #f1f5f9;
