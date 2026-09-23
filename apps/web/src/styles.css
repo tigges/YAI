@@ -1,5 +1,6 @@
 @import "@ybot/ui/styles";
 @import "tailwindcss";
+@source "../../../packages/ui/src";
 
 @theme {
   --color-accent: var(--accent);

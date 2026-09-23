@@ -38,9 +38,13 @@ export function FlowsPage() {
 
   async function handleCreate() {
     if (!newName.trim()) return
-    const flow = await createFlow.mutateAsync({ name: newName.trim(), description: newDesc.trim() || undefined })
-    setShowNew(false); setNewName(''); setNewDesc('')
-    navigate({ to: '/build/flows/$flowId', params: { flowId: flow.id } })
+    try {
+      const flow = await createFlow.mutateAsync({ name: newName.trim(), description: newDesc.trim() || undefined })
+      setShowNew(false); setNewName(''); setNewDesc('')
+      navigate({ to: '/build/flows/$flowId', params: { flowId: flow.id } })
+    } catch {
+      // The dialog stays open and shows createFlow.isError.
+    }
   }
 
   async function saveRename() {
@@ -146,6 +150,9 @@ export function FlowsPage() {
               <label className="text-xs font-medium text-[var(--text-muted)] mb-1.5 block">Description</label>
               <Input placeholder="What does this flow do?" value={newDesc} onChange={(e) => setNewDesc(e.target.value)} />
             </div>
+            {createFlow.isError && (
+              <p className="text-xs text-[var(--danger)]">Could not create this flow. Please try again.</p>
+            )}
           </DialogBody>
           <DialogFooter>
             <Button variant="ghost" onClick={() => setShowNew(false)}>Cancel</Button>
