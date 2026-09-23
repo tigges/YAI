@@ -28,7 +28,7 @@ export function NavRail({ collapsed = false, onToggleCollapse }: NavRailProps) {
             <Bot size={14} className="text-white" />
           </div>
           {!collapsed && (
-            <span className="text-sm font-semibold text-[var(--text-primary)] truncate">YBot</span>
+            <span className="text-sm font-semibold text-[var(--text-primary)] truncate">BotStudio</span>
           )}
         </div>
       </div>

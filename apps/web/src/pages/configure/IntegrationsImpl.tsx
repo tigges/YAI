@@ -43,7 +43,7 @@ const INTEGRATIONS: Integration[] = [
   { id: 'jira', name: 'Jira', description: 'Create Jira issues directly from chat escalations', category: 'Ticketing', status: 'available', logo: '🔷' },
   { id: 'slack', name: 'Slack', description: 'Post conversation alerts and reports to Slack channels', category: 'Messaging', status: 'available', logo: '💜' },
   { id: 'teams', name: 'Microsoft Teams', description: 'Send notifications and alerts to Teams channels', category: 'Messaging', status: 'available', logo: '🟣' },
-  { id: 'zapier', name: 'Zapier', description: 'Connect YBot to 5000+ apps via Zapier workflows', category: 'Automation', status: 'available', logo: '🟡' },
+  { id: 'zapier', name: 'Zapier', description: 'Connect BotStudio to 5000+ apps via Zapier workflows', category: 'Automation', status: 'available', logo: '🟡' },
   { id: 'n8n', name: 'n8n', description: 'Self-hosted automation workflows with n8n', category: 'Automation', status: 'available', logo: '🔴' },
   { id: 'ga4', name: 'Google Analytics', description: 'Track bot engagement and conversion events in GA4', category: 'Analytics', status: 'available', logo: '📊' },
   { id: 'mixpanel', name: 'Mixpanel', description: 'Send custom events to Mixpanel for product analytics', category: 'Analytics', status: 'available', logo: '🎯' },

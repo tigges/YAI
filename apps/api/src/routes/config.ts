@@ -211,7 +211,7 @@ export async function teamRoutes(app: FastifyInstance) {
       to: invitedUser.email,
       inviteUrl,
       invitedBy: invitedByUser?.displayName ?? invitedByUser?.email ?? 'A team member',
-      workspaceName: tenant?.name ?? 'YBot',
+      workspaceName: tenant?.name ?? 'BotStudio',
       role: body.data.role,
     })).catch((e) => { console.error('[email] invite send failed:', e) })
 

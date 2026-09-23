@@ -35,7 +35,7 @@ const ADD_KINDS = ['web', 'whatsapp', 'sms', 'email', 'facebook', 'telegram']
 
 function getEmbedCode(channelId: string): string {
   const base = typeof window !== 'undefined' ? window.location.origin : ''
-  return `<!-- YBot chat widget -->
+  return `<!-- BotStudio chat widget -->
 <script src="${base}/api/v1/widget.js?id=${channelId}" async></script>
 
 <!-- Optional customisation -->

@@ -18,7 +18,7 @@ export interface EmailOptions {
   text: string
 }
 
-const FROM = process.env['EMAIL_FROM'] ?? 'YBot <noreply@botstudio.uk>'
+const FROM = process.env['EMAIL_FROM'] ?? 'BotStudio <noreply@botstudio.uk>'
 
 async function sendViaResend(opts: EmailOptions): Promise<void> {
   const res = await fetch('https://api.resend.com/emails', {
@@ -73,8 +73,8 @@ export function passwordResetEmail(opts: { to: string; resetUrl: string; display
   const name = opts.displayName ?? 'there'
   return {
     to: opts.to,
-    subject: 'Reset your YBot password',
-    text: `Hi ${name},\n\nClick the link below to reset your password (valid for 1 hour):\n\n${opts.resetUrl}\n\nIf you didn't request this, you can ignore this email.\n\nYBot Team`,
+    subject: 'Reset your BotStudio password',
+    text: `Hi ${name},\n\nClick the link below to reset your password (valid for 1 hour):\n\n${opts.resetUrl}\n\nIf you didn't request this, you can ignore this email.\n\nBotStudio`,
     html: `<p>Hi ${name},</p>
 <p>Click the button below to reset your password. This link is valid for <strong>1 hour</strong>.</p>
 <p style="margin:24px 0"><a href="${opts.resetUrl}" style="background:#8b5cf6;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:600">Reset password</a></p>
@@ -86,8 +86,8 @@ export function passwordResetEmail(opts: { to: string; resetUrl: string; display
 export function inviteEmail(opts: { to: string; inviteUrl: string; invitedBy: string; workspaceName: string; role: string }): EmailOptions {
   return {
     to: opts.to,
-    subject: `You've been invited to ${opts.workspaceName} on YBot`,
-    text: `Hi,\n\n${opts.invitedBy} has invited you to join ${opts.workspaceName} as ${opts.role}.\n\nAccept your invite here:\n${opts.inviteUrl}\n\nThis link expires in 7 days.\n\nYBot Team`,
+    subject: `You've been invited to ${opts.workspaceName} on BotStudio`,
+    text: `Hi,\n\n${opts.invitedBy} has invited you to join ${opts.workspaceName} as ${opts.role}.\n\nAccept your invite here:\n${opts.inviteUrl}\n\nThis link expires in 7 days.\n\nBotStudio`,
     html: `<p>Hi,</p>
 <p><strong>${opts.invitedBy}</strong> has invited you to join <strong>${opts.workspaceName}</strong> as <strong>${opts.role}</strong>.</p>
 <p style="margin:24px 0"><a href="${opts.inviteUrl}" style="background:#8b5cf6;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:600">Accept invite</a></p>

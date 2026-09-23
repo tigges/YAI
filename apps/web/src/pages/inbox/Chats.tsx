@@ -178,7 +178,7 @@ export function ChatsPage() {
   const messages: Message[] = (selectedConvo?.messages ?? []).map((m) => ({
     id: m.id,
     from: (m.authorKind ?? m.direction === 'inbound' ? 'user' : 'agent') as 'user' | 'bot' | 'agent',
-    name: m.authorKind === 'user' ? selectedConvo!.contact?.displayName ?? 'User' : m.authorKind === 'bot' ? 'YBot' : 'Agent',
+    name: m.authorKind === 'user' ? selectedConvo!.contact?.displayName ?? 'User' : m.authorKind === 'bot' ? 'BotStudio' : 'Agent',
     text: m.content?.text ?? '',
     time: new Date(m.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
     isNote: Boolean(m.content?.internal),
@@ -488,9 +488,9 @@ export function ChatsPage() {
             {/* Streaming bot reply in progress */}
             {streamingText && (
               <div className="flex gap-3 px-4 py-2 justify-start">
-                <Avatar name="YBot" size="xs" />
+                <Avatar name="BotStudio" size="xs" />
                 <div className="max-w-[70%]">
-                  <p className="text-[11px] text-[var(--text-muted)] mb-1">YBot</p>
+                  <p className="text-[11px] text-[var(--text-muted)] mb-1">BotStudio</p>
                   <div className="rounded-2xl rounded-tl-sm px-3 py-2 text-sm bg-[var(--accent-muted)] text-[var(--text-primary)] border border-[var(--accent)]/20">
                     {streamingText}
                     <span className="inline-block w-1.5 h-3.5 ml-0.5 bg-[var(--accent)] rounded-sm animate-pulse align-middle" />
