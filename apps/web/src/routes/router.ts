@@ -43,6 +43,7 @@ import { AuditPage } from '../pages/admin/Audit'
 import { SystemStatusPage } from '../pages/admin/SystemStatus'
 import { SettingsPage } from '../pages/Settings'
 import { BotNewPage } from '../pages/BotNew'
+import { HelpPage } from '../pages/Help'
 
 // ── Auth guard ────────────────────────────────────────────────────────────────
 function requireAuth() {
@@ -158,6 +159,7 @@ const systemStatusRoute = createRoute({ getParentRoute: () => appRoute, path: '/
 
 // ── Settings ─────────────────────────────────────────────────────────────────
 const settingsRoute = createRoute({ getParentRoute: () => appRoute, path: '/settings', component: SettingsPage })
+const helpRoute = createRoute({ getParentRoute: () => appRoute, path: '/help', component: HelpPage })
 
 // ── Router ────────────────────────────────────────────────────────────────────
 const routeTree = rootRoute.addChildren([
@@ -199,6 +201,7 @@ const routeTree = rootRoute.addChildren([
     auditRoute,
     systemStatusRoute,
     settingsRoute,
+    helpRoute,
   ]),
 ])
 

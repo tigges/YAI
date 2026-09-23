@@ -46,7 +46,7 @@ export function AppShell() {
           darkMode={darkMode}
           onToggleDark={() => setDarkMode((d) => !d)}
         />
-        <main className="flex-1 overflow-auto">
+        <main className="min-h-0 flex-1 overflow-auto">
           <Outlet />
         </main>
       </div>
