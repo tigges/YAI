@@ -33,18 +33,14 @@ export const DialogContent = React.forwardRef<
     <DialogPrimitive.Content
       ref={ref}
       className={cn(
-        'fixed left-[50%] top-[50%] z-50 -translate-x-1/2 -translate-y-1/2',
+        'fixed inset-x-0 top-0 bottom-0 z-50 m-auto flex h-fit max-h-[min(85vh,100dvh)] flex-col overflow-hidden',
         'rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--bg-elevated)] shadow-[var(--shadow-lg)]',
         'data-[state=open]:animate-in data-[state=closed]:animate-out',
         'data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0',
-        'data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95',
-        'data-[state=closed]:slide-out-to-left-1/2 data-[state=open]:slide-in-from-left-1/2',
-        'data-[state=closed]:slide-out-to-top-[48%] data-[state=open]:slide-in-from-top-[48%]',
-        size === 'sm' && 'w-[400px]',
-        size === 'md' && 'w-[540px]',
-        size === 'lg' && 'w-[720px]',
-        size === 'xl' && 'w-[900px]',
-        'max-h-[85vh] overflow-y-auto',
+        size === 'sm' && 'w-[min(400px,calc(100vw-2rem))]',
+        size === 'md' && 'w-[min(540px,calc(100vw-2rem))]',
+        size === 'lg' && 'w-[min(720px,calc(100vw-2rem))]',
+        size === 'xl' && 'w-[min(900px,calc(100vw-2rem))]',
         className
       )}
       {...props}
@@ -59,17 +55,17 @@ export const DialogContent = React.forwardRef<
 DialogContent.displayName = DialogPrimitive.Content.displayName
 
 export function DialogHeader({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) {
-  return <div className={cn('px-6 pt-6 pb-4', className)} {...props} />
+  return <div className={cn('shrink-0 px-6 pt-6 pb-4 pr-10', className)} {...props} />
 }
 
 export function DialogBody({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) {
-  return <div className={cn('px-6 pb-6', className)} {...props} />
+  return <div className={cn('min-h-0 flex-1 overflow-y-auto px-6 pb-6', className)} {...props} />
 }
 
 export function DialogFooter({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) {
   return (
     <div
-      className={cn('flex items-center justify-end gap-2 border-t border-[var(--border)] px-6 py-4', className)}
+      className={cn('flex shrink-0 items-center justify-end gap-2 border-t border-[var(--border)] px-6 py-4', className)}
       {...props}
     />
   )

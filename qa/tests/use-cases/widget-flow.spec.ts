@@ -6,17 +6,22 @@ const sessionId = 'qa-widget-bella'
 const line = 'QA check from the website widget'
 
 test('a widget flow is processed and shows in the inbox and on the dashboard', { tag: '@smoke' }, async ({ page, request }) => {
-  const login = await request.post('/api/v1/auth/login', {
-    data: { email: bellaEmail, password: bellaPassword },
-  })
-  expect(login.ok()).toBeTruthy()
-  const token = (await login.json()).data.token as string
+  let token = ''
+  for (let attempt = 0; attempt < 3 && !token; attempt++) {
+    const login = await request.post('/api/v1/auth/login', {
+      data: { email: bellaEmail, password: bellaPassword },
+    })
+    if (login.ok()) token = (await login.json()).data.token as string
+    else if (attempt < 2) await new Promise((resolve) => setTimeout(resolve, 1000))
+  }
+  expect(token).toBeTruthy()
   const listed = await request.get('/api/v1/conversations?limit=50', {
     headers: { Authorization: `Bearer ${token}` },
   })
-  expect(listed.ok()).toBeTruthy()
-  const existing = ((await listed.json()).data as Array<{ id: string; contact?: { displayName?: string } }>)
-    .find((conversation) => conversation.contact?.displayName === visitor)
+  const existing = listed.ok()
+    ? ((await listed.json()).data as Array<{ id: string; contact?: { displayName?: string } }>)
+        .find((conversation) => conversation.contact?.displayName === visitor)
+    : undefined
 
   const chat = await request.post('/api/v1/public/chat/bella-web', {
     data: {

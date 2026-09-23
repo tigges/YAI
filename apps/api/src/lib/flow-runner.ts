@@ -16,6 +16,7 @@ import { SessionMachine } from '@ybot/runtime'
 import type { Session, SessionVariables, FlowGraph } from '@ybot/runtime'
 import { prisma } from '@ybot/db'
 import { createLlmAdapter, createLlmAdapterForModel } from '@ybot/llm'
+import { runFlowTurn } from './flow-turn.js'
 
 const defaultLlm = createLlmAdapter({
   provider: (process.env['LLM_PROVIDER'] as 'openai' | 'anthropic' | 'groq' | 'ollama' | 'gemini') ?? 'openai',
@@ -138,8 +139,13 @@ export async function runFlowIfPublished(opts: {
     httpFetch: fetch,
   })
 
-  const result = await machine.run(session, graph, userText)
+  const result = await runFlowTurn(machine, session, graph, startNode.id, userText)
   const updatedSession = result.session
+  const visible = result.newMessages.some((message) => message.content.text.trim().length > 0)
+  if (!visible && !result.handover) {
+    await prisma.flowSession.delete({ where: { conversationId } }).catch(() => {})
+    return { handled: false, messages: [] }
+  }
 
   // ── 6. Persist the updated session ───────────────────────────────────────────
   if (updatedSession.status === 'completed') {
