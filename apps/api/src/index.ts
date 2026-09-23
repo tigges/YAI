@@ -133,7 +133,7 @@ try {
 }
 
 /**
- * If DEPLOY_WEBHOOK_URL is set, POST a "YBot is live" notification once the
+ * If DEPLOY_WEBHOOK_URL is set, POST a "BotStudio is live" notification once the
  * server has started.  Compatible with Slack incoming webhooks and any generic
  * JSON POST endpoint.  Failures are silently swallowed so they never affect
  * the running server.
@@ -147,7 +147,7 @@ async function notifyDeployWebhook(): Promise<void> {
   const gitSha      = process.env['APP_GIT_SHA']      ?? 'dev'
   const buildDate   = process.env['APP_BUILD_DATE']   ?? new Date().toISOString()
 
-  const text = `✅ *YBot API is live* — v${version} · build #${buildNumber} · \`${gitSha.slice(0, 7)}\` — ${new Date(buildDate).toUTCString()}`
+  const text = `✅ *BotStudio API is live* — v${version} · build #${buildNumber} · \`${gitSha.slice(0, 7)}\` — ${new Date(buildDate).toUTCString()}`
 
   await fetch(url, {
     method: 'POST',

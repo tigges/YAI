@@ -20,7 +20,7 @@ const mkEdge = (id: string, source: string, target: string, label?: string) =>
 const WELCOME_GRAPH = {
   nodes: [
     mkNode('n1',   80, 'trigger',      'Start',          { event: 'conversation.started' }),
-    mkNode('n2',  320, 'send_message', 'Greeting',       { text: 'Hi there! 👋 I\'m the YBot assistant. How can I help you today?' }),
+    mkNode('n2',  320, 'send_message', 'Greeting',       { text: 'Hi there! 👋 I\'m the BotStudio assistant. How can I help you today?' }),
     mkNode('n3',  580, 'ask_question', 'Route',          { question: 'Choose an option:', options: ['Order / Delivery', 'Returns & Refunds', 'Billing', 'Speak to an agent'], variable: 'route' }),
     mkNode('n4',  840, 'condition',    'Route check',    { variable: 'route', operator: 'equals' }),
     mkNode('n5', 1100, 'handover',     'Agent handover', { team: 'support' }),
@@ -242,7 +242,7 @@ export const DEMO_TEMPLATES = [
     approvalStatus: 'approved', content: { body: '' }, variables: ['first_name'] },
   { id: 't6', name: 'OTP Verification', channel: 'sms',
     status: 'approved', category: 'utility', language: 'en',
-    body: 'Your YBot verification code is {{1}}. Valid for 10 minutes. Do not share this code.',
+    body: 'Your BotStudio verification code is {{1}}. Valid for 10 minutes. Do not share this code.',
     usedIn: 12, createdAt: '2m ago', updatedAt: '2m ago',
     approvalStatus: 'approved', content: { body: '' }, variables: ['otp_code'] },
   { id: 't7', name: 'CSAT Survey', channel: 'whatsapp',

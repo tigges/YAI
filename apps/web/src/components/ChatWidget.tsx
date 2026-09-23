@@ -38,9 +38,10 @@ interface ChatWidgetProps {
   systemPrompt?: string
   onClose?: () => void
   className?: string
+  autoFocus?: boolean
 }
 
-export function ChatWidget({ botId, botName = 'Bot', systemPrompt, onClose, className }: ChatWidgetProps) {
+export function ChatWidget({ botId, botName = 'Bot', systemPrompt, onClose, className, autoFocus = false }: ChatWidgetProps) {
   const [messages, setMessages] = useState<ChatMessage[]>([
     {
       id: 'welcome',
@@ -69,6 +70,12 @@ export function ChatWidget({ botId, botName = 'Bot', systemPrompt, onClose, clas
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
+
+  useEffect(() => {
+    if (!autoFocus) return
+    const id = window.setTimeout(() => inputRef.current?.focus(), 0)
+    return () => window.clearTimeout(id)
+  }, [autoFocus])
 
   const historyForApi = useCallback((): Array<{ role: 'user' | 'assistant'; content: string }> => {
     return messages
@@ -319,7 +326,7 @@ export function ChatWidget({ botId, botName = 'Bot', systemPrompt, onClose, clas
           </Button>
         </div>
         <p className="mt-1.5 text-center text-[10px] text-[var(--text-muted)]">
-          Powered by YBot · RAG + {import.meta.env.VITE_LLM_LABEL ?? 'Claude'}
+          Powered by BotStudio · RAG + {import.meta.env.VITE_LLM_LABEL ?? 'Claude'}
         </p>
       </div>
     </div>

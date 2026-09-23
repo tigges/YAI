@@ -20,7 +20,7 @@ const INTEGRATION_CATALOG = [
   { id: 'jira', name: 'Jira', description: 'Create Jira issues directly from chat escalations', category: 'Ticketing' },
   { id: 'slack', name: 'Slack', description: 'Post conversation alerts and reports to Slack channels', category: 'Messaging' },
   { id: 'teams', name: 'Microsoft Teams', description: 'Send notifications and alerts to Teams channels', category: 'Messaging' },
-  { id: 'zapier', name: 'Zapier', description: 'Connect YBot to 5000+ apps via Zapier workflows', category: 'Automation' },
+  { id: 'zapier', name: 'Zapier', description: 'Connect BotStudio to 5000+ apps via Zapier workflows', category: 'Automation' },
   { id: 'n8n', name: 'n8n', description: 'Self-hosted automation workflows with n8n', category: 'Automation' },
   { id: 'ga4', name: 'Google Analytics', description: 'Track bot engagement and conversion events in GA4', category: 'Analytics' },
   { id: 'mixpanel', name: 'Mixpanel', description: 'Send custom events to Mixpanel for product analytics', category: 'Analytics' },

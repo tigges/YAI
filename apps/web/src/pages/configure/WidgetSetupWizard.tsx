@@ -143,7 +143,7 @@ function getInstallSteps(platform: Platform, embedCode: string): { title: string
           'Open the Wix Editor for your site.',
           'Go to Settings (gear icon) → Advanced → Custom Code.',
           'Click "+ Add Custom Code" under the Body section.',
-          'Paste the snippet, name it "YBot Widget", set it to load on "All Pages". Save.',
+          'Paste the snippet, name it "BotStudio widget", set it to load on "All Pages". Save.',
         ],
       }
     case 'squarespace':
@@ -215,7 +215,7 @@ export function WidgetSetupWizard({ onClose }: WidgetSetupWizardProps) {
   const origin = typeof window !== 'undefined' ? window.location.origin : ''
 
   const embedCode = channelId
-    ? `<!-- YBot chat widget -->\n<script>\n  window.YBotTitle = '${widgetTitle}';\n  window.YBotAccentColor = '${accent}';\n</script>\n<script src="${origin}/api/v1/widget.js?id=${channelId}" async></script>`
+    ? `<!-- BotStudio chat widget -->\n<script>\n  window.YBotTitle = '${widgetTitle}';\n  window.YBotAccentColor = '${accent}';\n</script>\n<script src="${origin}/api/v1/widget.js?id=${channelId}" async></script>`
     : ''
 
   function copyCode() {
@@ -383,7 +383,7 @@ export function WidgetSetupWizard({ onClose }: WidgetSetupWizardProps) {
           </p>
           <button
             onClick={() => {
-              const subject = encodeURIComponent('YBot widget install snippet')
+              const subject = encodeURIComponent('BotStudio widget install snippet')
               const body = encodeURIComponent(`Here's the snippet to add to the website:\n\n${embedCode}\n\nPaste it just before the </body> tag.`)
               window.open(`mailto:?subject=${subject}&body=${body}`)
             }}

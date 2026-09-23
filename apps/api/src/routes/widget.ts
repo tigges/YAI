@@ -226,7 +226,7 @@ export async function widgetRoutes(app: FastifyInstance) {
   app.get<{ Params: { channelId: string }; Querystring: { title?: string; color?: string } }>('/widget-test/:channelId', async (request, reply) => {
     const { channelId } = request.params
     const channel = await prisma.channel.findFirst({ where: { id: channelId, isActive: true }, include: { bot: true } })
-    const botLabel   = channel?.bot?.name ?? 'YBot'
+    const botLabel   = channel?.bot?.name ?? 'BotStudio'
     const personaName = channel?.bot?.personaName ?? botLabel
     // Allow wizard/embed overrides via query params
     const titleOverride = request.query.title ? String(request.query.title) : null

@@ -4,7 +4,7 @@ import { NODE_DEFINITIONS, type NodeKind } from '@ybot/shared'
 import {
   Play, MessageSquare, HelpCircle, GitBranch, Variable,
   Globe, Workflow, Headphones, CheckCircle, Clock, Mail,
-  Sparkles, Search, Layout, Layers, Zap, FileText,
+  Sparkles, Search, Layout, Layers, Zap, FileText, ChevronLeft, ChevronRight,
 } from 'lucide-react'
 
 const ICON_MAP: Record<NodeKind, React.ElementType> = {
@@ -44,14 +44,48 @@ const CATEGORIES = [
 ]
 
 interface NodePaletteProps {
+  collapsed: boolean
+  onToggle: () => void
   onDragStart: (kind: NodeKind, label: string) => void
 }
 
-export function NodePalette({ onDragStart }: NodePaletteProps) {
+export function NodePalette({ collapsed, onToggle, onDragStart }: NodePaletteProps) {
+  if (collapsed) {
+    return (
+      <div className="flex h-full w-12 shrink-0 flex-col border-r border-[var(--border)] bg-[var(--bg-surface)]">
+        <button
+          type="button"
+          onClick={onToggle}
+          title="Show nodes"
+          className="flex h-10 items-center justify-center text-[var(--text-muted)] hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]"
+        >
+          <ChevronRight size={16} />
+        </button>
+        <div className="flex-1" />
+        <button
+          type="button"
+          onClick={onToggle}
+          title="Show nodes"
+          className="flex h-10 items-center justify-center border-t border-[var(--border)] text-[var(--text-muted)] hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]"
+        >
+          <ChevronRight size={14} />
+        </button>
+      </div>
+    )
+  }
+
   return (
-    <div className="flex h-full w-[200px] shrink-0 flex-col border-r border-[var(--border)] bg-[var(--bg-surface)] overflow-y-auto">
-      <div className="border-b border-[var(--border)] px-3 py-2.5">
+    <div className="flex h-full w-[200px] shrink-0 flex-col border-r border-[var(--border)] bg-[var(--bg-surface)] overflow-hidden max-md:absolute max-md:inset-y-0 max-md:left-0 max-md:z-20 max-md:shadow-xl">
+      <div className="flex items-center justify-between border-b border-[var(--border)] px-3 py-2.5">
         <h3 className="text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wider">Nodes</h3>
+        <button
+          type="button"
+          onClick={onToggle}
+          title="Hide nodes"
+          className="rounded p-1 text-[var(--text-muted)] hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]"
+        >
+          <ChevronLeft size={14} />
+        </button>
       </div>
 
       <div className="flex-1 overflow-y-auto py-2">
@@ -94,10 +128,15 @@ export function NodePalette({ onDragStart }: NodePaletteProps) {
         })}
       </div>
 
-      <div className="border-t border-[var(--border)] p-3">
-        <p className="text-[10px] text-[var(--text-muted)] text-center">
-          Drag nodes onto the canvas
-        </p>
+      <div className="border-t border-[var(--border)] p-2">
+        <button
+          type="button"
+          onClick={onToggle}
+          title="Hide nodes"
+          className="flex h-8 w-full items-center justify-center rounded-[var(--radius)] text-[var(--text-muted)] hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]"
+        >
+          <ChevronLeft size={14} />
+        </button>
       </div>
     </div>
   )

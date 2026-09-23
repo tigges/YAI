@@ -1,4 +1,4 @@
-import React, { useCallback, useRef, useState } from 'react'
+import React, { useCallback, useEffect, useRef, useState } from 'react'
 import {
   ReactFlow,
   Background,
@@ -7,6 +7,7 @@ import {
   addEdge,
   useNodesState,
   useEdgesState,
+  useReactFlow,
   type Connection,
   type Node,
   type Edge,
@@ -18,10 +19,12 @@ import { useNavigate, useParams } from '@tanstack/react-router'
 import {
   ArrowLeft, Save, Play, Share2,
   Undo2, Redo2, X,
+  AlignHorizontalJustifyCenter, AlignVerticalJustifyCenter, LayoutTemplate,
 } from 'lucide-react'
 import { Button, Badge } from '@ybot/ui'
 import { cn } from '@ybot/ui'
 import { nodeTypes } from '../../../components/canvas/FlowNode'
+import { alignHorizontal, alignVertical, tidyLayout } from '../../../components/canvas/layout'
 import { NodePalette } from '../../../components/canvas/NodePalette'
 import { NodeConfigPanel } from '../../../components/canvas/NodeConfigPanel'
 import { ChatWidget } from '../../../components/ChatWidget'
@@ -47,7 +50,8 @@ function normalizeCanvasEdge(edge: Edge): Edge {
   const handle = edge.sourceHandle
   const sourceHandle =
     handle === 'yes' ? 'true' : handle === 'no' ? 'false' : handle
-  return sourceHandle === handle ? edge : { ...edge, sourceHandle }
+  const next = sourceHandle === handle ? edge : { ...edge, sourceHandle }
+  return next.type && next.type !== 'default' ? next : { ...next, type: 'smoothstep' }
 }
 
 const INITIAL_NODES: Node[] = [
@@ -118,6 +122,20 @@ const EDGE_STYLE = {
   strokeWidth: 1.5,
 }
 
+function FitAfterLayout({ tick }: { tick: number }) {
+  const { fitView } = useReactFlow()
+  const skip = useRef(true)
+  useEffect(() => {
+    if (skip.current) {
+      skip.current = false
+      return
+    }
+    const id = requestAnimationFrame(() => { void fitView({ padding: 0.2, duration: 200 }) })
+    return () => cancelAnimationFrame(id)
+  }, [tick, fitView])
+  return null
+}
+
 import { useFlows, useSaveCanvas, useFlowCanvas, usePublishFlow } from '../../../lib/hooks'
 import { useAppStore } from '../../../store/app'
 
@@ -152,6 +170,8 @@ export function FlowCanvasPage() {
   }, [savedCanvas])
 
   const [showTestPanel, setShowTestPanel] = useState(false)
+  const [paletteOpen, setPaletteOpen] = useState(() => typeof window === 'undefined' || window.innerWidth >= 768)
+  const [layoutTick, setLayoutTick] = useState(0)
 
   const dragKindRef = useRef<{ kind: NodeKind; label: string } | null>(null)
   const reactFlowWrapper = useRef<HTMLDivElement>(null)
@@ -191,6 +211,7 @@ export function FlowCanvasPage() {
         addEdge(
           {
             ...params,
+            type: 'smoothstep',
             markerEnd: { type: MarkerType.ArrowClosed },
             style: EDGE_STYLE,
             animated: false,
@@ -248,6 +269,13 @@ export function FlowCanvasPage() {
     )
   }
 
+  function applyLayout(next: Node[]) {
+    remember()
+    setNodes(next)
+    setEdges((current) => current.map((edge) => (edge.type && edge.type !== 'default' ? edge : { ...edge, type: 'smoothstep' })))
+    setLayoutTick((tick) => tick + 1)
+  }
+
   function handleDeleteNode(nodeId: string) {
     remember()
     setNodes((ns) => ns.filter((n) => n.id !== nodeId))
@@ -278,6 +306,9 @@ export function FlowCanvasPage() {
       })
       await publishFlow.mutateAsync({ flowId: flowId ?? '', environmentId })
       setStatus('published')
+      setSaving(false)
+      navigate({ to: '/build/flows' })
+      return
     } catch {
       setStatus('saved')
     }
@@ -287,7 +318,7 @@ export function FlowCanvasPage() {
   return (
     <div className="flex flex-col h-full">
       {/* Canvas Toolbar */}
-      <div className="flex h-[var(--topbar-height)] items-center justify-between border-b border-[var(--border)] bg-[var(--bg-surface)] px-4 shrink-0">
+      <div className="flex min-h-[var(--topbar-height)] flex-wrap items-center justify-between gap-2 border-b border-[var(--border)] bg-[var(--bg-surface)] px-3 py-2 shrink-0">
         <div className="flex items-center gap-3">
           <Button
             variant="ghost"
@@ -309,7 +340,11 @@ export function FlowCanvasPage() {
           </Badge>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <Button variant="ghost" size="icon-sm" title="Tidy layout" onClick={() => applyLayout(tidyLayout(nodes, edges))}><LayoutTemplate size={14} /></Button>
+          <Button variant="ghost" size="icon-sm" title="Align nodes in a row" onClick={() => applyLayout(alignHorizontal(nodes))}><AlignHorizontalJustifyCenter size={14} /></Button>
+          <Button variant="ghost" size="icon-sm" title="Align nodes in a column" onClick={() => applyLayout(alignVertical(nodes))}><AlignVerticalJustifyCenter size={14} /></Button>
+          <div className="h-4 w-px bg-[var(--border)]" />
           <Button variant="ghost" size="icon-sm" title={`Undo (${selectedEnv})`} onClick={undo}><Undo2 size={14} /></Button>
           <Button variant="ghost" size="icon-sm" title="Redo" onClick={redo}><Redo2 size={14} /></Button>
           <div className="h-4 w-px bg-[var(--border)]" />
@@ -330,8 +365,8 @@ export function FlowCanvasPage() {
       </div>
 
       {/* Canvas body */}
-      <div className="flex flex-1 overflow-hidden">
-        <NodePalette onDragStart={handleDragStart} />
+      <div className="relative flex flex-1 overflow-hidden">
+        <NodePalette collapsed={!paletteOpen} onToggle={() => setPaletteOpen((open) => !open)} onDragStart={handleDragStart} />
 
         <div
           ref={reactFlowWrapper}
@@ -348,11 +383,12 @@ export function FlowCanvasPage() {
             onNodeClick={handleNodeClick}
             onPaneClick={() => setSelectedNode(null)}
             nodeTypes={nodeTypes}
-            defaultEdgeOptions={{ style: EDGE_STYLE, markerEnd: { type: MarkerType.ArrowClosed } }}
+            defaultEdgeOptions={{ type: 'smoothstep', style: EDGE_STYLE, markerEnd: { type: MarkerType.ArrowClosed } }}
             fitView
             fitViewOptions={{ padding: 0.2 }}
             style={{ background: 'var(--bg-base)' }}
           >
+            <FitAfterLayout tick={layoutTick} />
             <Background
               variant={BackgroundVariant.Dots}
               gap={20}
@@ -386,7 +422,7 @@ export function FlowCanvasPage() {
 
         {/* Test Bot panel */}
         {showTestPanel && (
-          <div className="w-[340px] shrink-0 border-l border-[var(--border)] flex flex-col overflow-hidden">
+          <div className="flex w-full max-w-[420px] shrink-0 flex-col overflow-hidden border-l border-[var(--border)] bg-[var(--bg-base)] max-md:absolute max-md:inset-y-0 max-md:right-0 max-md:z-30 max-md:shadow-xl md:w-[340px]">
             <div className="flex items-center justify-between px-4 py-2 border-b border-[var(--border)] bg-[var(--bg-surface)] shrink-0">
               <span className="text-[13px] font-semibold text-[var(--text-primary)]">Test Bot</span>
               <button
@@ -399,6 +435,7 @@ export function FlowCanvasPage() {
             <ChatWidget
               botId={selectedBotId}
               botName="Bot Preview"
+              autoFocus
               className="flex-1 rounded-none border-0 shadow-none"
             />
           </div>

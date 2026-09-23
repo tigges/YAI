@@ -122,7 +122,7 @@ export function SignInPage() {
             <Bot size={24} className="text-white" />
           </div>
           <div className="text-center">
-            <h1 className="text-xl font-bold text-[var(--text-primary)]">YBot Console</h1>
+            <h1 className="text-xl font-bold text-[var(--text-primary)]">BotStudio</h1>
             <p className="mt-0.5 text-sm text-[var(--text-muted)]">
               {mode === 'login' ? 'Sign in to your workspace' : 'Create your workspace'}
             </p>
@@ -235,7 +235,7 @@ export function SignInPage() {
         </Card>
 
         <p className="mt-6 text-center text-xs text-[var(--text-muted)]">
-          YBot Conversational AI Console
+          BotStudio
         </p>
       </div>
     </div>

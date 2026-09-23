@@ -9,7 +9,7 @@ test('QA Lab saves a contact, a ticket, and a flow', async ({ page }) => {
   if (await page.getByText('QA Scratch Contact').count() === 0) {
     await page.getByRole('button', { name: 'New Contact' }).click()
     await page.getByPlaceholder('e.g. Jane Doe').fill('QA Scratch Contact')
-    await page.getByRole('button', { name: 'Create contact' }).click()
+    await page.getByRole('dialog').getByRole('button', { name: 'Create contact' }).click()
   }
   await page.reload()
   await expect(page.getByText('QA Scratch Contact').first()).toBeVisible()
@@ -18,7 +18,7 @@ test('QA Lab saves a contact, a ticket, and a flow', async ({ page }) => {
   if (await page.getByText('QA scratch ticket').count() === 0) {
     await page.getByRole('button', { name: 'New Ticket' }).click()
     await page.getByPlaceholder('Describe the issue…').fill('QA scratch ticket')
-    await page.getByRole('button', { name: 'Create ticket' }).click()
+    await page.getByRole('dialog').getByRole('button', { name: 'Create ticket' }).click()
   }
   await page.reload()
   await expect(page.getByText('QA scratch ticket').first()).toBeVisible()
@@ -29,7 +29,7 @@ test('QA Lab saves a contact, a ticket, and a flow', async ({ page }) => {
   if (await scratch.count() === 0) {
     await page.getByRole('button', { name: 'New Flow' }).click()
     await page.getByPlaceholder('e.g. Welcome & Routing').fill('QA Scratch Flow')
-    await page.getByRole('button', { name: 'Create flow' }).click()
+    await page.getByRole('dialog').getByRole('button', { name: 'Create flow' }).click()
     await expect(page.getByRole('button', { name: 'Save' })).toBeVisible()
     await page.getByRole('button', { name: 'Save' }).click()
   } else {
