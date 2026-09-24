@@ -3,8 +3,8 @@ import { Workflow, Plus, Search, Play, Trash2, Pencil } from 'lucide-react'
 import { Button, Input, Badge, Table, THead, TBody, TR, TH, TD, EmptyState, PageHeader, Skeleton, Dialog, DialogContent, DialogHeader, DialogTitle, DialogBody, DialogFooter } from '@ybot/ui'
 import { SubNav } from '../../components/SubNav'
 import { useNavigate } from '@tanstack/react-router'
-import { useFlows, useCreateFlow, useDeleteFlow, useUpdateFlow, usePublishFlow, useSaveCanvas, useImportStarterPack } from '../../lib/hooks'
-import type { CorporatePackResult } from '../../lib/api'
+import { useFlows, useCreateFlow, useDeleteFlow, useUpdateFlow, usePublishFlow, useSaveCanvas, useImportStarterPack, useRemoveStarterPack } from '../../lib/hooks'
+import type { CorporatePackResult, PackRemovalResult } from '../../lib/api'
 import { FlowWizard } from './FlowWizard'
 import { reviewFlow } from './PublishCheck'
 import type { FlowGraph } from '../../lib/api'
@@ -48,6 +48,8 @@ export function FlowsPage() {
   const [showPack, setShowPack] = useState(false)
   const [packChoice, setPackChoice] = useState<'corporate-services' | 'hair-studio' | null>(null)
   const [packResult, setPackResult] = useState<CorporatePackResult | null>(null)
+  const [packRemoved, setPackRemoved] = useState<PackRemovalResult | null>(null)
+  const [confirmRemove, setConfirmRemove] = useState(false)
   const [packError, setPackError] = useState('')
 
   const { data: flows = [], isLoading } = useFlows()
@@ -57,6 +59,7 @@ export function FlowsPage() {
   const deleteFlow = useDeleteFlow()
   const publishFlow = usePublishFlow()
   const importPack = useImportStarterPack()
+  const removePack = useRemoveStarterPack()
   const environments = useAppStore((s) => s.bots.find((b) => b.id === s.selectedBotId)?.environments) ?? NO_ENVIRONMENTS
   const publishEnv = environments.find((env) => env.kind === 'sandbox') ?? environments.find((env) => env.kind === 'production')
   const suggested = flows.filter((flow) => flow.tags?.includes('proposed') && flow.versions?.[0]?.status !== 'published')
@@ -124,7 +127,7 @@ export function FlowsPage() {
         description="Visual conversation flow builder"
         actions={
           <div className="flex items-center gap-2">
-            <Button size="md" variant="secondary" onClick={() => { setPackChoice(null); setPackResult(null); setPackError(''); setShowPack(true) }}>
+            <Button size="md" variant="secondary" onClick={() => { setPackChoice(null); setPackResult(null); setPackRemoved(null); setConfirmRemove(false); setPackError(''); setShowPack(true) }}>
               Starter packs
             </Button>
             <Button size="md" onClick={() => setShowNew(true)}>
@@ -268,8 +271,19 @@ export function FlowsPage() {
             <DialogTitle>{packChoice === 'hair-studio' ? 'Hair studio' : packChoice === 'corporate-services' ? 'Corporate services' : 'Starter packs'}</DialogTitle>
           </DialogHeader>
           <DialogBody className="space-y-3">
-            {packResult && packChoice ? (
+            {packRemoved && packChoice ? (
+              <p className="text-sm text-[var(--text-secondary)]">
+                Removed {packRemoved.flowsRemoved.length} flows, {packRemoved.intentsRemoved} intents, and {packRemoved.faqsRemoved} FAQs from the {packChoice === 'hair-studio' ? 'hair studio' : 'corporate services'} pack. Flows that were already on this bot stay.
+              </p>
+            ) : packResult && packChoice ? (
               <PackResult result={packResult} pack={packChoice} />
+            ) : confirmRemove && packChoice ? (
+              <>
+                <p className="text-sm text-[var(--text-secondary)]">
+                  Remove the {packChoice === 'hair-studio' ? 'hair studio' : 'corporate services'} pack from this bot? The flows, intents, and FAQs it added are deleted. Flows that were already here stay, including the welcome the widget is using.
+                </p>
+                {packError && <p className="text-xs text-[var(--danger)]">{packError}</p>}
+              </>
             ) : packChoice === null ? (
               <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                 <button type="button" onClick={() => setPackChoice('corporate-services')} className="rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--bg-surface)] p-3 text-left hover:bg-[var(--bg-hover)]">
@@ -296,12 +310,36 @@ export function FlowsPage() {
             )}
           </DialogBody>
           <DialogFooter>
-            {packChoice && !packResult ? (
-              <Button variant="ghost" onClick={() => { setPackChoice(null); setPackError('') }}>Back</Button>
+            {packChoice && !packResult && !packRemoved ? (
+              <Button variant="ghost" onClick={() => { if (confirmRemove) { setConfirmRemove(false); setPackError('') } else { setPackChoice(null); setPackError('') } }}>Back</Button>
             ) : (
-              <Button variant="ghost" onClick={() => setShowPack(false)}>{packResult ? 'Close' : 'Cancel'}</Button>
+              <Button variant="ghost" onClick={() => setShowPack(false)}>{packResult || packRemoved ? 'Close' : 'Cancel'}</Button>
             )}
-            {packChoice && !packResult && (
+            {packChoice && !packResult && !packRemoved && !confirmRemove && (
+              <Button
+                variant="destructive"
+                disabled={removePack.isPending}
+                onClick={() => { setPackError(''); setConfirmRemove(true) }}
+              >
+                Remove pack
+              </Button>
+            )}
+            {packChoice && confirmRemove && !packRemoved && (
+              <Button
+                variant="destructive"
+                disabled={removePack.isPending}
+                onClick={() => {
+                  setPackError('')
+                  removePack.mutate(packChoice, {
+                    onSuccess: (result) => { setPackRemoved(result); setConfirmRemove(false) },
+                    onError: (err) => setPackError(err instanceof Error ? err.message : 'Could not remove the pack.'),
+                  })
+                }}
+              >
+                {removePack.isPending ? 'Removing…' : 'Remove pack'}
+              </Button>
+            )}
+            {packChoice && !packResult && !packRemoved && !confirmRemove && (
               <Button
                 disabled={importPack.isPending}
                 onClick={() => {

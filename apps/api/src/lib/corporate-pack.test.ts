@@ -9,6 +9,8 @@ import {
   flowCatalog,
   inspectFlowGraph,
   planCorporateImport,
+  selectPackRemoval,
+  starterPackScope,
 } from '@ybot/shared'
 
 function session(text: string): Session {
@@ -123,6 +125,30 @@ test('an existing welcome is left in place and the benchmark greeting is a draft
   assert.deepEqual(again.flows, [])
   assert.deepEqual(again.intents, [])
   assert.deepEqual(again.faqs, [])
+})
+
+test('removing the corporate pack leaves the salon flows that were already there', () => {
+  const scope = starterPackScope('corporate-services')
+  const selected = selectPackRemoval(scope, {
+    flows: [
+      { id: 'welcome', name: 'Welcome & Routing', tags: ['welcome', 'routing'] },
+      { id: 'draft', name: 'Corporate welcome', tags: ['welcome', 'routing', 'corporate'] },
+      { id: 'hours', name: 'Opening hours', tags: ['corporate', 'template', 'faq'] },
+      { id: 'cancel', name: 'Cancel order', tags: ['orders', 'template'] },
+    ],
+    intents: [
+      { id: 'keep', name: 'new_intent_1790205994182' },
+      { id: 'hours', name: 'Opening hours' },
+      { id: 'cancel', name: 'Cancel order' },
+    ],
+    faqs: [
+      { id: 'hours', tags: ['corporate', 'opening-hours'] },
+      { id: 'own', tags: ['salon'] },
+    ],
+  })
+  assert.deepEqual(selected.flows.map((flow) => flow.name).sort(), ['Corporate welcome', 'Opening hours'])
+  assert.deepEqual(selected.intents.map((intent) => intent.name).sort(), ['Cancel order', 'Opening hours'])
+  assert.deepEqual(selected.faqs.map((faq) => faq.id), ['hours'])
 })
 
 test('the new-flow list keeps one welcome and the older templates', () => {

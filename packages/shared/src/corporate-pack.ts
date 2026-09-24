@@ -12,6 +12,7 @@ import { returnRequestFlow, starterFlows, supportUseCaseFlows, SUPPORT_USE_CASES
 import { hairStudioPack } from './salon-pack.js'
 
 export const CORPORATE_PACK_ID = 'corporate-services'
+export type StarterPackId = 'corporate-services' | 'hair-studio'
 export const CORPORATE_WELCOME_NAME = 'Welcome & Routing'
 export const CORPORATE_WELCOME_DRAFT = 'Corporate welcome'
 
@@ -300,6 +301,27 @@ export function corporateServicesPack(companyName: string): CorporatePack {
       answer: topic.answer,
       tags: ['corporate', handleFor(topic.flowName)],
     })),
+  }
+}
+
+/** Tag and intent names a remove uses. Flows and FAQs carry the tag. Intents match by name. */
+export function starterPackScope(pack: StarterPackId): { tag: 'corporate' | 'salon'; intentNames: string[] } {
+  const built = pack === 'hair-studio' ? hairStudioPack('studio') : corporateServicesPack('company')
+  return {
+    tag: pack === 'hair-studio' ? 'salon' : 'corporate',
+    intentNames: built.intents.map((intent) => intent.name),
+  }
+}
+
+export function selectPackRemoval<TFlow extends { id: string; tags: string[] }, TIntent extends { id: string; name: string }, TFaq extends { id: string; tags: string[] }>(
+  scope: { tag: string; intentNames: string[] },
+  records: { flows: TFlow[]; intents: TIntent[]; faqs: TFaq[] },
+): { flows: TFlow[]; intents: TIntent[]; faqs: TFaq[] } {
+  const names = new Set(scope.intentNames)
+  return {
+    flows: records.flows.filter((flow) => flow.tags.includes(scope.tag)),
+    intents: records.intents.filter((intent) => names.has(intent.name)),
+    faqs: records.faqs.filter((faq) => faq.tags.includes(scope.tag)),
   }
 }
 

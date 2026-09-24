@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify'
 import { requireRole } from '../middleware/auth.js'
 import { prisma } from '@ybot/db'
-import { installCorporatePack, installHairStudioPack } from '../lib/install-corporate-pack.js'
+import { installCorporatePack, installHairStudioPack, removeStarterPack } from '../lib/install-corporate-pack.js'
 import { installStarterFlows } from '../lib/install-starter-flows.js'
 
 
@@ -96,6 +96,18 @@ export async function botsRoutes(app: FastifyInstance) {
 
   app.post('/:botId/packs/hair-studio', { preHandler: canBuild }, async (request, reply) => {
     return importPack(request as { user: JwtPayload; params: { botId: string } }, reply, installHairStudioPack)
+  })
+
+  app.delete('/:botId/packs/:packId', { preHandler: canBuild }, async (request, reply) => {
+    const { tenantId } = request.user as JwtPayload
+    const { botId, packId } = request.params as { botId: string; packId: string }
+    if (packId !== 'corporate-services' && packId !== 'hair-studio') {
+      return reply.status(404).send({ error: { code: 'NOT_FOUND', message: 'Unknown starter pack' } })
+    }
+    const bot = await prisma.bot.findFirst({ where: { id: botId, tenantId } })
+    if (!bot) return reply.status(404).send({ error: { code: 'NOT_FOUND', message: 'Bot not found' } })
+    const result = await removeStarterPack(tenantId, bot.id, packId)
+    return { data: result }
   })
 
   app.patch('/:botId', { preHandler: canBuild }, async (request, reply) => {

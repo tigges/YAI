@@ -36,6 +36,19 @@ export function useFlows() {
   })
 }
 
+export function useRemoveStarterPack() {
+  const qc = useQueryClient()
+  const bid = botId()
+  return useMutation({
+    mutationFn: (pack: 'corporate-services' | 'hair-studio') => api.bots.removePack(bid, pack).then((r) => r.data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['flows', bid] })
+      qc.invalidateQueries({ queryKey: ['intents', bid] })
+      qc.invalidateQueries({ queryKey: ['faqs', bid] })
+    },
+  })
+}
+
 export function useImportStarterPack() {
   const qc = useQueryClient()
   const bid = botId()

@@ -1,5 +1,5 @@
 import { prisma } from '@ybot/db'
-import { planCorporateImport, planHairStudioImport } from '@ybot/shared'
+import { planCorporateImport, planHairStudioImport, selectPackRemoval, starterPackScope, type StarterPackId } from '@ybot/shared'
 
 export interface CorporateInstallResult {
   flowsAdded: string[]
@@ -126,4 +126,42 @@ async function installPlannedPack(
   }
 
   return { flowsAdded, publishedNames, draftNames, intentsAdded, faqsAdded }
+}
+
+export interface PackRemovalResult {
+  flowsRemoved: string[]
+  intentsRemoved: number
+  faqsRemoved: number
+}
+
+/** Deletes the flows, intents, and FAQs that belong to the pack. Other flows stay. */
+export async function removeStarterPack(tenantId: string, botId: string, pack: StarterPackId): Promise<PackRemovalResult> {
+  const scope = starterPackScope(pack)
+  const [flows, intents, faqs] = await Promise.all([
+    prisma.flow.findMany({ where: { tenantId, botId }, select: { id: true, name: true, tags: true } }),
+    prisma.intent.findMany({ where: { tenantId, botId }, select: { id: true, name: true } }),
+    prisma.faq.findMany({ where: { tenantId, botId }, select: { id: true, tags: true } }),
+  ])
+  const selected = selectPackRemoval(scope, { flows, intents, faqs })
+  const flowIds = selected.flows.map((flow) => flow.id)
+  if (flowIds.length > 0) {
+    const versions = await prisma.flowVersion.findMany({ where: { flowId: { in: flowIds } }, select: { id: true } })
+    const versionIds = versions.map((version) => version.id)
+    if (versionIds.length > 0) {
+      await prisma.stepLog.deleteMany({ where: { flowVersionId: { in: versionIds } } })
+    }
+    await prisma.flowSession.deleteMany({ where: { botId, flowId: { in: flowIds } } })
+    await prisma.flow.deleteMany({ where: { tenantId, botId, id: { in: flowIds } } })
+  }
+  const faqIds = selected.faqs.map((faq) => faq.id)
+  const intentIds = selected.intents.map((intent) => intent.id)
+  const [removedFaqs, removedIntents] = await Promise.all([
+    faqIds.length > 0 ? prisma.faq.deleteMany({ where: { tenantId, botId, id: { in: faqIds } } }) : Promise.resolve({ count: 0 }),
+    intentIds.length > 0 ? prisma.intent.deleteMany({ where: { tenantId, botId, id: { in: intentIds } } }) : Promise.resolve({ count: 0 }),
+  ])
+  return {
+    flowsRemoved: selected.flows.map((flow) => flow.name),
+    intentsRemoved: removedIntents.count,
+    faqsRemoved: removedFaqs.count,
+  }
 }
