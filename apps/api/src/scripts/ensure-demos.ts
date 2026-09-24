@@ -142,7 +142,9 @@ export async function ensureDemos() {
   const acme = await ensureAcme()
   const bella = await ensureBella()
   const qaLab = await ensureQaLab()
-  return { acme, bella, qaLab }
+  const { applyDemoProgram } = await import('./demo-program.js')
+  const program = await applyDemoProgram()
+  return { acme, bella, qaLab, program }
 }
 
 async function ensureAcme() {

@@ -3,7 +3,8 @@ import { Workflow, Plus, Search, Play, Trash2, Pencil } from 'lucide-react'
 import { Button, Input, Badge, Table, THead, TBody, TR, TH, TD, EmptyState, PageHeader, Skeleton, Dialog, DialogContent, DialogHeader, DialogTitle, DialogBody, DialogFooter } from '@ybot/ui'
 import { SubNav } from '../../components/SubNav'
 import { useNavigate } from '@tanstack/react-router'
-import { useFlows, useCreateFlow, useDeleteFlow, useUpdateFlow } from '../../lib/hooks'
+import { useFlows, useCreateFlow, useDeleteFlow, useUpdateFlow, usePublishFlow } from '../../lib/hooks'
+import { useAppStore } from '../../store/app'
 
 const SUBNAV = [
   { label: 'Flows', path: '/build/flows' },
@@ -23,6 +24,10 @@ export function FlowsPage() {
   const createFlow = useCreateFlow()
   const updateFlow = useUpdateFlow()
   const deleteFlow = useDeleteFlow()
+  const publishFlow = usePublishFlow()
+  const environments = useAppStore((s) => s.bots.find((b) => b.id === s.selectedBotId)?.environments ?? [])
+  const publishEnv = environments.find((env) => env.kind === 'sandbox') ?? environments.find((env) => env.kind === 'production')
+  const suggested = flows.filter((flow) => flow.tags?.includes('proposed') && flow.versions?.[0]?.status !== 'published')
 
   const filtered = flows.filter((f) => f.name.toLowerCase().includes(query.toLowerCase()))
 
@@ -71,6 +76,32 @@ export function FlowsPage() {
       />
 
       <div className="flex-1 overflow-auto p-6">
+        {suggested.length > 0 && (
+          <div className="mb-4 rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--bg-surface)] p-4">
+            <p className="text-sm font-medium text-[var(--text-primary)]">Suggested from chats</p>
+            <p className="mt-1 text-xs text-[var(--text-muted)]">
+              These drafts stay unpublished until you publish one. The welcome flow then hands off to it next time.
+            </p>
+            <div className="mt-3 flex flex-col gap-2">
+              {suggested.map((flow) => (
+                <div key={flow.id} className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-sm text-[var(--text-primary)]">{flow.name}</p>
+                    {flow.description && <p className="text-xs text-[var(--text-muted)]">{flow.description}</p>}
+                  </div>
+                  <Button
+                    size="sm"
+                    disabled={!publishEnv || publishFlow.isPending}
+                    onClick={() => publishEnv && publishFlow.mutate({ flowId: flow.id, environmentId: publishEnv.id })}
+                  >
+                    {publishEnv?.kind === 'sandbox' ? 'Publish to Sandbox' : 'Publish'}
+                  </Button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         <div className="mb-4 flex items-center gap-3">
           <div className="flex-1 max-w-xs">
             <Input

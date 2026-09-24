@@ -101,6 +101,29 @@ export function HelpPage() {
           <Figure file="inbox.jpg" alt="Inbox chats" />
         </section>
 
+        <section id="admin-training" className="scroll-mt-6 space-y-2">
+          <h2 className="text-base font-semibold text-[var(--text-primary)]">Admin walkthrough</h2>
+          <p className="text-sm leading-relaxed text-[var(--text-secondary)]">
+            Sign in with the Acme demo account and open Acme Support Bot. Choose Production. On the widget test page for the website channel, ask where an order is. The reply comes from the Order Status flow.
+          </p>
+          <p className="text-sm leading-relaxed text-[var(--text-secondary)]">
+            Open Inbox in another window. The same chat is there. Open Flows and you will see Welcome & Routing hand off to Order Status, Returns, and Billing. Analytics, then Dashboards, opens Live operations. Those numbers are the same chats as the overview.
+          </p>
+          <p className="text-sm leading-relaxed text-[var(--text-secondary)]">
+            Sandbox holds the training chats, including password resets. When three similar chats have no flow, Flows shows a suggested draft. Publish it to Sandbox and the welcome flow learns that handoff. QA Lab keeps a copy of this bot for practice. The scratch bot there is separate.
+          </p>
+        </section>
+
+        <section id="agent-training" className="scroll-mt-6 space-y-2">
+          <h2 className="text-base font-semibold text-[var(--text-primary)]">Agent walkthrough</h2>
+          <p className="text-sm leading-relaxed text-[var(--text-secondary)]">
+            Stay on Acme Support Bot and open Inbox. Pick one of the training chats. Assign it to a teammate, add an internal note, then Resolve. The note stays off the customer widget. The overview and Live operations count the resolved chat.
+          </p>
+          <p className="text-sm leading-relaxed text-[var(--text-secondary)]">
+            The marketing site has its own bot. A visitor can ask about features, the inbox, or the free plan before they create an account. Those chats land in the BotStudio company inbox, signed in as the BotStudio demo account. They do not mix with Acme.
+          </p>
+        </section>
+
         <section id="planned" className="scroll-mt-6 space-y-2">
           <h2 className="text-base font-semibold text-[var(--text-primary)]">Planned features</h2>
           <p className="text-sm leading-relaxed text-[var(--text-secondary)]">

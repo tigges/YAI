@@ -15,6 +15,7 @@ import { readFile } from 'node:fs/promises'
 import { triggerRules } from '../lib/automation-engine.js'
 import { resolve, dirname } from 'node:path'
 import { usableContactName } from '../lib/contact-name.js'
+import { proposeDraftFlows, textMightStartDraft } from '../lib/draft-flows.js'
 import { runFlowIfPublished } from '../lib/flow-runner.js'
 import { onInboundCustomerMessage, onOutboundReply } from '../lib/sla.js'
 import { fileURLToPath } from 'node:url'
@@ -466,6 +467,10 @@ export async function widgetRoutes(app: FastifyInstance) {
         messageCount: msgCount,
         conversationStatus: 'active',
       }).catch(() => {})
+    }
+
+    if (textMightStartDraft(userText)) {
+      void proposeDraftFlows(botId).catch(() => {})
     }
 
     // ── SSE helpers (shared by both flow and RAG paths) ───────────────────
