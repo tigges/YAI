@@ -36,6 +36,19 @@ export function useFlows() {
   })
 }
 
+export function useImportCorporatePack() {
+  const qc = useQueryClient()
+  const bid = botId()
+  return useMutation({
+    mutationFn: () => api.bots.importCorporatePack(bid).then((r) => r.data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['flows', bid] })
+      qc.invalidateQueries({ queryKey: ['intents', bid] })
+      qc.invalidateQueries({ queryKey: ['faqs', bid] })
+    },
+  })
+}
+
 export function useCreateFlow() {
   const qc = useQueryClient()
   const bid = botId()

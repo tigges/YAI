@@ -3,13 +3,33 @@ import { Workflow, Plus, Search, Play, Trash2, Pencil } from 'lucide-react'
 import { Button, Input, Badge, Table, THead, TBody, TR, TH, TD, EmptyState, PageHeader, Skeleton, Dialog, DialogContent, DialogHeader, DialogTitle, DialogBody, DialogFooter } from '@ybot/ui'
 import { SubNav } from '../../components/SubNav'
 import { useNavigate } from '@tanstack/react-router'
-import { useFlows, useCreateFlow, useDeleteFlow, useUpdateFlow, usePublishFlow, useSaveCanvas } from '../../lib/hooks'
+import { useFlows, useCreateFlow, useDeleteFlow, useUpdateFlow, usePublishFlow, useSaveCanvas, useImportCorporatePack } from '../../lib/hooks'
+import type { CorporatePackResult } from '../../lib/api'
 import { FlowWizard } from './FlowWizard'
 import { reviewFlow } from './PublishCheck'
 import type { FlowGraph } from '../../lib/api'
 import { useAppStore } from '../../store/app'
 
 const NO_ENVIRONMENTS: Array<{ id: string; kind: string; name: string }> = []
+
+function PackResult({ result }: { result: CorporatePackResult }) {
+  const added = result.flowsAdded.length + result.intentsAdded + result.faqsAdded
+  if (added === 0) {
+    return <p className="text-sm text-[var(--text-secondary)]">This bot already has the corporate services pack.</p>
+  }
+  const draft = result.draftNames.includes('Corporate welcome')
+  return (
+    <div className="space-y-2 text-sm text-[var(--text-secondary)]">
+      <p>Added {result.flowsAdded.length} flows, {result.intentsAdded} intents, and {result.faqsAdded} FAQs.</p>
+      {result.publishedNames.length > 0 && result.environmentName && (
+        <p>The new answers are published on {result.environmentName}.</p>
+      )}
+      {draft && (
+        <p>Corporate welcome is a draft on this list. Publish it in Sandbox when you want the widget to use that greeting.</p>
+      )}
+    </div>
+  )
+}
 
 const SUBNAV = [
   { label: 'Flows', path: '/build/flows' },
@@ -23,6 +43,9 @@ export function FlowsPage() {
   const [createError, setCreateError] = useState('')
   const [renaming, setRenaming] = useState<{ id: string; name: string; description: string } | null>(null)
   const [deleting, setDeleting] = useState<{ id: string; name: string } | null>(null)
+  const [showPack, setShowPack] = useState(false)
+  const [packResult, setPackResult] = useState<CorporatePackResult | null>(null)
+  const [packError, setPackError] = useState('')
 
   const { data: flows = [], isLoading } = useFlows()
   const createFlow = useCreateFlow()
@@ -30,6 +53,7 @@ export function FlowsPage() {
   const updateFlow = useUpdateFlow()
   const deleteFlow = useDeleteFlow()
   const publishFlow = usePublishFlow()
+  const importPack = useImportCorporatePack()
   const environments = useAppStore((s) => s.bots.find((b) => b.id === s.selectedBotId)?.environments) ?? NO_ENVIRONMENTS
   const publishEnv = environments.find((env) => env.kind === 'sandbox') ?? environments.find((env) => env.kind === 'production')
   const suggested = flows.filter((flow) => flow.tags?.includes('proposed') && flow.versions?.[0]?.status !== 'published')
@@ -96,9 +120,14 @@ export function FlowsPage() {
         title="Flows"
         description="Visual conversation flow builder"
         actions={
-          <Button size="md" onClick={() => setShowNew(true)}>
-            <Plus size={14} /> New Flow
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button size="md" variant="secondary" onClick={() => { setPackResult(null); setPackError(''); setShowPack(true) }}>
+              Import starter pack
+            </Button>
+            <Button size="md" onClick={() => setShowNew(true)}>
+              <Plus size={14} /> New Flow
+            </Button>
+          </div>
         }
         tabs={<SubNav items={SUBNAV} />}
       />
@@ -229,6 +258,46 @@ export function FlowsPage() {
           </Table>
         )}
       </div>
+
+      <Dialog open={showPack} onOpenChange={(open) => { if (!open) setShowPack(false) }}>
+        <DialogContent size="lg">
+          <DialogHeader>
+            <DialogTitle>Corporate services</DialogTitle>
+          </DialogHeader>
+          <DialogBody className="space-y-3">
+            {packResult ? (
+              <PackResult result={packResult} />
+            ) : (
+              <>
+                <p className="text-sm text-[var(--text-secondary)]">
+                  This pack is a starting point for a web widget. It greets the visitor and answers the questions customers ask first: hours, shipping, returns, tracking, payments, passwords, plans, and reaching a person. The wording is a benchmark. Edit each message so it matches your business. The guided wizard is how you reshape a flow after that.
+                </p>
+                <p className="text-sm text-[var(--text-secondary)]">
+                  The widget says the words in the published flow. The same answers are added under Intents and FAQs so you can keep them together. Anything already on this bot stays as it is. Your current welcome stays the one the widget uses. A draft named Corporate welcome is added when you already have a welcome. Publish that draft in Sandbox when you want to try the new greeting. New answers are published on Sandbox. Publish a flow to Production when the live widget should use it.
+                </p>
+                {packError && <p className="text-xs text-[var(--danger)]">{packError}</p>}
+              </>
+            )}
+          </DialogBody>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setShowPack(false)}>{packResult ? 'Close' : 'Cancel'}</Button>
+            {!packResult && (
+              <Button
+                disabled={importPack.isPending}
+                onClick={() => {
+                  setPackError('')
+                  importPack.mutate(undefined, {
+                    onSuccess: (result) => setPackResult(result),
+                    onError: (err) => setPackError(err instanceof Error ? err.message : 'Could not import the pack.'),
+                  })
+                }}
+              >
+                {importPack.isPending ? 'Importing…' : 'Import pack'}
+              </Button>
+            )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <FlowWizard
         open={showNew}
