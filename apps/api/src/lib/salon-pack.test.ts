@@ -64,6 +64,30 @@ test('a salon widget answers prices, bookings, and the Bella address', async () 
   const where = await machine.run(session('Where are you?'), graph, 'Where are you?')
   assert.equal(where.jumpToFlow, 'Location')
 
+  const move = await machine.run(session('Can I move my appointment to Tuesday?'), graph, 'Can I move my appointment to Tuesday?')
+  assert.equal(move.jumpToFlow, 'Reschedule')
+
+  const voucher = await machine.run(session('Do you sell gift vouchers?'), graph, 'Do you sell gift vouchers?')
+  assert.equal(voucher.jumpToFlow, 'Gift voucher')
+
+  const correction = await machine.run(session('I need colour correction after a home dye'), graph, 'I need colour correction after a home dye')
+  assert.equal(correction.jumpToFlow, 'Colour correction')
+
+  const consult = await machine.run(session('Can I book a consultation?'), graph, 'Can I book a consultation?')
+  assert.equal(consult.jumpToFlow, 'Consultation')
+
+  const patch = await machine.run(session('Do I need a patch test before colour?'), graph, 'Do I need a patch test before colour?')
+  assert.equal(patch.jumpToFlow, 'Patch test')
+
+  const notice = await machine.run(session('What is your cancellation policy?'), graph, 'What is your cancellation policy?')
+  assert.equal(notice.jumpToFlow, 'Cancellation policy')
+
+  const late = await machine.run(session("I'm running late"), graph, "I'm running late")
+  assert.equal(late.jumpToFlow, 'Running late')
+
+  const stylist = await machine.run(session('Can I request a stylist?'), graph, 'Can I request a stylist?')
+  assert.equal(stylist.jumpToFlow, 'Stylist')
+
   const hello = await machine.run(session('hello'), graph, 'hello')
   assert.equal(hello.jumpToFlow, undefined)
   assert.match(hello.newMessages.map((message) => message.content.text).join('\n'), /What do you need help with/)
@@ -76,6 +100,19 @@ test('a salon widget answers prices, bookings, and the Bella address', async () 
   const location = pack.flows.find((flow) => flow.name === 'Location')!
   const address = await machine.run(session('address'), location.graph as unknown as FlowGraph, 'address')
   assert.match(address.newMessages.map((message) => message.content.text).join('\n'), /14 Rosewood Lane/)
+
+  const hoursFlow = pack.flows.find((flow) => flow.name === 'Salon hours')!
+  const hoursSpoken = await machine.run(session('hours'), hoursFlow.graph as unknown as FlowGraph, 'hours')
+  const hoursText = hoursSpoken.newMessages.map((message) => message.content.text).join('\n')
+  assert.match(hoursText, /Monday to Saturday, 09:00 to 18:00/)
+  assert.equal(hoursText.includes('Sunday'), false)
+
+  const voucherFlow = pack.flows.find((flow) => flow.name === 'Gift voucher')!
+  const voucherSpoken = await machine.run(session('voucher'), voucherFlow.graph as unknown as FlowGraph, 'voucher')
+  assert.match(voucherSpoken.newMessages.map((message) => message.content.text).join('\n'), /£25, £50, or £100/)
+
+  const bookFlow = pack.flows.find((flow) => flow.name === 'Book an appointment')!
+  assert.match(JSON.stringify(bookFlow.graph), /Consultation/)
 })
 
 test('a salon with no welcome publishes Salon welcome', () => {
@@ -120,6 +157,9 @@ test('the new-flow list includes the salon answers once', () => {
   const names = flowCatalog('Bella Hair Studio').map((flow) => flow.name)
   assert.ok(names.includes('Salon welcome'))
   assert.ok(names.includes('Services and prices'))
+  assert.ok(names.includes('Reschedule'))
+  assert.ok(names.includes('Gift voucher'))
+  assert.ok(names.includes('Patch test'))
   assert.ok(names.includes('Order Status'))
   assert.equal(new Set(names).size, names.length)
 })

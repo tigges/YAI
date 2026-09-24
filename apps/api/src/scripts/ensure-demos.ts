@@ -15,11 +15,15 @@
  *
  * Running this again does not duplicate chats, does not edit an existing
  * Order Status graph, and does not reset passwords.
+ * Bella gains a Sandbox. The hair studio pack is published there.
+ * Her Production welcome stays the live widget. Owned Bella demo chats
+ * are rewritten when they still contain the old Sunday hours or a booked slot.
  */
 
 import bcrypt from 'bcryptjs'
 import { prisma } from '@ybot/db'
 import { installStarterFlows } from '../lib/install-starter-flows.js'
+import { installHairStudioPack } from '../lib/install-corporate-pack.js'
 
 const DEMO_PASSWORD = 'Demo1234!'
 const CHARLES_PASSWORD = 'password123'
@@ -46,43 +50,43 @@ const BELLA_CHATS: Array<{ subject: string; lines: Array<{ role: 'user' | 'bot';
     subject: 'Booking inquiry',
     lines: [
       { role: 'user', text: 'Hi, I would like to book a haircut please.' },
-      { role: 'bot', text: "Hi, I'm Bella from Bella Hair Studio. Cuts start from £35. Do you have a preferred day?" },
+      { role: 'bot', text: "Hi, I'm Bella from Bella Hair Studio. Cuts start from £35. Which day works for you?" },
       { role: 'user', text: 'Thursday afternoon if possible.' },
-      { role: 'bot', text: 'Thursday at 4 pm is free. I have booked that for you.' },
+      { role: 'bot', text: 'I have noted a cut on Thursday afternoon. The studio will confirm the time in this chat.' },
     ],
   },
   {
     subject: 'Opening hours query',
     lines: [
       { role: 'user', text: 'What are your opening hours?' },
-      { role: 'bot', text: 'We are open Monday to Saturday 9 am to 6 pm, and Sunday 10 am to 4 pm.' },
+      { role: 'bot', text: 'We are open Monday to Saturday, 9 am to 6 pm. You can message any time.' },
     ],
   },
   {
     subject: 'Balayage price',
     lines: [
       { role: 'user', text: 'How much is a balayage?' },
-      { role: 'bot', text: 'Balayage starts from £120, including a treatment and blow-dry. A consultation is free.' },
+      { role: 'bot', text: 'Balayage starts from £90. A consultation is free and takes about 15 minutes.' },
       { role: 'user', text: 'Yes please, how do I book that?' },
-      { role: 'bot', text: 'I can hold a 15 minute consultation. Which day suits you?' },
+      { role: 'bot', text: 'I can note a consultation and the day. The studio will confirm the time in this chat.' },
     ],
   },
   {
     subject: 'Colour correction',
     lines: [
       { role: 'user', text: 'I need colour correction after a home dye.' },
-      { role: 'bot', text: 'Colour correction usually takes 3 to 5 hours. We quote after seeing your hair.' },
+      { role: 'bot', text: 'Colour correction is quoted after we see your hair. It often takes 3 to 5 hours.' },
       { role: 'user', text: 'Can I come in on Saturday?' },
-      { role: 'bot', text: 'Saturday late morning is open for a consultation. Shall I book it?' },
+      { role: 'bot', text: 'I have noted a consultation on Saturday. The studio will confirm the time in this chat.' },
     ],
   },
   {
     subject: 'Cancel appointment',
     lines: [
       { role: 'user', text: 'I need to cancel my appointment tomorrow.' },
-      { role: 'bot', text: 'I can cancel that. Would you like another day this week?' },
+      { role: 'bot', text: 'I can note that cancellation. Would you like another day this week?' },
       { role: 'user', text: 'Next Tuesday please.' },
-      { role: 'bot', text: 'Moved to Tuesday at the same time. See you then.' },
+      { role: 'bot', text: 'I have noted a move to Tuesday. The studio will confirm the new time in this chat.' },
     ],
   },
   {
@@ -91,7 +95,7 @@ const BELLA_CHATS: Array<{ subject: string; lines: Array<{ role: 'user' | 'bot';
       { role: 'user', text: 'Do you sell gift vouchers?' },
       { role: 'bot', text: 'Yes. Vouchers are £25, £50, or £100, and they last 12 months.' },
       { role: 'user', text: 'I will take a £50 one.' },
-      { role: 'bot', text: 'Lovely. I can email the voucher as soon as you share the name to print on it.' },
+      { role: 'bot', text: 'Share the name to print on it and the studio will email the voucher.' },
     ],
   },
 ]
@@ -289,8 +293,127 @@ async function ensureBella() {
     templates: BELLA_CHATS,
     repeats: 4,
   })
+  const benchmark = await ensureBellaBenchmark()
 
-  return { status: 'ok', tenant: tenant.slug, flowsAdded, flowsBound, ruleAdded, chatsAdded }
+  return { status: 'ok', tenant: tenant.slug, flowsAdded, flowsBound, ruleAdded, chatsAdded, benchmark }
+}
+
+const BELLA_RETAIL_DRAFTS = ['Order Status', 'Billing', 'Lead Capture', 'Return Request', 'Cancel order', 'Change address']
+
+const STALE_BELLA_LINES = [
+  'Sunday 10 am to 4 pm',
+  'Balayage starts from £120',
+  'I have booked that for you',
+  'Moved to Tuesday at the same time',
+  'Saturday late morning is open',
+]
+
+function messageText(content: unknown): string {
+  if (content && typeof content === 'object' && 'text' in content && typeof (content as { text: unknown }).text === 'string') {
+    return (content as { text: string }).text
+  }
+  return ''
+}
+
+/**
+ * Gives Bella a Sandbox and the hair studio pack on that Sandbox.
+ * The published Production welcome stays the live widget.
+ * Retail drafts that do not belong on a salon are removed when they are still drafts.
+ */
+export async function ensureBellaBenchmark() {
+  const bot = await prisma.bot.findUnique({ where: { id: 'bella-bot' } })
+  if (!bot) return { status: 'skipped' as const, reason: 'bella-bot missing' }
+
+  const sandbox = await prisma.environment.upsert({
+    where: { botId_kind: { botId: bot.id, kind: 'sandbox' } },
+    update: { name: 'Sandbox', isActive: true },
+    create: {
+      id: 'bella-env-sandbox',
+      tenantId: bot.tenantId,
+      botId: bot.id,
+      kind: 'sandbox',
+      name: 'Sandbox',
+      isActive: true,
+    },
+  })
+
+  await prisma.channel.upsert({
+    where: { id: 'bella-web-sandbox' },
+    update: { environmentId: sandbox.id, name: 'Website Chat (Sandbox)', isActive: true },
+    create: {
+      id: 'bella-web-sandbox',
+      tenantId: bot.tenantId,
+      botId: bot.id,
+      environmentId: sandbox.id,
+      name: 'Website Chat (Sandbox)',
+      kind: 'web',
+      isActive: true,
+      config: { primaryColor: '#7c3aed', greeting: "Hi, I'm Bella. How can I help today?" },
+    },
+  })
+
+  const pack = await installHairStudioPack(bot.tenantId, bot.id, BELLA_NAME, sandbox.id)
+  const retired = await retireBellaRetailDrafts(bot.tenantId, bot.id)
+  const chatsRefreshed = await refreshStaleBellaChats()
+  return { status: 'ok' as const, sandboxId: sandbox.id, pack, retired, chatsRefreshed }
+}
+
+async function retireBellaRetailDrafts(tenantId: string, botId: string): Promise<string[]> {
+  const flows = await prisma.flow.findMany({
+    where: { tenantId, botId, name: { in: BELLA_RETAIL_DRAFTS } },
+    include: { versions: { select: { id: true, status: true } } },
+  })
+  const removable = flows.filter((flow) => (
+    !flow.tags.includes('salon')
+    && !flow.tags.includes('corporate')
+    && flow.versions.every((version) => version.status !== 'published')
+  ))
+  const removed: string[] = []
+  for (const flow of removable) {
+    const versionIds = flow.versions.map((version) => version.id)
+    if (versionIds.length > 0) {
+      await prisma.stepLog.deleteMany({ where: { flowVersionId: { in: versionIds } } })
+    }
+    await prisma.flowSession.deleteMany({ where: { botId, flowId: flow.id } })
+    await prisma.flow.deleteMany({ where: { id: flow.id, tenantId, botId } })
+    removed.push(flow.name)
+  }
+  return removed
+}
+
+async function refreshStaleBellaChats(): Promise<number> {
+  let refreshed = 0
+  const total = BELLA_CHATS.length * 4
+  for (let i = 0; i < total; i++) {
+    const id = `enrich-bella-convo-${i + 1}`
+    const existing = await prisma.conversation.findUnique({
+      where: { id },
+      include: { messages: { orderBy: { createdAt: 'asc' } } },
+    })
+    if (!existing) continue
+    const stale = existing.messages.some((message) => STALE_BELLA_LINES.some((line) => messageText(message.content).includes(line)))
+    if (!stale) continue
+    const template = BELLA_CHATS[i % BELLA_CHATS.length]!
+    await prisma.message.deleteMany({ where: { conversationId: id } })
+    let msgTime = new Date(existing.createdAt)
+    for (const line of template.lines) {
+      msgTime = new Date(msgTime.getTime() + 45_000)
+      await prisma.message.create({
+        data: {
+          tenantId: existing.tenantId,
+          conversationId: id,
+          direction: line.role === 'user' ? 'inbound' : 'outbound',
+          authorKind: line.role,
+          authorId: line.role === 'user' ? existing.contactId : existing.botId,
+          content: { text: line.text },
+          createdAt: msgTime,
+        },
+      })
+    }
+    await prisma.conversation.update({ where: { id }, data: { subject: template.subject } })
+    refreshed += 1
+  }
+  return refreshed
 }
 
 async function ensureQaLab() {

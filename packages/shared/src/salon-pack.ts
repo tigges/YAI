@@ -65,9 +65,73 @@ function topicsFor(companyName: string): Topic[] {
   const company = companyLabel(companyName)
   return [
     {
+      flowName: 'Reschedule',
+      choice: 'Move an appointment',
+      phrases: ['reschedule my appointment', 'move my appointment', 'change my appointment', 'change my booking', 'move my booking', 'reschedule'],
+      question: 'How do I move an appointment?',
+      answer: 'I can note a new time. The studio will confirm it in this chat.',
+      kind: 'task',
+    },
+    {
+      flowName: 'Consultation',
+      choice: 'Book a consultation',
+      phrases: ['book a consultation', 'free consultation', 'consultation'],
+      question: 'How do I book a consultation?',
+      answer: 'A consultation is free and takes about 15 minutes. I will note the day, and the studio will confirm the time in this chat.',
+      kind: 'task',
+    },
+    {
+      flowName: 'Colour correction',
+      choice: 'Colour correction',
+      phrases: ['book a colour correction', 'colour correction', 'color correction', 'home dye'],
+      question: 'Can you fix a home dye?',
+      answer: 'Colour correction is quoted after the studio sees your hair. It often takes 3 to 5 hours. A free consultation is the first step.',
+      kind: 'answer',
+    },
+    {
+      flowName: 'Cancellation policy',
+      choice: 'Cancellation policy',
+      phrases: ['cancellation policy', 'late cancellation', 'how much notice', 'notice to cancel'],
+      question: 'How much notice do you need to cancel?',
+      answer: 'Tell the studio at least 24 hours before the appointment if you need to cancel or move it. The studio confirms the change in this chat.',
+      kind: 'answer',
+    },
+    {
+      flowName: 'Gift voucher',
+      choice: 'Gift voucher',
+      phrases: ['gift vouchers', 'gift voucher', 'gift card', 'voucher'],
+      question: 'Do you sell gift vouchers?',
+      answer: 'Gift vouchers are £25, £50, or £100, and they last 12 months. Share the name to print on it and the studio will email the voucher.',
+      kind: 'answer',
+    },
+    {
+      flowName: 'Patch test',
+      choice: 'Patch test',
+      phrases: ['patch test', 'allergy test', 'skin test'],
+      question: 'Do I need a patch test?',
+      answer: 'A colour appointment needs a patch test at least 48 hours before if you have not had one here recently. The studio will tell you if your booking needs one.',
+      kind: 'answer',
+    },
+    {
+      flowName: 'Running late',
+      choice: 'Running late',
+      phrases: ['running late', 'i am late', "i'm late"],
+      question: 'What if I am running late?',
+      answer: 'Tell us your name and how late you will be. The studio will hold the chair when the day allows.',
+      kind: 'answer',
+    },
+    {
+      flowName: 'Stylist',
+      choice: 'Choose a stylist',
+      phrases: ['request a stylist', 'same stylist', 'my stylist', 'who will do my hair', 'stylist'],
+      question: 'Can I choose my stylist?',
+      answer: 'Tell us the stylist you would like. The studio will check they are in, and will offer another stylist or another time if they are booked.',
+      kind: 'answer',
+    },
+    {
       flowName: 'Book an appointment',
       choice: 'Book an appointment',
-      phrases: ['book an appointment', 'book a haircut', 'book a colour', 'book a color', 'make an appointment', 'to book', 'booking', 'book'],
+      phrases: ['book an appointment', 'book a haircut', 'book a cut', 'book a colour', 'book a color', 'book a balayage', 'book a keratin', 'book a treatment', 'book a skin scrub', 'make an appointment', 'to book', 'booking', 'book'],
       question: 'How do I book an appointment?',
       answer: 'I can take a booking. I will note the service and the day, and the studio will confirm the time in this chat.',
       kind: 'task',
@@ -155,7 +219,7 @@ function bookFlow(topic: Topic): StarterFlow {
       nodes: [
         { id: 'b1', type: 'flow-node', position: { x: 80, y }, data: { kind: 'trigger_start', label: 'Book', config: {} } },
         { id: 'b2', type: 'flow-node', position: { x: 300, y }, data: { kind: 'send_message', label: 'Intro', config: { text: topic.answer } } },
-        { id: 'b3', type: 'flow-node', position: { x: 540, y }, data: { kind: 'ask_question', label: 'Service', config: { question: 'Which service would you like?', variable: 'service', choices: ['Cut', 'Colour', 'Balayage', 'Treatment', 'Keratin', 'Skin scrub'] } } },
+        { id: 'b3', type: 'flow-node', position: { x: 540, y }, data: { kind: 'ask_question', label: 'Service', config: { question: 'Which service would you like?', variable: 'service', choices: ['Cut', 'Colour', 'Balayage', 'Treatment', 'Keratin', 'Skin scrub', 'Consultation'] } } },
         { id: 'b4', type: 'flow-node', position: { x: 780, y }, data: { kind: 'ask_question', label: 'Day', config: { question: 'Which day works for you?', variable: 'preferred_day' } } },
         { id: 'b5', type: 'flow-node', position: { x: 1020, y }, data: { kind: 'send_message', label: 'Confirm', config: { text: 'I have noted {{service}} on {{preferred_day}}. The studio will confirm the time in this chat.' } } },
         { id: 'b6', type: 'flow-node', position: { x: 1260, y }, data: { kind: 'end_flow', label: 'End', config: {} } },
@@ -221,9 +285,65 @@ function talkFlow(topic: Topic): StarterFlow {
   }
 }
 
+function rescheduleFlow(topic: Topic): StarterFlow {
+  const y = 120
+  return {
+    name: topic.flowName,
+    description: 'Notes a new day. The studio confirms the time. Edit the notice line on Cancellation policy to match your salon.',
+    tags: ['salon', 'template', 'booking'],
+    publish: true,
+    graph: {
+      nodes: [
+        { id: 'm1', type: 'flow-node', position: { x: 80, y }, data: { kind: 'trigger_start', label: 'Reschedule', config: {} } },
+        { id: 'm2', type: 'flow-node', position: { x: 300, y }, data: { kind: 'send_message', label: 'Intro', config: { text: topic.answer } } },
+        { id: 'm3', type: 'flow-node', position: { x: 540, y }, data: { kind: 'ask_question', label: 'Name', config: { question: 'What name is the appointment under?', variable: 'guest_name' } } },
+        { id: 'm4', type: 'flow-node', position: { x: 780, y }, data: { kind: 'ask_question', label: 'Current time', config: { question: 'Which day and time is it now?', variable: 'appointment_time' } } },
+        { id: 'm5', type: 'flow-node', position: { x: 1020, y }, data: { kind: 'ask_question', label: 'New day', config: { question: 'Which day would you like instead?', variable: 'new_day' } } },
+        { id: 'm6', type: 'flow-node', position: { x: 1260, y }, data: { kind: 'send_message', label: 'Confirm', config: { text: 'I have noted a move for {{guest_name}} from {{appointment_time}} to {{new_day}}. The studio will confirm the new time in this chat.' } } },
+        { id: 'm7', type: 'flow-node', position: { x: 1500, y }, data: { kind: 'end_flow', label: 'End', config: {} } },
+      ],
+      edges: [
+        { id: 'e1', source: 'm1', target: 'm2', sourceHandle: 'out' },
+        { id: 'e2', source: 'm2', target: 'm3' },
+        { id: 'e3', source: 'm3', target: 'm4' },
+        { id: 'e4', source: 'm4', target: 'm5' },
+        { id: 'e5', source: 'm5', target: 'm6' },
+        { id: 'e6', source: 'm6', target: 'm7' },
+      ],
+    },
+  }
+}
+
+function consultationFlow(topic: Topic): StarterFlow {
+  const y = 120
+  return {
+    name: topic.flowName,
+    description: 'Notes a free consultation. The studio confirms the time.',
+    tags: ['salon', 'template', 'booking'],
+    publish: true,
+    graph: {
+      nodes: [
+        { id: 'n1', type: 'flow-node', position: { x: 80, y }, data: { kind: 'trigger_start', label: 'Consultation', config: {} } },
+        { id: 'n2', type: 'flow-node', position: { x: 300, y }, data: { kind: 'send_message', label: 'Intro', config: { text: topic.answer } } },
+        { id: 'n3', type: 'flow-node', position: { x: 540, y }, data: { kind: 'ask_question', label: 'Day', config: { question: 'Which day works for you?', variable: 'preferred_day' } } },
+        { id: 'n4', type: 'flow-node', position: { x: 780, y }, data: { kind: 'send_message', label: 'Confirm', config: { text: 'I have noted a consultation on {{preferred_day}}. The studio will confirm the time in this chat.' } } },
+        { id: 'n5', type: 'flow-node', position: { x: 1020, y }, data: { kind: 'end_flow', label: 'End', config: {} } },
+      ],
+      edges: [
+        { id: 'e1', source: 'n1', target: 'n2', sourceHandle: 'out' },
+        { id: 'e2', source: 'n2', target: 'n3' },
+        { id: 'e3', source: 'n3', target: 'n4' },
+        { id: 'e4', source: 'n4', target: 'n5' },
+      ],
+    },
+  }
+}
+
 function taskFlow(topic: Topic): StarterFlow {
   if (topic.flowName === 'Book an appointment') return bookFlow(topic)
   if (topic.flowName === 'Cancel appointment') return cancelFlow(topic)
+  if (topic.flowName === 'Reschedule') return rescheduleFlow(topic)
+  if (topic.flowName === 'Consultation') return consultationFlow(topic)
   return talkFlow(topic)
 }
 
@@ -244,7 +364,7 @@ function welcomeFlow(companyName: string, topics: Topic[]): StarterFlow {
       data: {
         kind: 'send_message',
         label: 'Welcome',
-        config: { text: `Hi {{contact.name}}. Welcome to ${company}. I can help with a booking, prices, opening hours, or a person at the studio.` },
+        config: { text: `Hi {{contact.name}}. Welcome to ${company}. I can help with a booking, prices, a voucher, opening hours, or a person at the studio.` },
       },
     },
     { id: 'route', type: 'flow-node', position: { x: 620, y }, data: { kind: 'route_topic', label: 'Route by topic', config: { routes } } },
@@ -266,7 +386,7 @@ function welcomeFlow(companyName: string, topics: Topic[]): StarterFlow {
       data: {
         kind: 'send_message',
         label: 'Offer the menu',
-        config: { text: 'I can help with a booking, a cancellation, prices, opening hours, walk-ins, our address, or a person at the studio.' },
+        config: { text: 'I can help with a booking, a new time, prices, a voucher, opening hours, walk-ins, our address, or a person at the studio.' },
       },
     },
     { id: 'end', type: 'flow-node', position: { x: 1460, y: 420 }, data: { kind: 'end_flow', label: 'End', config: {} } },
