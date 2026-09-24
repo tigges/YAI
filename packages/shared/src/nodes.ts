@@ -23,6 +23,7 @@ export type NodeKind =
   | 'search_knowledge'
   | 'classify_intent'
   | 'create_ticket'
+  | 'route_topic'
 
 export interface NodePort {
   id: string
@@ -298,6 +299,18 @@ export const NODE_DEFINITIONS: Record<NodeKind, NodeDefinition> = {
     ports: [
       { id: 'in', type: 'target' },
       { id: 'out', label: 'Next', type: 'source' },
+    ],
+  },
+  route_topic: {
+    kind: 'route_topic',
+    label: 'Route by topic',
+    description: 'Send the visitor to the branch that matches what they said',
+    category: 'runtime_alias',
+    icon: 'git-branch',
+    color: '#f59e0b',
+    ports: [
+      { id: 'in', type: 'target' },
+      { id: 'other', label: 'Other', type: 'source' },
     ],
   },
   create_ticket: {

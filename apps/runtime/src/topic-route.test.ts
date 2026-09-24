@@ -65,3 +65,38 @@ test('execute_flow hands off and route_topic selects a branch', async () => {
   assert.equal(welcomed.jumpToFlow, undefined)
   assert.match(welcomed.newMessages.map((message) => message.content.text).join('\n'), /How can I help/)
 })
+
+test('a condition saved as true and false still takes the no branch', async () => {
+  const services = { llm: {}, db: {}, httpFetch: async () => ({ ok: false, status: 404, json: async () => ({}) }) } as unknown as ExecutionServices
+  const machine = new SessionMachine(services)
+  const graph: FlowGraph = {
+    nodes: [
+      { id: 'start', data: { kind: 'trigger_start', label: 'Start', config: {} } },
+      { id: 'fetch', data: { kind: 'http_request', label: 'Fetch', config: { url: 'https://example.test/order' } } },
+      { id: 'check', data: { kind: 'condition', label: 'Found?', config: { conditions: [{ field: 'status', operator: 'equals', value: '200' }] } } },
+      { id: 'yes', data: { kind: 'send_message', label: 'Yes', config: { text: 'Found it' } } },
+      { id: 'no', data: { kind: 'send_message', label: 'No', config: { text: 'Not found' } } },
+    ],
+    edges: [
+      { id: 'e1', source: 'start', target: 'fetch' },
+      { id: 'e2', source: 'fetch', target: 'check' },
+      { id: 'e3', source: 'check', target: 'yes', sourceHandle: 'true' },
+      { id: 'e4', source: 'check', target: 'no', sourceHandle: 'false' },
+    ],
+  }
+  const session: Session = {
+    id: 's3',
+    conversationId: 'c3',
+    botId: 'b1',
+    tenantId: 't1',
+    flowId: 'f1',
+    flowVersionId: 'v1',
+    currentNodeId: 'start',
+    variables: { flow: {}, global: {}, contact: { name: 'there' } },
+    status: 'running',
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  }
+  const result = await machine.run(session, graph, 'order 1')
+  assert.match(result.newMessages.map((message) => message.content.text).join('\n'), /Not found/)
+})

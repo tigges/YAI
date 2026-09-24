@@ -5,6 +5,7 @@ import { SubNav } from '../../components/SubNav'
 import { useNavigate } from '@tanstack/react-router'
 import { useFlows, useCreateFlow, useDeleteFlow, useUpdateFlow, usePublishFlow, useSaveCanvas } from '../../lib/hooks'
 import { FlowWizard } from './FlowWizard'
+import { reviewFlow } from './PublishCheck'
 import type { FlowGraph } from '../../lib/api'
 import { useAppStore } from '../../store/app'
 
@@ -33,7 +34,24 @@ export function FlowsPage() {
   const publishEnv = environments.find((env) => env.kind === 'sandbox') ?? environments.find((env) => env.kind === 'production')
   const suggested = flows.filter((flow) => flow.tags?.includes('proposed') && flow.versions?.[0]?.status !== 'published')
 
+  const flowNames = flows.map((flow) => flow.name)
+  const checked = flows.flatMap((flow) => {
+    const latest = flow.versions?.[0]
+    if (!latest?.graph) return []
+    const review = reviewFlow(latest.graph, { flowNames })
+    const open = review.repairs.length + review.blocks.length + review.notes.length
+    if (open === 0) return []
+    return [{ flow, version: latest.version, review }]
+  })
   const filtered = flows.filter((f) => f.name.toLowerCase().includes(query.toLowerCase()))
+
+  async function repairStored(flowId: string, version: number, graph: { nodes: unknown[]; edges: unknown[] }) {
+    await saveCanvas.mutateAsync({
+      flowId,
+      version,
+      graph: graph as FlowGraph,
+    })
+  }
 
   function relativeTime(iso: string) {
     const diff = Date.now() - new Date(iso).getTime()
@@ -86,6 +104,39 @@ export function FlowsPage() {
       />
 
       <div className="flex-1 overflow-auto p-6">
+        {checked.length > 0 && (
+          <div className="mb-4 rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--bg-surface)] p-4">
+            <p className="text-sm font-medium text-[var(--text-primary)]">Connection check</p>
+            <p className="mt-1 text-xs text-[var(--text-muted)]">
+              A published flow with a missing line does not run that path. Repair fills the lines that have an obvious fix. The rest need a decision, then a walk-through in Test Bot.
+            </p>
+            <div className="mt-3 flex flex-col gap-3">
+              {checked.map(({ flow, version, review }) => (
+                <div key={flow.id} className="rounded-[var(--radius-sm)] border border-[var(--border)] px-3 py-2">
+                  <div className="flex items-center justify-between gap-3">
+                    <p className="text-sm font-medium text-[var(--text-primary)]">{flow.name}</p>
+                    {review.repairs.length > 0 && (
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        disabled={saveCanvas.isPending}
+                        onClick={() => { void repairStored(flow.id, version, review.graph) }}
+                      >
+                        Repair connections
+                      </Button>
+                    )}
+                  </div>
+                  <ul className="mt-1 space-y-0.5">
+                    {[...review.planned, ...review.blocks, ...review.notes].map((issue, index) => (
+                      <li key={`${issue.code}-${index}`} className="text-xs text-[var(--text-secondary)]">{issue.message}</li>
+                    ))}
+                  </ul>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         {suggested.length > 0 && (
           <div className="mb-4 rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--bg-surface)] p-4">
             <p className="text-sm font-medium text-[var(--text-primary)]">Suggested from chats</p>

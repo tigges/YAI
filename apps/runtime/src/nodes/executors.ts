@@ -1,6 +1,6 @@
 import type { NodeContext, NodeResult } from '../types.js'
 import { matchTopic, type TopicRoute } from '../topic-route.js'
-import { interpolate } from '../utils.js'
+import { evaluateCondition, interpolate } from '../utils.js'
 
 // ── trigger_start ────────────────────────────────────────────────────────────
 export async function executeTriggerStart(_ctx: NodeContext): Promise<NodeResult> {
@@ -54,16 +54,9 @@ export async function executeCondition(ctx: NodeContext): Promise<NodeResult> {
   const conditions = (config['conditions'] as Array<{ field: string; operator: string; value: string }>) ?? []
   const vars = { ...session.variables.flow, ...session.variables.global, contact: session.variables.contact }
 
-  const met = conditions.every((c) => {
-    const actual = String((vars as Record<string, unknown>)[c.field] ?? '')
-    switch (c.operator) {
-      case 'equals':    return actual === c.value
-      case 'not_equals': return actual !== c.value
-      case 'contains':  return actual.includes(c.value)
-      case 'is_set':    return actual !== '' && actual !== 'undefined'
-      default:          return false
-    }
-  })
+  const met = conditions.every((c) =>
+    evaluateCondition(c.field, c.operator as 'equals', c.value, vars as Record<string, unknown>),
+  )
 
   return { output: { result: met ? 'yes' : 'no' }, nextNodeId: met ? 'yes' : 'no' }
 }
@@ -81,9 +74,9 @@ export async function executeHttpRequest(ctx: NodeContext): Promise<NodeResult> 
       ...(method !== 'GET' && config['body'] ? { body: JSON.stringify(config['body']) } : {}),
     })
     const data = await res.json().catch(() => ({}))
-    return { output: { status: res.status, data, ok: res.ok } }
+    return { output: { status: res.status, data, ok: res.ok }, nextNodeId: res.ok ? 'success' : 'error' }
   } catch (err) {
-    return { output: { status: 0, ok: false }, error: String(err) }
+    return { output: { status: 0, ok: false }, error: String(err), nextNodeId: 'error' }
   }
 }
 

@@ -42,6 +42,14 @@ export interface FlowGraph {
   edges: GraphEdge[]
 }
 
+/** Yes/No on the canvas used to be saved as true/false. Both names are the same branch. */
+function handlesMatch(edgeHandle: string | undefined, wanted: string): boolean {
+  if (!edgeHandle) return false
+  if (edgeHandle === wanted) return true
+  const aliases: Record<string, string> = { yes: 'true', true: 'yes', no: 'false', false: 'no' }
+  return aliases[wanted] === edgeHandle
+}
+
 export class SessionMachine {
   private services: ExecutionServices
 
@@ -143,8 +151,9 @@ export class SessionMachine {
   private nextNode(nodeId: string, edgeMap: Map<string, GraphEdge[]>, handle?: string): string {
     const edges = edgeMap.get(nodeId) ?? []
     if (handle) {
-      const match = edges.find((e) => e.sourceHandle === handle)
+      const match = edges.find((edge) => handlesMatch(edge.sourceHandle, handle))
       if (match) return match.target
+      return edges.find((edge) => !edge.sourceHandle)?.target ?? ''
     }
     return edges[0]?.target ?? ''
   }
