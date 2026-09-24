@@ -9,7 +9,8 @@
 import { prisma } from '@ybot/db'
 import bcrypt from 'bcryptjs'
 import { proposeDraftFlows } from '../lib/draft-flows.js'
-import { attachDestination } from '../lib/welcome-routes.js'
+import { attachDestination, extendWelcomeGraph } from '../lib/welcome-routes.js'
+import { SUPPORT_USE_CASES, supportUseCaseFlows } from './starter-flows.js'
 
 const DEMO_PASSWORD = 'Demo1234!'
 const ACME_BOT_NAME = 'Acme Support Bot'
@@ -240,6 +241,67 @@ async function ensureSupportRouting() {
     welcome = await ensureWelcomeRouter(bot.id, bot.tenantId, env.id, companyName) || welcome
   }
   return { status: 'ok' as const, welcome, billing, orders, returns }
+}
+
+const SANDBOX_CHANNEL_NAMES: Record<string, string> = {
+  'Bella Hair Studio': 'Acme website',
+  'Bella 2': 'Acme website 2',
+}
+
+async function renameSandboxChannels(botId: string, environmentId: string) {
+  const channels = await prisma.channel.findMany({ where: { botId, environmentId } })
+  let renamed = 0
+  for (const channel of channels) {
+    const name = SANDBOX_CHANNEL_NAMES[channel.name]
+    if (!name) continue
+    await prisma.channel.update({ where: { id: channel.id }, data: { name } })
+    renamed += 1
+  }
+  return renamed
+}
+
+async function publishSandboxWelcome(botId: string, environmentId: string) {
+  const welcome = await prisma.flowVersion.findFirst({
+    where: {
+      status: 'published',
+      environmentId,
+      flow: { botId, OR: [{ tags: { has: 'welcome' } }, { name: 'Welcome & Routing' }] },
+    },
+    orderBy: { publishedAt: 'desc' },
+  })
+  if (!welcome) return false
+  const before = JSON.stringify(welcome.graph)
+  const destinations = SUPPORT_USE_CASES.map((item) => ({ flowName: item.name, phrases: item.phrases, choice: item.choice }))
+  const next = extendWelcomeGraph(structuredClone(welcome.graph) as unknown as Parameters<typeof extendWelcomeGraph>[0], destinations)
+  if (!next || JSON.stringify(next) === before) return false
+  const latest = await prisma.flowVersion.findFirst({ where: { flowId: welcome.flowId }, orderBy: { version: 'desc' } })
+  await prisma.flowVersion.create({
+    data: {
+      tenantId: welcome.tenantId,
+      flowId: welcome.flowId,
+      version: (latest?.version ?? welcome.version) + 1,
+      status: 'published',
+      environmentId,
+      graph: next as object,
+      publishedAt: new Date(),
+    },
+  })
+  return true
+}
+
+/** Sandbox-only Acme flows. Production keeps the orders, returns, and billing router. */
+async function ensureSandboxUseCases() {
+  const bot = await acmeBot()
+  if (!bot) return { status: 'skipped' as const }
+  const sandbox = bot.environments.find((env) => env.kind === 'sandbox')
+  if (!sandbox) return { status: 'skipped' as const, reason: 'no sandbox' }
+  let published = 0
+  for (const flow of supportUseCaseFlows()) {
+    if (await publishNamed(bot.id, bot.tenantId, sandbox.id, flow.name, flow.graph)) published += 1
+  }
+  const renamed = await renameSandboxChannels(bot.id, sandbox.id)
+  const routed = await publishSandboxWelcome(bot.id, sandbox.id)
+  return { status: 'ok' as const, published, renamed, routed }
 }
 
 async function copyRows(sourceBotId: string, tenantId: string, botId: string) {
@@ -614,6 +676,7 @@ async function linkPublishedDrafts(botId: string) {
 
 export async function applyDemoProgram() {
   const routing = await ensureSupportRouting()
+  const useCases = await ensureSandboxUseCases()
   const reference = await copyAcmeIntoQaLab()
   const synthetic = await ensureSyntheticChats()
   const product = await ensureProductBot()
@@ -626,5 +689,5 @@ export async function applyDemoProgram() {
   if (acme) dashboard = await ensureDashboard('acme-ops-dashboard', acme.tenantId, acme.id, 'Live operations')
   const lab = await prisma.tenant.findUnique({ where: { slug: 'qa-lab' } })
   if (lab) await ensureDashboard('acme-ref-ops-dashboard', lab.id, REF_BOT_ID, 'Live operations')
-  return { routing, reference, synthetic, product, drafts, productDrafts, linked, productLinked, dashboard }
+  return { routing, useCases, reference, synthetic, product, drafts, productDrafts, linked, productLinked, dashboard }
 }

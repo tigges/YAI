@@ -17,6 +17,7 @@ import { resolve, dirname } from 'node:path'
 import { usableContactName } from '../lib/contact-name.js'
 import { proposeDraftFlows, textMightStartDraft } from '../lib/draft-flows.js'
 import { runFlowIfPublished } from '../lib/flow-runner.js'
+import { streamDoneEvent } from '../lib/widget-rating.js'
 import { onInboundCustomerMessage, onOutboundReply } from '../lib/sla.js'
 import { fileURLToPath } from 'node:url'
 
@@ -74,9 +75,7 @@ const WIDGET_INLINE_JS = /* js */`
   if(script){try{var u=new URL(script.src);API_BASE=u.protocol+'//'+u.host+'/api/v1';}catch(e){}}
   var ACCENT=window.YBotAccentColor||'#6366f1';
   var TITLE=window.YBotTitle||'Chat with us';
-  var BOT_NAME=window.YBotBotName||'';
-  // visitorName is remembered within the same browser tab (sessionStorage).
-  // 'nameAsked' means the bot asked for the name but the user hasn't replied yet.
+  // A name saved earlier in this tab is passed through. The published flow speaks first.
   function looksLikeName(text){
     var t=String(text||'').trim().replace(/\\s+/g,' ');
     if(!t||t.length>40)return false;
@@ -86,7 +85,6 @@ const WIDGET_INLINE_JS = /* js */`
   }
   var visitorName=sessionStorage.getItem('ybot_vname')||'';
   if(visitorName&&!looksLikeName(visitorName)){visitorName='';sessionStorage.removeItem('ybot_vname');}
-  var nameAsked=false;
   var conversationId=null;
   var sessionId='ws_'+Date.now()+'_'+Math.random().toString(36).slice(2);
   var open=false,messages=[],loading=false;
@@ -140,9 +138,9 @@ const WIDGET_INLINE_JS = /* js */`
     msgArea.scrollTop=msgArea.scrollHeight;
   }
   function addMsg(role,text,streaming){messages.push({role:role,text:text,streaming:streaming||false});render();return messages.length-1;}
-  function updMsg(i,text,streaming,done){
+  function updMsg(i,text,streaming,ended){
     if(messages[i]){messages[i].text=text;messages[i].streaming=streaming||false;}
-    if(done&&messages.filter(function(m){return m.role==='user';}).length>=1&&csatState===null){csatState='pending';}
+    if(ended&&messages.filter(function(m){return m.role==='user';}).length>=1&&csatState===null){csatState='pending';}
     render();
   }
   function submitCsat(rating){
@@ -153,15 +151,6 @@ const WIDGET_INLINE_JS = /* js */`
   async function send(){
     var text=ta.value.trim();if(!text||loading)return;
     ta.value='';
-    // First reply after asking for name — capture it as the visitor name,
-    // then forward "My name is <name>" to the AI as the opening message.
-    if(nameAsked&&!visitorName){
-      nameAsked=false;
-      if(looksLikeName(text)){
-        visitorName=text.trim().replace(/\s+/g,' ');
-        sessionStorage.setItem('ybot_vname',visitorName);
-      }
-    }
     loading=true;sendB.disabled=true;
     var hist=messages.slice(-10).map(function(m){return{role:m.role==='user'?'user':'assistant',content:m.text};});
     addMsg('user',text);var bi=addMsg('bot','',true);
@@ -177,10 +166,10 @@ const WIDGET_INLINE_JS = /* js */`
         var lines=buf.split('\\n');buf=lines.pop()||'';
         for(var i=0;i<lines.length;i++){
           var line=lines[i];
-          if(line.startsWith('data: ')){try{var d=JSON.parse(line.slice(6));if(d.conversationId)conversationId=d.conversationId;if(d.chunk){botText+=d.chunk;updMsg(bi,botText,true);}if(d.done)updMsg(bi,botText,false,true);}catch(e){}}
+          if(line.startsWith('data: ')){try{var d=JSON.parse(line.slice(6));if(d.conversationId)conversationId=d.conversationId;if(d.chunk){botText+=d.chunk;updMsg(bi,botText,true);}if(d.done)updMsg(bi,botText,false,!!d.ended);}catch(e){}}
         }
       }
-      if(!botText)updMsg(bi,"I\\'m sorry, I couldn\\'t generate a response.",false,true);
+      if(!botText)updMsg(bi,"I\\'m sorry, I couldn\\'t generate a response.",false,false);
     }catch(e){updMsg(bi,"Couldn\\'t reach the server. Please try again.");}
     finally{loading=false;sendB.disabled=false;}
   }
@@ -188,17 +177,6 @@ const WIDGET_INLINE_JS = /* js */`
     open=force!==undefined?force:!open;
     panel.style.display=open?'flex':'none';
     bubble.innerHTML=open?'&times;':'&#128172;';
-    if(open&&messages.length===0){
-      if(visitorName){
-        // Returning visitor — greet by name straight away
-        addMsg('bot','Welcome back, '+visitorName+'! 👋 How can I help you today?');
-      } else {
-        // First time — ask for name conversationally, introducing the bot
-        var intro=BOT_NAME?"Hi there, I'm "+BOT_NAME+"! 👋 What's your name?":"Hi there! 👋 What's your name?";
-        addMsg('bot',intro);
-        nameAsked=true;
-      }
-    }
     if(open)setTimeout(function(){ta.focus();},50);
   }
   bubble.onclick=function(){toggle();};sendB.onclick=send;
@@ -505,7 +483,7 @@ export async function widgetRoutes(app: FastifyInstance) {
             }).catch(() => {})
             await onOutboundReply(conversationId).catch(() => {})
           }
-          send({ done: true })
+          send(streamDoneEvent(flowResult.ended))
           reply.raw.end()
           return
         }

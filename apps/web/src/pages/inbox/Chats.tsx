@@ -19,6 +19,8 @@ import { useConversationWS, useTenantWS } from '../../lib/ws'
 import { useAppStore } from '../../store/app'
 import * as api from '../../lib/api'
 import { useQueryClient } from '@tanstack/react-query'
+import { useNavigate } from '@tanstack/react-router'
+import { claimChat, queueContact } from '../../lib/inbox-nav'
 import { useCannedReplies, useTeamMembers, useLabels, useCreateLabel, useCreateTicket } from '../../lib/hooks'
 
 const SUBNAV = [
@@ -42,6 +44,8 @@ interface Convo {
   status: ConvoStatus
   unread: number
   channel: 'web' | 'whatsapp' | 'sms' | 'email'
+  channelId?: string
+  channelName?: string
   contactId?: string
   assigneeId?: string | null
   assignee: string | null
@@ -119,6 +123,8 @@ export function ChatsPage() {
   const [showNewConvo, setShowNewConvo] = useState(false)
   const [newConvoMessage, setNewConvoMessage] = useState('')
   const selectedBotId = useAppStore((s: { selectedBotId: string | null }) => s.selectedBotId)
+  const environmentId = useAppStore((s) => s.bots.find((b) => b.id === s.selectedBotId)?.environments.find((e) => e.kind === s.selectedEnv)?.id)
+  const navigate = useNavigate()
   const currentUserId = useAppStore((s) => s.user?.id)
   const { data: members = [] } = useTeamMembers()
   const { data: canned = [] } = useCannedReplies()
@@ -131,6 +137,11 @@ export function ChatsPage() {
   useTenantWS()
 
   useEffect(() => {
+    const pending = claimChat()
+    if (pending) {
+      setSelectedId(pending)
+      return
+    }
     if (conversations.length && !selectedId) setSelectedId(conversations[0]?.id ?? null)
   }, [conversations, selectedId])
 
@@ -166,6 +177,8 @@ export function ChatsPage() {
     status: (c.status as ConvoStatus) ?? 'active',
     unread: c.messages?.filter((m) => m.direction === 'inbound').length ?? 0,
     channel: (c.channel?.kind ?? 'web') as Convo['channel'],
+    channelId: c.channel?.id,
+    channelName: c.channel?.name,
     contactId: c.contact?.id,
     assigneeId: c.assignedTo ?? null,
     assignee: members.find((m) => m.id === c.assignedTo)?.displayName ?? null,
@@ -184,7 +197,7 @@ export function ChatsPage() {
     isNote: Boolean(m.content?.internal),
   }))
 
-  const selected = convos.find((c) => c.id === selectedId) ?? convos[0]
+  const selected = convos.find((c) => c.id === selectedId) ?? (selectedId ? undefined : convos[0])
 
   const filteredConvos = convos.filter((c) => {
     if (view === 'mine') return c.assigneeId === currentUserId
@@ -315,6 +328,8 @@ export function ChatsPage() {
             : filteredConvos.map((conv) => (
             <button
               key={conv.id}
+              data-convo-id={conv.id}
+              data-selected={selectedId === conv.id ? 'true' : 'false'}
               onClick={() => setSelectedId(conv.id)}
               className={cn(
                 'flex w-full items-start gap-2.5 px-3 py-3 text-left transition-colors',
@@ -442,7 +457,7 @@ export function ChatsPage() {
           )}
 
           {/* Messages */}
-          <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4">
+          <div data-thread="messages" className="flex-1 overflow-y-auto px-4 py-4 space-y-4">
             {messages.map((msg) => (
               <div key={msg.id}>
                 {msg.isNote ? (
@@ -643,7 +658,7 @@ export function ChatsPage() {
                   { label: 'Email', value: selected.email, icon: <Mail size={12} /> },
                   { label: 'Phone', value: selected.phone, icon: <Phone size={12} /> },
                   { label: 'Location', value: selected.location, icon: <Globe size={12} /> },
-                  { label: 'Channel', value: selected.channel, icon: <MessageCircle size={12} /> },
+                  { label: 'Channel', value: selected.channelName ?? selected.channel, icon: <MessageCircle size={12} /> },
                   { label: 'Assigned to', value: selected.assignee ?? 'Unassigned', icon: <UserPlus size={12} /> },
                 ].filter((item) => item.value).map((item) => (
                   <div key={item.label} className="flex items-start gap-2">
@@ -659,7 +674,27 @@ export function ChatsPage() {
                 <Button variant="secondary" size="sm" className="w-full gap-1.5" onClick={() => setShowTicketDialog(true)}>
                   <Ticket size={13} /> Create ticket
                 </Button>
-                <Button variant="ghost" size="sm" className="w-full gap-1.5">
+                {selected.channel === 'web' && selected.channelId && (
+                  <a
+                    className="flex w-full items-center justify-center gap-1.5 rounded-[var(--radius-md)] border border-[var(--border)] px-2 py-1.5 text-xs text-[var(--accent)] hover:bg-[var(--bg-hover)]"
+                    href={`/api/v1/widget-test/${selected.channelId}`}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    Open test widget
+                  </a>
+                )}
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="w-full gap-1.5"
+                  disabled={!selected.contactId}
+                  onClick={() => {
+                    if (!selected.contactId) return
+                    queueContact(selected.contactId)
+                    void navigate({ to: '/inbox/contacts' })
+                  }}
+                >
                   <Star size={13} /> View contact profile
                 </Button>
               </div>
@@ -852,6 +887,7 @@ export function ChatsPage() {
                 if (!selectedBotId) return
                 const convo = await createConversation.mutateAsync({
                   botId: selectedBotId,
+                  ...(environmentId ? { environmentId } : {}),
                   ...(newConvoMessage.trim() ? { message: newConvoMessage.trim() } : {}),
                 })
                 setShowNewConvo(false)

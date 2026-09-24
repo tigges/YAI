@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import {
   Search, Plus, Filter, Mail, Phone, Globe, MessageSquare,
   MoreHorizontal, ChevronDown, Upload, Download, Star,
@@ -14,10 +14,11 @@ import {
 } from '@ybot/ui'
 import { SubNav } from '../../components/SubNav'
 import { cn } from '@ybot/ui'
-import { useContacts, useCreateContact, useUpdateContact, useDeleteContact, useContactConversations, useCreateConversation, useCreateTicket } from '../../lib/hooks'
+import { useContacts, useCreateContact, useUpdateContact, useDeleteContact, useContactConversations, useCreateConversation, useCreateTicket, useChannels } from '../../lib/hooks'
 import { useAppStore } from '../../store/app'
 import { useNavigate } from '@tanstack/react-router'
 import { useQueryClient } from '@tanstack/react-query'
+import { claimContact, queueChat } from '../../lib/inbox-nav'
 import * as api from '../../lib/api'
 
 const SUBNAV = [
@@ -73,9 +74,12 @@ function ChannelBadge({ ch }: { ch: string }) {
 interface ContactDetailProps {
   contact: Contact
   onClose: () => void
+  onOpenChat: (id: string) => void
+  onStart: () => void
+  starting: boolean
 }
 
-function ContactDetail({ contact, onClose }: ContactDetailProps) {
+function ContactDetail({ contact, onClose, onOpenChat, onStart, starting }: ContactDetailProps) {
   const { data: convos = [] } = useContactConversations(contact.id)
   return (
     <DialogContent size="lg">
@@ -127,23 +131,37 @@ function ContactDetail({ contact, onClose }: ContactDetailProps) {
             {convos.length === 0 && (
               <p className="text-xs text-[var(--text-muted)]">No conversations yet</p>
             )}
-            {convos.slice(0, 5).map((c) => (
-              <div key={c.id} className="flex items-center gap-3 p-2.5 rounded-[var(--radius-md)] border border-[var(--border)] hover:bg-[var(--bg-hover)] transition-colors cursor-pointer">
+            {convos.slice(0, 5).map((c) => {
+              const channel = c.channel
+              return (
+              <div key={c.id} role="button" tabIndex={0} onClick={() => onOpenChat(c.id)} onKeyDown={(e) => { if (e.key === 'Enter') onOpenChat(c.id) }} className="flex items-center gap-3 p-2.5 rounded-[var(--radius-md)] border border-[var(--border)] hover:bg-[var(--bg-hover)] transition-colors cursor-pointer">
                 <CheckCircle2 size={14} className={c.status === 'resolved' ? 'text-[var(--success)]' : 'text-[var(--accent)]'} />
                 <div className="flex-1 min-w-0">
                   <p className="text-sm text-[var(--text-primary)] truncate">
-                    {(c as { messages?: Array<{ content: { text?: string } }> }).messages?.[0]?.content?.text ?? 'Conversation'}
+                    {c.messages?.[0]?.content?.text ?? 'Conversation'}
                   </p>
-                  <p className="text-xs text-[var(--text-muted)] capitalize">{c.status} · {new Date(c.updatedAt as string).toLocaleDateString()}</p>
+                  <p className="text-xs text-[var(--text-muted)] capitalize">{c.status} · {new Date(c.updatedAt).toLocaleDateString()}</p>
+                  {channel?.name && (
+                    <p className="text-xs text-[var(--text-muted)] mt-0.5">
+                      {channel.name}
+                      {channel.kind === 'web' && (
+                        <>
+                          {' · '}
+                          <a className="text-[var(--accent)] hover:underline" href={`/api/v1/widget-test/${channel.id}`} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()}>Test widget</a>
+                        </>
+                      )}
+                    </p>
+                  )}
                 </div>
               </div>
-            ))}
+              )
+            })}
           </div>
         </div>
       </DialogBody>
       <DialogFooter>
         <Button variant="ghost" onClick={onClose}>Close</Button>
-        <Button className="gap-1.5"><MessageCircle size={13} /> Start conversation</Button>
+        <Button className="gap-1.5" disabled={starting} onClick={onStart}><MessageCircle size={13} /> {starting ? 'Starting…' : 'Start conversation'}</Button>
       </DialogFooter>
     </DialogContent>
   )
@@ -165,6 +183,8 @@ export function ContactsPage() {
   const navigate = useNavigate()
   const qc = useQueryClient()
   const botId = useAppStore((s) => s.selectedBotId)
+  const environmentId = useAppStore((s) => s.bots.find((b) => b.id === s.selectedBotId)?.environments.find((e) => e.kind === s.selectedEnv)?.id)
+  const { data: channels = [] } = useChannels()
   const createConversation = useCreateConversation()
   const createTicket = useCreateTicket()
 
@@ -181,6 +201,32 @@ export function ContactsPage() {
     lastSeen: formatRelativeContact((c as { createdAt?: string }).createdAt),
     conversations: (c as { _count?: { conversations: number } })._count?.conversations ?? 0,
   })).filter((c) => !emailOnly || Boolean(c.email))
+
+  function openChat(id: string) {
+    queueChat(id)
+    setSelected(null)
+    void navigate({ to: '/inbox/chats' })
+  }
+
+  async function startConversation(contactId: string) {
+    if (!botId) return
+    const channel = channels.find((item) => item.kind === 'web' && item.environmentId === environmentId && item.isActive)
+      ?? channels.find((item) => item.kind === 'web' && item.environmentId === environmentId)
+    const convo = await createConversation.mutateAsync({
+      botId,
+      contactId,
+      ...(environmentId ? { environmentId } : {}),
+      ...(channel ? { channelId: channel.id } : {}),
+    })
+    openChat(convo.id)
+  }
+
+  useEffect(() => {
+    const id = claimContact()
+    if (!id) return
+    const match = filtered.find((item) => item.id === id)
+    if (match) setSelected(match)
+  }, [rawContacts])
 
   async function handleCreate() {
     if (!newName.trim()) return
@@ -316,7 +362,7 @@ export function ContactsPage() {
                     </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
                       <DropdownMenuItem onClick={() => setSelected(c)}>View profile</DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => { if (botId) void createConversation.mutateAsync({ botId, contactId: c.id }).then(() => navigate({ to: '/inbox/chats' })) }}>Start conversation</DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => { void startConversation(c.id) }}>Start conversation</DropdownMenuItem>
                       <DropdownMenuItem onClick={() => {
                         if (!botId) return
                         void createConversation.mutateAsync({ botId, contactId: c.id }).then((convo) =>
@@ -336,7 +382,15 @@ export function ContactsPage() {
 
       {/* Contact detail dialog */}
       <Dialog open={!!selected} onOpenChange={(o) => { if (!o) setSelected(null) }}>
-        {selected && <ContactDetail contact={selected} onClose={() => setSelected(null)} />}
+        {selected && (
+          <ContactDetail
+            contact={selected}
+            onClose={() => setSelected(null)}
+            onOpenChat={openChat}
+            onStart={() => { void startConversation(selected.id) }}
+            starting={createConversation.isPending}
+          />
+        )}
       </Dialog>
 
       {/* New contact dialog */}

@@ -68,6 +68,55 @@ export function withDestination(graph: Graph, flowName: string, phrases: string[
   return { nodes, edges }
 }
 
+export interface WelcomeDestination {
+  flowName: string
+  phrases: string[]
+  choice: string
+}
+
+/** Add handoffs and menu choices. A second call with the same destinations leaves the graph as it is. */
+export function extendWelcomeGraph(graph: Graph, destinations: WelcomeDestination[]): Graph | null {
+  let current: Graph = graph
+  for (const destination of destinations) {
+    const next = withDestination(current, destination.flowName, destination.phrases)
+    if (!next) return null
+    current = next
+  }
+  const choices = destinations.map((destination) => destination.choice)
+  const nodes = current.nodes.map((node) => {
+    if (node.data.kind === 'ask_question') {
+      const existing = [...((node.data.config['choices'] as string[] | undefined) ?? [])]
+      const missing = choices.filter((choice) => !existing.includes(choice))
+      if (missing.length === 0) return node
+      return {
+        ...node,
+        data: { ...node.data, config: { ...node.data.config, choices: [...existing, ...missing] } },
+      }
+    }
+    if (node.data.kind === 'send_message') {
+      const text = node.data.config['text']
+      if (typeof text === 'string' && text.includes('orders, returns, and billing') && !text.includes('cancellation')) {
+        return {
+          ...node,
+          data: {
+            ...node.data,
+            config: {
+              ...node.data.config,
+              text: 'I can help with orders, returns, billing, a cancellation, a delivery address, or a person on the team. Tell me which one you need.',
+            },
+          },
+        }
+      }
+    }
+    return node
+  })
+  const handoffs = nodes.filter((node) => node.id.startsWith('go-'))
+  handoffs.forEach((node, index) => {
+    node.position = { x: 1100, y: 40 + index * 90 }
+  })
+  return { nodes, edges: current.edges }
+}
+
 /**
  * After a person publishes a suggested flow, the welcome flow in that
  * environment learns the handoff. A second call changes nothing.

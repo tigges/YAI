@@ -74,7 +74,7 @@ export const bots = {
 export const flows = {
   list: (botId: string) => apiFetch<{ data: Flow[] }>(`/bots/${botId}/flows`),
   get: (botId: string, flowId: string) => apiFetch<{ data: Flow }>(`/bots/${botId}/flows/${flowId}`),
-  create: (botId: string, body: { name: string; description?: string; kind?: string; tags?: string[] }) =>
+  create: (botId: string, body: { name: string; description?: string; kind?: string; tags?: string[]; graph?: FlowGraph }) =>
     apiFetch<{ data: Flow }>(`/bots/${botId}/flows`, { method: 'POST', body: JSON.stringify(body) }),
   update: (botId: string, flowId: string, body: Partial<{ name: string; description: string; tags: string[] }>) =>
     apiFetch<{ data: unknown }>(`/bots/${botId}/flows/${flowId}`, { method: 'PATCH', body: JSON.stringify(body) }),
@@ -146,7 +146,7 @@ export const knowledge = {
 export const conversations = {
   list: (params?: Record<string, string>) => apiFetch<{ data: Conversation[] }>(`/conversations?${new URLSearchParams(params ?? {})}`),
   get: (id: string) => apiFetch<{ data: Conversation }>(`/conversations/${id}`),
-  create: (body: { botId: string; channelId?: string; contactId?: string; message?: string }) =>
+  create: (body: { botId: string; channelId?: string; contactId?: string; environmentId?: string; message?: string }) =>
     apiFetch<{ data: Conversation }>('/conversations', { method: 'POST', body: JSON.stringify(body) }),
   update: (id: string, body: { status?: string; assignedTo?: string | null }) =>
     apiFetch<{ data: unknown }>(`/conversations/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
@@ -387,7 +387,7 @@ export interface Contact { id: string; displayName?: string; email?: string; pho
 export interface Campaign { id: string; name: string; channel: string; status: string; direction: string; subject?: string; body?: string; scheduledAt?: string; sentAt?: string; sent?: number; delivered?: number }
 export interface CampaignDelivery { id: string; contactId: string; email?: string; status: string; sentAt?: string; error?: string }
 export interface Template { id: string; name: string; channel: string; approvalStatus: string; content: Record<string, unknown>; variables: string[] }
-export interface Channel { id: string; name: string; kind: string; config: Record<string, unknown>; isActive: boolean; botId: string; createdAt: string }
+export interface Channel { id: string; name: string; kind: string; environmentId?: string; config: Record<string, unknown>; isActive: boolean; botId: string; createdAt: string }
 export interface Webhook { id: string; url: string; events: string[]; isActive: boolean; createdAt: string; successRate?: number | null; secret?: string | null }
 export interface WebhookDelivery { id: string; event: string; statusCode: number; success: boolean; durationMs: number; error?: string | null; createdAt: string }
 export interface CannedReply { id: string; shortcut: string; title: string; text: string }

@@ -11,6 +11,7 @@ import {
   type Connection,
   type Node,
   type Edge,
+  type EdgeChange,
   BackgroundVariant,
   MarkerType,
 } from '@xyflow/react'
@@ -51,7 +52,8 @@ function normalizeCanvasEdge(edge: Edge): Edge {
   const sourceHandle =
     handle === 'yes' ? 'true' : handle === 'no' ? 'false' : handle
   const next = sourceHandle === handle ? edge : { ...edge, sourceHandle }
-  return next.type && next.type !== 'default' ? next : { ...next, type: 'smoothstep' }
+  const typed = next.type && next.type !== 'default' ? next : { ...next, type: 'smoothstep' }
+  return { ...typed, interactionWidth: 24 }
 }
 
 const INITIAL_NODES: Node[] = [
@@ -155,6 +157,7 @@ export function FlowCanvasPage() {
   const [nodes, setNodes, onNodesChange] = useNodesState(INITIAL_NODES)
   const [edges, setEdges, onEdgesChange] = useEdgesState(INITIAL_EDGES)
   const [selectedNode, setSelectedNode] = useState<Node | null>(null)
+  const [selectedEdgeIds, setSelectedEdgeIds] = useState<string[]>([])
   const [status, setStatus] = useState<'draft' | 'saved' | 'published'>('draft')
   const [saving, setSaving] = useState(false)
   const { data: flows } = useFlows()
@@ -164,13 +167,16 @@ export function FlowCanvasPage() {
   const saveCanvas = useSaveCanvas()
   // Load the latest saved version. Welcome & Routing lives on version 2.
   const { data: savedCanvas } = useFlowCanvas(flowId ?? '', canvasVersion)
+  const loadedGraph = useRef<string | null>(null)
   React.useEffect(() => {
-    if (savedCanvas?.graph?.nodes?.length) {
-      setNodes(savedCanvas.graph.nodes.map((n, index) => normalizeCanvasNode(n as Node, index)))
-      setEdges((savedCanvas.graph.edges as Edge[]).map(normalizeCanvasEdge))
-      setStatus(savedCanvas.status as 'draft' | 'saved' | 'published')
-    }
-  }, [savedCanvas])
+    if (!savedCanvas?.graph?.nodes?.length) return
+    const key = JSON.stringify(savedCanvas.graph)
+    if (loadedGraph.current === key) return
+    loadedGraph.current = key
+    setNodes(savedCanvas.graph.nodes.map((n, index) => normalizeCanvasNode(n as Node, index)))
+    setEdges((savedCanvas.graph.edges as Edge[]).map(normalizeCanvasEdge))
+    setStatus(savedCanvas.status as 'draft' | 'saved' | 'published')
+  }, [savedCanvas, setNodes, setEdges])
 
   const [showTestPanel, setShowTestPanel] = useState(false)
   const [paletteOpen, setPaletteOpen] = useState(() => typeof window === 'undefined' || window.innerWidth >= 768)
@@ -206,6 +212,22 @@ export function FlowCanvasPage() {
     applyingHistory.current = false
   }
 
+  const handleEdgesChange = useCallback((changes: EdgeChange[]) => {
+    if (changes.some((change) => change.type === 'remove')) {
+      historyPast.current.push({ nodes, edges })
+      historyFuture.current = []
+    }
+    onEdgesChange(changes)
+  }, [nodes, edges, onEdgesChange])
+
+  function removeSelectedEdges() {
+    if (selectedEdgeIds.length === 0) return
+    remember()
+    const drop = new Set(selectedEdgeIds)
+    setEdges((current) => current.filter((edge) => !drop.has(edge.id)))
+    setSelectedEdgeIds([])
+  }
+
   const onConnect = useCallback(
     (params: Connection) => {
       historyPast.current.push({ nodes, edges })
@@ -217,6 +239,7 @@ export function FlowCanvasPage() {
             type: 'smoothstep',
             markerEnd: { type: MarkerType.ArrowClosed },
             style: EDGE_STYLE,
+            interactionWidth: 24,
             animated: false,
           },
           eds
@@ -380,6 +403,9 @@ export function FlowCanvasPage() {
           <Button variant="ghost" size="icon-sm" title="Align nodes in a row" onClick={() => applyLayout(alignHorizontal(nodes))}><AlignHorizontalJustifyCenter size={14} /></Button>
           <Button variant="ghost" size="icon-sm" title="Align nodes in a column" onClick={() => applyLayout(alignVertical(nodes))}><AlignVerticalJustifyCenter size={14} /></Button>
           <div className="h-4 w-px bg-[var(--border)]" />
+          <Button variant="ghost" size="sm" disabled={selectedEdgeIds.length === 0} onClick={removeSelectedEdges}>
+            Remove connection
+          </Button>
           <Button variant="ghost" size="icon-sm" title={`Undo (${selectedEnv})`} onClick={undo}><Undo2 size={14} /></Button>
           <Button variant="ghost" size="icon-sm" title="Redo" onClick={redo}><Redo2 size={14} /></Button>
           <div className="h-4 w-px bg-[var(--border)]" />
@@ -413,12 +439,21 @@ export function FlowCanvasPage() {
             nodes={nodes}
             edges={edges}
             onNodesChange={onNodesChange}
-            onEdgesChange={onEdgesChange}
+            onEdgesChange={handleEdgesChange}
             onConnect={onConnect}
             onNodeClick={handleNodeClick}
-            onPaneClick={() => setSelectedNode(null)}
+            onPaneClick={() => { setSelectedNode(null); setSelectedEdgeIds([]) }}
+            onSelectionChange={({ edges: picked }) => {
+              const ids = picked.map((edge) => edge.id)
+              setSelectedEdgeIds((current) => (
+                current.length === ids.length && current.every((id, index) => id === ids[index]) ? current : ids
+              ))
+            }}
+            deleteKeyCode={['Backspace', 'Delete']}
+            edgesFocusable
+            elementsSelectable
             nodeTypes={nodeTypes}
-            defaultEdgeOptions={{ type: 'smoothstep', style: EDGE_STYLE, markerEnd: { type: MarkerType.ArrowClosed } }}
+            defaultEdgeOptions={{ type: 'smoothstep', style: EDGE_STYLE, interactionWidth: 24, markerEnd: { type: MarkerType.ArrowClosed } }}
             fitView
             fitViewOptions={{ padding: 0.2 }}
             style={{ background: 'var(--bg-base)' }}
@@ -446,6 +481,20 @@ export function FlowCanvasPage() {
               maskColor="rgba(0,0,0,0.4)"
             />
           </ReactFlow>
+          <div className="pointer-events-none absolute left-1/2 top-3 z-10 -translate-x-1/2">
+            <div className="pointer-events-auto flex items-center gap-2 rounded-full border border-[var(--border)] bg-[var(--bg-elevated)] px-3 py-1.5 text-xs text-[var(--text-secondary)] shadow-sm">
+              {selectedEdgeIds.length > 0 ? (
+                <>
+                  <span>Connection selected</span>
+                  <button type="button" className="font-medium text-[var(--accent)] hover:underline" onClick={removeSelectedEdges}>
+                    Remove
+                  </button>
+                </>
+              ) : (
+                <span>Click a line between steps, then press Delete to remove it.</span>
+              )}
+            </div>
+          </div>
         </div>
 
         <NodeConfigPanel

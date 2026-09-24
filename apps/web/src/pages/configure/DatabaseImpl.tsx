@@ -1,8 +1,8 @@
 import React, { useState } from 'react'
 import {
-  Database, Plus, Table2, ChevronRight, MoreHorizontal,
+  Database, Plus, Table2,
   Key, Hash, Type, AlignLeft, List, Calendar,
-  Search, Filter, Download, Pencil, Trash2,
+  Search, Download,
 } from 'lucide-react'
 import { Badge, Button, Input } from '@ybot/ui'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogBody, DialogFooter } from '@ybot/ui'
@@ -33,73 +33,6 @@ const TYPE_ICONS: Record<ColumnType, React.ReactNode> = {
   json:    <AlignLeft size={11} className="text-[var(--text-muted)]" />,
 }
 
-const MOCK_TABLES: Table[] = [
-  {
-    id: 'customers', name: 'customers', rows: 1_842, updatedAt: '2h ago',
-    columns: [
-      { name: 'id', type: 'pk', nullable: false },
-      { name: 'name', type: 'text', nullable: false },
-      { name: 'email', type: 'text', nullable: false },
-      { name: 'plan', type: 'enum', nullable: false, default: 'free' },
-      { name: 'created_at', type: 'date', nullable: false },
-    ],
-  },
-  {
-    id: 'orders', name: 'orders', rows: 5_216, updatedAt: '5m ago',
-    columns: [
-      { name: 'id', type: 'pk', nullable: false },
-      { name: 'customer_id', type: 'number', nullable: false },
-      { name: 'total', type: 'number', nullable: false },
-      { name: 'status', type: 'enum', nullable: false, default: 'pending' },
-      { name: 'placed_at', type: 'date', nullable: false },
-      { name: 'metadata', type: 'json', nullable: true },
-    ],
-  },
-  {
-    id: 'products', name: 'products', rows: 423, updatedAt: '3d ago',
-    columns: [
-      { name: 'id', type: 'pk', nullable: false },
-      { name: 'name', type: 'text', nullable: false },
-      { name: 'sku', type: 'text', nullable: false },
-      { name: 'price', type: 'number', nullable: false },
-      { name: 'in_stock', type: 'boolean', nullable: false, default: 'true' },
-    ],
-  },
-  {
-    id: 'promo_codes', name: 'promo_codes', rows: 48, updatedAt: '1w ago',
-    columns: [
-      { name: 'id', type: 'pk', nullable: false },
-      { name: 'code', type: 'text', nullable: false },
-      { name: 'discount_pct', type: 'number', nullable: false },
-      { name: 'expires_at', type: 'date', nullable: true },
-    ],
-  },
-]
-
-const MOCK_RECORDS: Record<string, Record<string, string>[]> = {
-  customers: [
-    { id: '1', name: 'Alice Johnson', email: 'alice@example.com', plan: 'pro', created_at: '2026-01-15' },
-    { id: '2', name: 'Bob Smith', email: 'bob@example.com', plan: 'free', created_at: '2026-02-20' },
-    { id: '3', name: 'Carol White', email: 'carol@example.com', plan: 'enterprise', created_at: '2026-03-01' },
-    { id: '4', name: 'David Lee', email: 'david@example.com', plan: 'free', created_at: '2026-04-12' },
-    { id: '5', name: 'Eve Brown', email: 'eve@example.com', plan: 'pro', created_at: '2026-05-22' },
-  ],
-  orders: [
-    { id: '1001', customer_id: '1', total: '£149.99', status: 'delivered', placed_at: '2026-08-01', metadata: '{}' },
-    { id: '1002', customer_id: '2', total: '£29.99', status: 'pending', placed_at: '2026-09-15', metadata: '{}' },
-    { id: '1003', customer_id: '1', total: '£299.00', status: 'refunded', placed_at: '2026-09-18', metadata: '{}' },
-  ],
-  products: [
-    { id: '1', name: 'Starter Pack', sku: 'PKG-001', price: '£29.99', in_stock: 'true' },
-    { id: '2', name: 'Pro Bundle', sku: 'PKG-002', price: '£149.99', in_stock: 'true' },
-    { id: '3', name: 'Enterprise Suite', sku: 'PKG-003', price: '£499.00', in_stock: 'false' },
-  ],
-  promo_codes: [
-    { id: '1', code: 'SAVE20', discount_pct: '20', expires_at: '2026-12-31' },
-    { id: '2', code: 'WELCOME10', discount_pct: '10', expires_at: '—' },
-  ],
-}
-
 export function DatabasePage() {
   const { data: loaded = [] } = useDataTables()
   const tables: Table[] = loaded.map((table) => ({
@@ -110,10 +43,10 @@ export function DatabasePage() {
     columns: (Array.isArray(table.columns) ? table.columns : []) as Column[],
   }))
   const [activeId, setActiveId] = useState('')
-  const activeTable = tables.find((table) => table.id === activeId) ?? tables[0] ?? { id: '', name: 'No tables yet', rows: 0, columns: [{ name: 'name', type: 'text' as const, nullable: true }], updatedAt: '' }
-  const { data: loadedRecords = [] } = useDataRecords(activeTable.id)
+  const activeTable = tables.find((table) => table.id === activeId) ?? tables[0]
+  const { data: loadedRecords = [] } = useDataRecords(activeTable?.id ?? '')
   const createTable = useCreateDataTable()
-  const addRecord = useAddDataRecord(activeTable.id)
+  const addRecord = useAddDataRecord(activeTable?.id ?? '')
   const [view, setView] = useState<'schema' | 'records'>('records')
   const [search, setSearch] = useState('')
   const [showNew, setShowNew] = useState(false)
@@ -136,10 +69,18 @@ export function DatabasePage() {
         <SubNav items={SUBNAV} />
       </div>
 
-      {tables.length === 0 && (
-        <div className="px-6 py-3 border-b border-[var(--border)] text-sm text-[var(--text-muted)]">No tables yet. Create one to store rows for this workspace.</div>
-      )}
-
+      {tables.length === 0 || !activeTable ? (
+        <div className="flex flex-1 items-center justify-center p-8">
+          <div className="max-w-sm text-center">
+            <Database size={28} className="mx-auto mb-3 text-[var(--text-muted)]" />
+            <p className="text-sm font-medium text-[var(--text-primary)]">No tables yet</p>
+            <p className="mt-1 text-sm text-[var(--text-muted)]">Tables are stored once for this workspace, shared by every bot and environment. Create one when you want the bot to read rows.</p>
+            <Button size="sm" className="mt-4 gap-1.5" onClick={() => setShowNew(true)}>
+              <Plus size={14} /> Create table
+            </Button>
+          </div>
+        </div>
+      ) : (
       <div className="flex flex-1 overflow-hidden">
         {/* Tables list sidebar */}
         <div className="w-56 shrink-0 border-r border-[var(--border)] bg-[var(--bg-surface)] overflow-y-auto flex flex-col">
@@ -190,7 +131,7 @@ export function DatabasePage() {
               <>
                 <Input placeholder="Search records…" leftIcon={<Search size={12} />} value={search} onChange={(e) => setSearch(e.target.value)} className="w-52" />
                 <Input placeholder="New row name" value={rowName} onChange={(e) => setRowName(e.target.value)} className="w-40" />
-                <Button size="sm" disabled={!activeTable.id || !rowName.trim() || addRecord.isPending} onClick={() => {
+                <Button size="sm" disabled={!rowName.trim() || addRecord.isPending} onClick={() => {
                   void addRecord.mutateAsync({ name: rowName.trim() }).then(() => setRowName(''))
                 }}>Add row</Button>
               </>
@@ -249,6 +190,7 @@ export function DatabasePage() {
           )}
         </div>
       </div>
+      )}
 
       <Dialog open={showNew} onOpenChange={setShowNew}>
         <DialogContent size="sm">

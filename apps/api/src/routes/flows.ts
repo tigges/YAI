@@ -26,16 +26,23 @@ export async function flowsRoutes(app: FastifyInstance) {
   app.post('/:botId/flows', async (request, reply) => {
     const { tenantId } = request.user as JWT
     const { botId } = request.params as { botId: string }
-    const body = z.object({ name: z.string().min(1), description: z.string().optional(), kind: z.string().default('flow'), tags: z.array(z.string()).default([]) }).safeParse(request.body)
+    const body = z.object({
+      name: z.string().min(1),
+      description: z.string().optional(),
+      kind: z.string().default('flow'),
+      tags: z.array(z.string()).default([]),
+      graph: z.object({ nodes: z.array(z.any()), edges: z.array(z.any()) }).optional(),
+    }).safeParse(request.body)
     if (!body.success) return reply.status(400).send({ error: { code: 'VALIDATION', details: body.error.flatten() } })
 
+    const { graph, ...flowData } = body.data
     const flow = await prisma.flow.create({
-      data: { ...body.data, tenantId, botId },
+      data: { ...flowData, tenantId, botId },
     })
-    await prisma.flowVersion.create({
-      data: { tenantId, flowId: flow.id, version: 1, status: 'draft', graph: { nodes: [], edges: [] }, variables: [] },
+    const version = await prisma.flowVersion.create({
+      data: { tenantId, flowId: flow.id, version: 1, status: 'draft', graph: graph ?? { nodes: [], edges: [] }, variables: [] },
     })
-    return reply.status(201).send({ data: flow })
+    return reply.status(201).send({ data: { ...flow, versions: [version] } })
   })
 
   // GET /bots/:botId/flows/:flowId

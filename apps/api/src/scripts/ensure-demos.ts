@@ -19,7 +19,7 @@
 
 import bcrypt from 'bcryptjs'
 import { prisma } from '@ybot/db'
-import { starterFlows } from './starter-flows.js'
+import { installStarterFlows } from '../lib/install-starter-flows.js'
 
 const DEMO_PASSWORD = 'Demo1234!'
 const CHARLES_PASSWORD = 'password123'
@@ -383,34 +383,7 @@ async function bindPublishedFlows(botId: string, environmentId: string) {
 }
 
 async function ensureFlows(tenantId: string, botId: string, companyName: string, environmentId: string | null) {
-  let added = 0
-  for (const starter of starterFlows(companyName)) {
-    const found = await prisma.flow.findFirst({ where: { tenantId, botId, name: starter.name } })
-    if (found) continue
-    const flow = await prisma.flow.create({
-      data: {
-        tenantId,
-        botId,
-        name: starter.name,
-        description: starter.description,
-        kind: 'flow',
-        tags: starter.tags,
-      },
-    })
-    await prisma.flowVersion.create({
-      data: {
-        tenantId,
-        flowId: flow.id,
-        version: 1,
-        status: starter.publish ? 'published' : 'draft',
-        environmentId: starter.publish ? environmentId : null,
-        graph: starter.graph,
-        publishedAt: starter.publish ? new Date() : null,
-      },
-    })
-    added += 1
-  }
-  return added
+  return installStarterFlows(tenantId, botId, companyName, environmentId)
 }
 
 async function ensureOpeningHours(tenantId: string, botId: string) {

@@ -1,12 +1,12 @@
 import React from 'react'
-import { Link, useNavigate } from '@tanstack/react-router'
+import { useQuery } from '@tanstack/react-query'
+import { useNavigate } from '@tanstack/react-router'
 import {
   ChevronDown,
   Plus,
   Sun,
   Moon,
   LogOut,
-  User,
   Settings,
   Beaker,
   Rocket,
@@ -28,6 +28,7 @@ import {
 import { useAppStore } from '../store/app'
 import { apiFetch } from '../lib/api'
 import { useAgentStatus, useUpdateAgentStatus } from '../lib/hooks'
+import { workspaceIdentity } from '../lib/workspace-handle'
 import { HELP_TOPICS } from '../pages/help-topics'
 
 interface TopBarProps {
@@ -89,6 +90,17 @@ export function TopBar({ darkMode, onToggleDark }: TopBarProps) {
   const { user, bots, botsLoading, selectedBotId, selectBot, clearAuth } = useAppStore()
   const { data: agentStatus = 'offline' } = useAgentStatus()
   const updateStatus = useUpdateAgentStatus()
+  const { data: tenant } = useQuery({
+    queryKey: ['tenant-me', user?.tenantId],
+    enabled: Boolean(user),
+    retry: false,
+    queryFn: () => apiFetch<{ data: { name?: string } | null }>('/tenants/me').then((res) => res.data),
+  })
+  const identity = workspaceIdentity({
+    displayName: user?.displayName,
+    email: user?.email,
+    tenantName: tenant?.name,
+  })
 
   const STATUS_COLOR: Record<string, string> = {
     online: 'var(--success)', away: 'var(--warning)', offline: 'var(--text-muted)',
@@ -189,18 +201,25 @@ export function TopBar({ darkMode, onToggleDark }: TopBarProps) {
 
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <button className="flex items-center gap-2 rounded-[var(--radius)] px-2 py-1 hover:bg-[var(--bg-hover)] transition-colors">
+            <button
+              className="flex items-center gap-2 rounded-[var(--radius)] px-2 py-1 hover:bg-[var(--bg-hover)] transition-colors"
+              aria-label={identity.handle ? `Account ${identity.handle}` : 'Account'}
+              title={user?.displayName && identity.company ? `${user.displayName} · ${identity.company}` : user?.displayName}
+            >
               <div className="relative">
-                <Avatar name={user?.displayName} src={user?.avatarUrl ?? null} size="sm" />
+                <Avatar name={identity.avatarName || user?.displayName} src={user?.avatarUrl ?? null} size="sm" />
                 <span className="absolute bottom-0 right-0 h-2 w-2 rounded-full border-2 border-[var(--bg-surface)]" style={{ background: STATUS_COLOR[agentStatus] ?? STATUS_COLOR.offline }} />
               </div>
-              <span className="text-sm text-[var(--text-secondary)] hidden md:block">
-                {user?.displayName}
+              <span className="text-sm font-medium text-[var(--text-secondary)]">
+                {identity.handle}
               </span>
             </button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
-            <DropdownMenuLabel>{user?.email}</DropdownMenuLabel>
+            <DropdownMenuLabel className="text-sm font-semibold text-[var(--text-primary)]">
+              <span className="block">{identity.handle}</span>
+              <span className="mt-0.5 block text-xs font-normal text-[var(--text-muted)]">{user?.email}</span>
+            </DropdownMenuLabel>
             <DropdownMenuSeparator />
             <DropdownMenuLabel className="text-xs text-[var(--text-muted)] font-normal">Status</DropdownMenuLabel>
             {(['online', 'away', 'offline'] as const).map((s) => (

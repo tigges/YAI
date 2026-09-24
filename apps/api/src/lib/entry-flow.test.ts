@@ -3,7 +3,7 @@ import { test } from 'node:test'
 import { pickEntry } from './entry-flow.js'
 import { recipesToPropose } from './draft-flows.js'
 import { DRAFT_RECIPES } from './draft-flows.js'
-import { withDestination } from './welcome-routes.js'
+import { extendWelcomeGraph, withDestination } from './welcome-routes.js'
 
 test('pickEntry keeps the newest welcome flow in front of a later publish', () => {
   const chosen = pickEntry([
@@ -40,4 +40,30 @@ test('publishing a destination adds one handoff to the welcome router', () => {
   const again = withDestination(next!, 'Password Reset', phrases)
   const routesAgain = again!.nodes.find((node) => node.id === 'route')!.data.config['routes'] as Array<{ flowName?: string }>
   assert.equal(routesAgain.filter((route) => route.flowName === 'Password Reset').length, 1)
+})
+
+test('sandbox use cases extend the welcome menu once', () => {
+  const graph = {
+    nodes: [
+      { id: 'route', data: { kind: 'route_topic', label: 'Route', config: { routes: [{ handle: 'orders', phrases: ['order', 'delivery'] }] } } },
+      { id: 'ask', data: { kind: 'ask_question', label: 'Ask', config: { question: 'What do you need?', choices: ['Order status'] } } },
+      { id: 'other', data: { kind: 'send_message', label: 'Menu', config: { text: 'I can help with orders, returns, and billing. Tell me which one you need.' } } },
+    ],
+    edges: [] as Array<{ id: string; source: string; target: string; sourceHandle?: string }>,
+  }
+  const destinations = [
+    { flowName: 'Cancel order', phrases: ['cancel my order'], choice: 'Cancel an order' },
+    { flowName: 'Change address', phrases: ['delivery address'], choice: 'Change address' },
+  ]
+  const next = extendWelcomeGraph(graph, destinations)
+  assert.ok(next)
+  const routes = next!.nodes.find((node) => node.id === 'route')!.data.config['routes'] as Array<{ handle: string }>
+  assert.equal(routes.some((route) => route.handle === 'cancel-order'), true)
+  assert.equal(routes.some((route) => route.handle === 'change-address'), true)
+  const choices = next!.nodes.find((node) => node.id === 'ask')!.data.config['choices'] as string[]
+  assert.deepEqual(choices, ['Order status', 'Cancel an order', 'Change address'])
+  const menu = next!.nodes.find((node) => node.id === 'other')!.data.config['text'] as string
+  assert.match(menu, /cancellation/)
+  const again = extendWelcomeGraph(next!, destinations)
+  assert.equal(JSON.stringify(again), JSON.stringify(next))
 })

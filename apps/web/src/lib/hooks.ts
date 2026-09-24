@@ -40,7 +40,7 @@ export function useCreateFlow() {
   const qc = useQueryClient()
   const bid = botId()
   return useMutation({
-    mutationFn: (body: { name: string; description?: string; tags?: string[] }) =>
+    mutationFn: (body: { name: string; description?: string; tags?: string[]; graph?: api.FlowGraph }) =>
       api.flows.create(bid, body).then((r) => r.data),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['flows', bid] }),
   })
@@ -288,7 +288,7 @@ export function useConversations(params?: Record<string, string>) {
 export function useCreateConversation() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: (body: { botId: string; channelId?: string; contactId?: string; message?: string }) =>
+    mutationFn: (body: { botId: string; channelId?: string; contactId?: string; environmentId?: string; message?: string }) =>
       api.conversations.create(body).then((r) => r.data),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['conversations'] }),
   })
