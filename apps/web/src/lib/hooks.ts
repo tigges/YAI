@@ -40,7 +40,7 @@ export function useCreateFlow() {
   const qc = useQueryClient()
   const bid = botId()
   return useMutation({
-    mutationFn: (body: { name: string; description?: string; tags?: string[] }) =>
+    mutationFn: (body: { name: string; description?: string; tags?: string[]; graph?: api.FlowGraph }) =>
       api.flows.create(bid, body).then((r) => r.data),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['flows', bid] }),
   })

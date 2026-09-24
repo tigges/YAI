@@ -74,7 +74,7 @@ export const bots = {
 export const flows = {
   list: (botId: string) => apiFetch<{ data: Flow[] }>(`/bots/${botId}/flows`),
   get: (botId: string, flowId: string) => apiFetch<{ data: Flow }>(`/bots/${botId}/flows/${flowId}`),
-  create: (botId: string, body: { name: string; description?: string; kind?: string; tags?: string[] }) =>
+  create: (botId: string, body: { name: string; description?: string; kind?: string; tags?: string[]; graph?: FlowGraph }) =>
     apiFetch<{ data: Flow }>(`/bots/${botId}/flows`, { method: 'POST', body: JSON.stringify(body) }),
   update: (botId: string, flowId: string, body: Partial<{ name: string; description: string; tags: string[] }>) =>
     apiFetch<{ data: unknown }>(`/bots/${botId}/flows/${flowId}`, { method: 'PATCH', body: JSON.stringify(body) }),

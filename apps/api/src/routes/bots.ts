@@ -1,6 +1,7 @@
 import type { FastifyInstance } from 'fastify'
 import { requireRole } from '../middleware/auth.js'
 import { prisma } from '@ybot/db'
+import { installStarterFlows } from '../lib/install-starter-flows.js'
 
 
 interface JwtPayload {
@@ -54,6 +55,10 @@ export async function botsRoutes(app: FastifyInstance) {
       },
       include: { environments: true },
     })
+
+    const tenant = await prisma.tenant.findUnique({ where: { id: tenantId } })
+    const sandbox = bot.environments.find((env) => env.kind === 'sandbox')
+    await installStarterFlows(tenantId, bot.id, tenant?.name ?? name, sandbox?.id ?? null)
 
     return reply.status(201).send({ data: bot })
   })
