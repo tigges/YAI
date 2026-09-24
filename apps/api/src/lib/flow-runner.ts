@@ -28,6 +28,8 @@ export interface FlowRunResult {
   messages: string[]
   handover?: { team?: string; priority?: string; note?: string }
   waitingFor?: Session['waitingFor']
+  /** The published flow reached its end. A waiting question is still open. */
+  ended?: boolean
   flowName?: string
 }
 
@@ -163,6 +165,7 @@ export async function runFlowIfPublished(opts: {
     messages: outcome.messages,
     handover: outcome.handover,
     waitingFor: outcome.session.waitingFor,
+    ended: outcome.session.status === 'completed',
     flowName: version.flow.name,
   }
 }
