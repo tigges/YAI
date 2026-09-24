@@ -292,14 +292,14 @@ export function FlowsPage() {
                 </button>
                 <button type="button" onClick={() => setPackChoice('hair-studio')} className="rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--bg-surface)] p-3 text-left hover:bg-[var(--bg-hover)]">
                   <p className="text-sm font-medium text-[var(--text-primary)]">Hair studio</p>
-                  <p className="mt-1 text-xs text-[var(--text-muted)]">Bookings, prices, walk-ins, and the salon address. The menu matches Bella.</p>
+                  <p className="mt-1 text-xs text-[var(--text-muted)]">Bookings, prices, vouchers, and the salon address. The menu matches Bella.</p>
                 </button>
               </div>
             ) : (
               <>
                 <p className="text-sm text-[var(--text-secondary)]">
                   {packChoice === 'hair-studio'
-                    ? 'This pack greets a guest and answers the questions a salon hears first: a booking, a cancellation, prices, opening hours, walk-ins, the address, and a person at the studio. Cuts from £35 and 14 Rosewood Lane match the Bella demo page. Edit those lines for your own salon. A booking notes the service and the day. The studio confirms the time in the chat.'
+                    ? 'This pack greets a guest and answers the questions a salon hears first: a booking, a new time, a cancellation, prices, a voucher, opening hours, walk-ins, the address, and a person at the studio. It also covers a free consultation, colour correction, a patch test, running late, and choosing a stylist. Cuts from £35 and 14 Rosewood Lane match the Bella demo page. Edit those lines for your own salon. A booking notes the service and the day. The studio confirms the time in the chat.'
                     : 'This pack greets the visitor and answers the questions customers ask first: hours, shipping, returns, tracking, payments, passwords, plans, and reaching a person. The wording is a benchmark. Edit each message so it matches your business. The guided wizard is how you reshape a flow after that.'}
                 </p>
                 <p className="text-sm text-[var(--text-secondary)]">
