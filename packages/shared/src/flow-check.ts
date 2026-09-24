@@ -216,7 +216,7 @@ export function inspectFlowGraph(graph: CheckGraph | null | undefined, options: 
         issues.push({ level: 'block', code: 'empty-jump', nodeId: node.id, message: `${label} does not name the flow to open.` })
       } else if (options.flowNames && !options.flowNames.includes(flowName)) {
         issues.push({ level: 'block', code: 'missing-flow', nodeId: node.id, message: `${label} opens “${flowName}”, and this bot has no flow with that name.` })
-      } else {
+      } else if (leaving.length > 0) {
         issues.push({ level: 'note', code: 'jump', nodeId: node.id, message: `${label} opens ${flowName}. The line after this step does not run.` })
       }
     }
@@ -298,11 +298,20 @@ export function repairFlowGraph<T extends CheckGraph>(graph: T): { graph: T; rep
   }
 
   const kept: CheckEdge[] = []
+  let stray = 0
+  let afterJump = 0
   for (const edge of edges) {
     const source = byId.get(edge.source)
+    if (source && kindOf(source) === 'execute_flow') {
+      afterJump += 1
+      continue
+    }
     if (source && kindOf(source) === 'route_topic') {
       const allowed = new Set(routeHandles(source))
-      if (!edge.sourceHandle || !allowed.has(edge.sourceHandle)) continue
+      if (!edge.sourceHandle || !allowed.has(edge.sourceHandle)) {
+        stray += 1
+        continue
+      }
     }
     if (source && kindOf(source) === 'condition') {
       if (edge.sourceHandle === 'true') edge.sourceHandle = 'yes'
@@ -310,14 +319,22 @@ export function repairFlowGraph<T extends CheckGraph>(graph: T): { graph: T; rep
     }
     kept.push(edge)
   }
-  const removed = edges.length - kept.length
-  if (removed > 0) {
+  if (stray > 0) {
     repairs.push({
       level: 'repair',
       code: 'stray-route',
-      message: removed === 1
+      message: stray === 1
         ? 'Removed a line that was not tied to a route.'
-        : `Removed ${removed} lines that were not tied to a route.`,
+        : `Removed ${stray} lines that were not tied to a route.`,
+    })
+  }
+  if (afterJump > 0) {
+    repairs.push({
+      level: 'repair',
+      code: 'jump',
+      message: afterJump === 1
+        ? 'Removed the line after a jump. That line never runs.'
+        : `Removed ${afterJump} lines after a jump. Those lines never run.`,
     })
   }
   edges = kept
@@ -350,6 +367,61 @@ export function repairFlowGraph<T extends CheckGraph>(graph: T): { graph: T; rep
       if (renamed) {
         repairs.push({ level: 'repair', code: 'condition-names', nodeId: node.id, message: `Renamed the Yes and No lines on ${labelOf(node)}.` })
       }
+    }
+  }
+
+  for (const node of nodes) {
+    if (kindOf(node) !== 'condition') continue
+    const config = configOf(node)
+    const conditions = Array.isArray(config['conditions']) ? config['conditions'] as Array<{ field?: string; operator?: string; value?: string }> : []
+    let changed = false
+    for (const condition of conditions) {
+      if (!condition.field?.startsWith('response.')) continue
+      condition.field = 'ok'
+      condition.operator = 'equals'
+      condition.value = 'true'
+      changed = true
+    }
+    if (changed) {
+      repairs.push({
+        level: 'repair',
+        code: 'condition-field',
+        nodeId: node.id,
+        message: `${labelOf(node)} now checks whether the lookup succeeded.`,
+      })
+    }
+  }
+
+  for (const node of nodes) {
+    if (kindOf(node) !== 'send_message') continue
+    const config = configOf(node)
+    const text = String(config['text'] ?? '')
+    if (!text.includes('{{response.')) continue
+    config['text'] = text
+      .replaceAll('{{response.status}}', '{{status}}')
+      .replaceAll('{{response.estimated_delivery}}', 'the details in the lookup')
+  }
+
+  const routes = nodes.filter((node) => kindOf(node) === 'route_topic')
+  const ask = nodes.find((node) => kindOf(node) === 'ask_question')
+  const end = nodes.find((node) => kindOf(node) === 'end_flow')
+  const menu = nodes.find((node) => kindOf(node) === 'send_message' && /menu/i.test(labelOf(node)))
+  if (routes.length > 0 && inspectFlowGraph({ nodes, edges }).some((issue) => issue.code === 'cycle')) {
+    const trial = edges.slice()
+    if (ask && routes.length > 1) {
+      const withoutAsk = trial.filter((edge) => edge.source !== ask.id)
+      trial.length = 0
+      trial.push(...withoutAsk, { id: `repair-${ask.id}-route`, source: ask.id, target: routes[routes.length - 1]!.id })
+    }
+    if (menu && end) {
+      const withoutMenu = trial.filter((edge) => edge.source !== menu.id)
+      trial.length = 0
+      trial.push(...withoutMenu, { id: `repair-${menu.id}-end`, source: menu.id, target: end.id })
+    }
+    const changed = trial.length !== edges.length || trial.some((edge, index) => edge.source !== edges[index]?.source || edge.target !== edges[index]?.target)
+    if (changed && !inspectFlowGraph({ nodes, edges: trial }).some((issue) => issue.code === 'cycle')) {
+      edges = trial
+      repairs.push({ level: 'repair', code: 'cycle', message: 'The unmatched reply now ends, instead of asking again.' })
     }
   }
 

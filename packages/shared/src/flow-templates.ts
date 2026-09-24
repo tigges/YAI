@@ -191,9 +191,9 @@ export function starterFlows(companyName: string): StarterFlow[] {
         nodes: [
           { id: 's1', type: 'flow-node', position: { x: 80, y }, data: { kind: 'trigger_start', label: 'Order Status Trigger', config: {} } },
           { id: 's2', type: 'flow-node', position: { x: 280, y }, data: { kind: 'ask_question', label: 'Ask order number', config: { question: 'Please share your order number so I can look it up.', variable: 'order_number' } } },
-          { id: 's3', type: 'flow-node', position: { x: 480, y }, data: { kind: 'http_request', label: 'Fetch order', config: { method: 'GET', url: '', headers: {} } } },
-          { id: 's4', type: 'flow-node', position: { x: 680, y }, data: { kind: 'condition', label: 'Order found?', config: { conditions: [{ field: 'response.status', operator: 'equals', value: '200' }] } } },
-          { id: 's5', type: 'flow-node', position: { x: 880, y: 60 }, data: { kind: 'send_message', label: 'Order details', config: { text: 'Order {{order_number}} status: {{response.status}} — estimated delivery: {{response.estimated_delivery}}' } } },
+          { id: 's3', type: 'flow-node', position: { x: 480, y }, data: { kind: 'http_request', label: 'Fetch order', config: { method: 'GET', url: 'https://api.acme.com/orders/{{order_number}}', headers: {} } } },
+          { id: 's4', type: 'flow-node', position: { x: 680, y }, data: { kind: 'condition', label: 'Order found?', config: { conditions: [{ field: 'ok', operator: 'equals', value: 'true' }] } } },
+          { id: 's5', type: 'flow-node', position: { x: 880, y: 60 }, data: { kind: 'send_message', label: 'Order details', config: { text: 'Order {{order_number}} came back with status {{status}}.' } } },
           { id: 's6', type: 'flow-node', position: { x: 880, y: 200 }, data: { kind: 'handover', label: 'Escalate to agent', config: { team: 'support', priority: 'medium' } } },
           { id: 's7', type: 'flow-node', position: { x: 1080, y }, data: { kind: 'end_flow', label: 'End', config: {} } },
         ],
