@@ -10,6 +10,7 @@ import { prisma } from '@ybot/db'
 import bcrypt from 'bcryptjs'
 import { proposeDraftFlows } from '../lib/draft-flows.js'
 import { attachDestination, extendWelcomeGraph } from '../lib/welcome-routes.js'
+import { withSampleOrder } from '@ybot/shared'
 import { SUPPORT_USE_CASES, supportUseCaseFlows } from './starter-flows.js'
 
 const DEMO_PASSWORD = 'Demo1234!'
@@ -674,7 +675,29 @@ async function linkPublishedDrafts(botId: string) {
   return linked
 }
 
+async function ensureSampleOrderReply() {
+  const bot = await acmeBot()
+  if (!bot) return { status: 'skipped' as const }
+  const flows = await prisma.flow.findMany({
+    where: { botId: bot.id, name: 'Order Status' },
+    include: { versions: true },
+  })
+  let updated = 0
+  for (const flow of flows) {
+    for (const version of flow.versions) {
+      const raw = version.graph
+      if (!raw || typeof raw !== 'object' || !Array.isArray((raw as { nodes?: unknown }).nodes)) continue
+      const next = withSampleOrder(raw as { nodes: Array<{ id: string; data?: { kind?: string; config?: Record<string, unknown> } }>; edges: Array<{ id: string; source: string; target: string }> })
+      if (!next.changed) continue
+      await prisma.flowVersion.update({ where: { id: version.id }, data: { graph: next.graph as object } })
+      updated += 1
+    }
+  }
+  return { status: 'ok' as const, updated }
+}
+
 export async function applyDemoProgram() {
+  const sampleOrders = await ensureSampleOrderReply()
   const routing = await ensureSupportRouting()
   const useCases = await ensureSandboxUseCases()
   const reference = await copyAcmeIntoQaLab()
@@ -689,5 +712,5 @@ export async function applyDemoProgram() {
   if (acme) dashboard = await ensureDashboard('acme-ops-dashboard', acme.tenantId, acme.id, 'Live operations')
   const lab = await prisma.tenant.findUnique({ where: { slug: 'qa-lab' } })
   if (lab) await ensureDashboard('acme-ref-ops-dashboard', lab.id, REF_BOT_ID, 'Live operations')
-  return { routing, useCases, reference, synthetic, product, drafts, productDrafts, linked, productLinked, dashboard }
+  return { sampleOrders, routing, useCases, reference, synthetic, product, drafts, productDrafts, linked, productLinked, dashboard }
 }
