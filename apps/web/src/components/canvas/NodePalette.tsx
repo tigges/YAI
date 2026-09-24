@@ -32,6 +32,7 @@ const ICON_MAP: Record<NodeKind, React.ElementType> = {
   search_knowledge: Search,
   classify_intent: GitBranch,
   create_ticket: FileText,
+  route_topic: GitBranch,
 }
 
 const CATEGORIES = [

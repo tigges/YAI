@@ -33,6 +33,7 @@ const ICON_MAP: Record<NodeKind, React.ElementType> = {
   search_knowledge: Search,
   classify_intent: GitBranch,
   create_ticket: FileText,
+  route_topic: GitBranch,
 }
 
 const COLOR_MAP: Record<NodeKind, string> = {
@@ -60,6 +61,7 @@ const COLOR_MAP: Record<NodeKind, string> = {
   search_knowledge: '#06b6d4',
   classify_intent: '#f59e0b',
   create_ticket: '#3b82f6',
+  route_topic: '#f59e0b',
 }
 
 function previewValue(value: unknown): string {
@@ -85,8 +87,9 @@ export const FlowNode = memo(function FlowNode({ data, selected }: NodeProps) {
   const color = COLOR_MAP[nodeData.kind] ?? '#6366f1'
 
   const hasTarget = !['start', 'trigger_start'].includes(nodeData.kind)
+  const routePorts = nodeData.kind === 'route_topic' ? routePortIds(nodeData.config) : []
   const hasSingleSource =
-    !['condition', 'http_request', 'knowledge_search', 'search_knowledge', 'start', 'trigger_start'].includes(nodeData.kind) &&
+    !['condition', 'http_request', 'knowledge_search', 'search_knowledge', 'start', 'trigger_start', 'route_topic'].includes(nodeData.kind) &&
     !['resolve', 'end_flow'].includes(nodeData.kind)
   const hasConditionSources = nodeData.kind === 'condition'
   const hasHttpSources = nodeData.kind === 'http_request'
@@ -102,6 +105,7 @@ export const FlowNode = memo(function FlowNode({ data, selected }: NodeProps) {
           ? 'border-[var(--accent)] shadow-[0_0_0_3px_rgba(99,102,241,0.25)]'
           : 'border-[var(--border-strong)] hover:border-[var(--border-focus)]'
       )}
+      style={routePorts.length > 2 ? { minWidth: Math.max(220, routePorts.length * 78) } : undefined}
     >
       {/* Header */}
       <div
@@ -168,14 +172,14 @@ export const FlowNode = memo(function FlowNode({ data, selected }: NodeProps) {
         <>
           <Handle
             type="source"
-            id="true"
+            id="yes"
             position={Position.Bottom}
             style={{ left: '30%' }}
             className="!h-3 !w-3 !bg-[var(--success)] !border-2"
           />
           <Handle
             type="source"
-            id="false"
+            id="no"
             position={Position.Bottom}
             style={{ left: '70%' }}
             className="!h-3 !w-3 !bg-[var(--error)] !border-2"
@@ -221,6 +225,28 @@ export const FlowNode = memo(function FlowNode({ data, selected }: NodeProps) {
         </>
       )}
 
+      {routePorts.map((port, index) => (
+        <Handle
+          key={port}
+          type="source"
+          id={port}
+          position={Position.Bottom}
+          style={{ left: `${((index + 1) / (routePorts.length + 1)) * 100}%` }}
+          title={port === 'other' ? 'Other' : port.replace(/-/g, ' ')}
+          className="!h-3 !w-3 !bg-[var(--accent)] !border-2"
+        />
+      ))}
+
+      {routePorts.length > 0 && (
+        <div className="flex justify-between gap-1 px-2 pb-1">
+          {routePorts.map((port) => (
+            <span key={port} className="max-w-[72px] truncate text-[8px] text-[var(--text-muted)]" title={port}>
+              {port === 'other' ? 'Other' : port.replace(/-/g, ' ')}
+            </span>
+          ))}
+        </div>
+      )}
+
       {/* Port labels for condition/http/kb */}
       {(hasConditionSources || hasHttpSources || hasKBSources) && (
         <div className="flex justify-between px-2 pb-1">
@@ -235,6 +261,19 @@ export const FlowNode = memo(function FlowNode({ data, selected }: NodeProps) {
     </div>
   )
 })
+
+function routePortIds(config?: Record<string, unknown>): string[] {
+  const raw = config?.['routes']
+  const ids = Array.isArray(raw)
+    ? raw.flatMap((item) => {
+        if (!item || typeof item !== 'object') return []
+        const handle = String((item as { handle?: string }).handle ?? '').trim()
+        return handle ? [handle] : []
+      })
+    : []
+  if (!ids.includes('other')) ids.push('other')
+  return ids
+}
 
 export const nodeTypes = {
   flowNode: FlowNode,

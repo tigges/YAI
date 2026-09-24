@@ -46,11 +46,11 @@ function normalizeCanvasNode(node: Node, index: number): Node {
   return { ...node, type: 'flowNode', position }
 }
 
-/** Older graphs branch conditions with yes/no; the canvas ports are true/false. */
+/** The bot follows yes/no. Older saves used true/false for the same branches. */
 function normalizeCanvasEdge(edge: Edge): Edge {
   const handle = edge.sourceHandle
   const sourceHandle =
-    handle === 'yes' ? 'true' : handle === 'no' ? 'false' : handle
+    handle === 'true' ? 'yes' : handle === 'false' ? 'no' : handle
   const next = sourceHandle === handle ? edge : { ...edge, sourceHandle }
   const typed = next.type && next.type !== 'default' ? next : { ...next, type: 'smoothstep' }
   return { ...typed, interactionWidth: 24 }
@@ -140,6 +140,7 @@ function FitAfterLayout({ tick }: { tick: number }) {
 
 import { useFlows, useSaveCanvas, useFlowCanvas, usePublishFlow, useUpdateFlow } from '../../../lib/hooks'
 import { useAppStore } from '../../../store/app'
+import { PublishCheckDialog, reviewFlow } from '../PublishCheck'
 
 export function FlowCanvasPage() {
   const navigate = useNavigate()
@@ -179,6 +180,7 @@ export function FlowCanvasPage() {
   }, [savedCanvas, setNodes, setEdges])
 
   const [showTestPanel, setShowTestPanel] = useState(false)
+  const [checkOpen, setCheckOpen] = useState(false)
   const [paletteOpen, setPaletteOpen] = useState(() => typeof window === 'undefined' || window.innerWidth >= 768)
   const [layoutTick, setLayoutTick] = useState(0)
 
@@ -330,24 +332,44 @@ export function FlowCanvasPage() {
     setSaving(false)
   }
 
-  async function handlePublish() {
+  const flowNames = (flows ?? []).map((item) => item.name)
+  const review = reviewFlow({ nodes, edges }, { flowNames })
+
+  function applyGraph(graph: { nodes: Array<{ id: string }>; edges: Array<{ id: string; source: string; target: string }> }) {
+    remember()
+    setNodes(graph.nodes.map((node, index) => normalizeCanvasNode(node as Node, index)))
+    setEdges(graph.edges.map((edge) => normalizeCanvasEdge(edge as Edge)))
+  }
+
+  async function publishGraph(graph: { nodes: Node[]; edges: Edge[] }) {
     if (!environmentId) return
     setSaving(true)
     try {
       await saveCanvas.mutateAsync({
         flowId: flowId ?? '',
         version: canvasVersion,
-        graph: { nodes: nodes as unknown as import('../../../lib/api').FlowNode[], edges: edges as unknown as import('../../../lib/api').FlowEdge[] },
+        graph: { nodes: graph.nodes as unknown as import('../../../lib/api').FlowNode[], edges: graph.edges as unknown as import('../../../lib/api').FlowEdge[] },
       })
       await publishFlow.mutateAsync({ flowId: flowId ?? '', environmentId })
       setStatus('published')
       setSaving(false)
+      setCheckOpen(false)
       navigate({ to: '/build/flows' })
       return
     } catch {
       setStatus('saved')
     }
     setSaving(false)
+  }
+
+  function handlePublish() {
+    if (!environmentId) return
+    const findings = reviewFlow({ nodes, edges }, { flowNames })
+    if (findings.before.length === 0) {
+      void publishGraph({ nodes, edges })
+      return
+    }
+    setCheckOpen(true)
   }
 
   return (
@@ -418,6 +440,9 @@ export function FlowCanvasPage() {
             onClick={() => setShowTestPanel((v) => !v)}
           >
             <Play size={13} /> {showTestPanel ? 'Hide Test' : 'Test Bot'}
+          </Button>
+          <Button variant="ghost" size="sm" onClick={() => setCheckOpen(true)}>
+            Check
           </Button>
           <Button size="sm" onClick={handlePublish} disabled={saving || !environmentId}>
             <Share2 size={13} /> Publish
@@ -496,6 +521,19 @@ export function FlowCanvasPage() {
             </div>
           </div>
         </div>
+
+        <PublishCheckDialog
+          open={checkOpen}
+          review={review}
+          pending={saving}
+          onClose={() => setCheckOpen(false)}
+          onRepair={() => applyGraph(review.graph)}
+          onPublish={() => {
+            const prepared = review.repairs.length > 0 ? review.graph : { nodes, edges }
+            applyGraph(prepared)
+            void publishGraph(prepared as { nodes: Node[]; edges: Edge[] })
+          }}
+        />
 
         <NodeConfigPanel
           node={selectedNode}

@@ -103,6 +103,45 @@ export function supportUseCaseFlows(): StarterFlow[] {
   ]
 }
 
+function welcomeGraph(companyName: string, y: number): { nodes: object[]; edges: object[] } {
+  const routes = [
+    { handle: 'orders', phrases: ['order', 'tracking', 'where is my order'], flowName: 'Order Status' },
+    { handle: 'returns', phrases: ['return', 'refund'], flowName: 'Return Request' },
+    { handle: 'billing', phrases: ['invoice', 'billing', 'payment'], flowName: 'Billing' },
+    ...SUPPORT_USE_CASES.map((item) => ({
+      handle: item.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, ''),
+      phrases: item.phrases,
+      flowName: item.name,
+    })),
+  ]
+  const nodes: object[] = [
+    { id: 'start', type: 'flow-node', position: { x: 80, y }, data: { kind: 'trigger_start', label: 'Start', config: {} } },
+    { id: 'hi', type: 'flow-node', position: { x: 320, y }, data: { kind: 'send_message', label: 'Welcome', config: { text: `Hi {{contact.name}}. Welcome to ${companyName}. How can I help?` } } },
+    { id: 'ask', type: 'flow-node', position: { x: 560, y }, data: { kind: 'ask_question', label: 'Ask for topic', config: { question: 'What do you need help with?', variable: 'topic', choices: routes.map((route) => route.flowName) } } },
+    { id: 'route', type: 'flow-node', position: { x: 820, y }, data: { kind: 'route_topic', label: 'Route by topic', config: { routes } } },
+    { id: 'menu', type: 'flow-node', position: { x: 1100, y: 280 }, data: { kind: 'send_message', label: 'Offer the menu', config: { text: 'I can help with an order, a return, billing, a cancellation, a delivery address, or a person on the team.' } } },
+    { id: 'end', type: 'flow-node', position: { x: 1340, y: 280 }, data: { kind: 'end_flow', label: 'End', config: {} } },
+  ]
+  const edges: object[] = [
+    { id: 'e-start', source: 'start', target: 'hi', sourceHandle: 'out' },
+    { id: 'e-ask', source: 'hi', target: 'ask' },
+    { id: 'e-route', source: 'ask', target: 'route' },
+    { id: 'e-other', source: 'route', target: 'menu', sourceHandle: 'other' },
+    { id: 'e-end', source: 'menu', target: 'end' },
+  ]
+  routes.forEach((route, index) => {
+    const id = `go-${route.handle}`
+    nodes.push({
+      id,
+      type: 'flow-node',
+      position: { x: 1100, y: y - 80 + index * 70 },
+      data: { kind: 'execute_flow', label: route.flowName, config: { flowName: route.flowName } },
+    })
+    edges.push({ id: `e-${route.handle}`, source: 'route', target: id, sourceHandle: route.handle })
+  })
+  return { nodes, edges }
+}
+
 export function starterFlows(companyName: string): StarterFlow[] {
   const y = 120
   return [
@@ -111,23 +150,7 @@ export function starterFlows(companyName: string): StarterFlow[] {
       description: 'Greets visitors and routes them to the right flow',
       tags: ['welcome', 'routing'],
       publish: true,
-      graph: {
-        nodes: [
-          { id: 'start-1', type: 'flow-node', position: { x: 80, y }, data: { kind: 'trigger_start', label: 'Conversation Start', config: {} } },
-          { id: 'send-1', type: 'flow-node', position: { x: 280, y }, data: { kind: 'send_message', label: 'Welcome Message', config: { text: `Hi {{contact.name}}! 👋 Welcome to ${companyName}. How can I help you today?` } } },
-          { id: 'ask-1', type: 'flow-node', position: { x: 480, y }, data: { kind: 'ask_question', label: 'Ask for topic', config: { question: 'What do you need help with?', variable: 'topic', choices: ['Order status', 'Returns', 'Billing', 'Technical support', 'Other'] } } },
-          { id: 'intent-1', type: 'flow-node', position: { x: 680, y }, data: { kind: 'classify_intent', label: 'Classify intent', config: {} } },
-          { id: 'cond-1', type: 'flow-node', position: { x: 880, y }, data: { kind: 'condition', label: 'Route by intent', config: { conditions: [{ field: 'intent', operator: 'equals', value: 'order_status' }, { field: 'intent', operator: 'equals', value: 'return_request' }] } } },
-          { id: 'end-1', type: 'flow-node', position: { x: 1080, y }, data: { kind: 'end_flow', label: 'End', config: {} } },
-        ],
-        edges: [
-          { id: 'e1', source: 'start-1', target: 'send-1' },
-          { id: 'e2', source: 'send-1', target: 'ask-1' },
-          { id: 'e3', source: 'ask-1', target: 'intent-1' },
-          { id: 'e4', source: 'intent-1', target: 'cond-1' },
-          { id: 'e5', source: 'cond-1', target: 'end-1' },
-        ],
-      },
+      graph: welcomeGraph(companyName, y),
     },
     {
       name: 'Order Status',
@@ -181,6 +204,27 @@ export function starterFlows(companyName: string): StarterFlow[] {
       },
     },
     ...supportUseCaseFlows(),
+    {
+      name: 'Billing',
+      description: 'Answers a billing question and records the account',
+      tags: ['billing', 'template'],
+      publish: false,
+      graph: {
+        nodes: [
+          { id: 'b1', type: 'flow-node', position: { x: 80, y }, data: { kind: 'trigger_start', label: 'Billing', config: {} } },
+          { id: 'b2', type: 'flow-node', position: { x: 280, y }, data: { kind: 'send_message', label: 'Intro', config: { text: 'I can help with a bill, an invoice, or a payment.' } } },
+          { id: 'b3', type: 'flow-node', position: { x: 500, y }, data: { kind: 'ask_question', label: 'Ask account', config: { question: 'Which account or invoice should I look at?', variable: 'account' } } },
+          { id: 'b4', type: 'flow-node', position: { x: 740, y }, data: { kind: 'send_message', label: 'Answer', config: { text: 'I have noted {{account}}. A teammate will confirm the balance in this chat if it needs a change.' } } },
+          { id: 'b5', type: 'flow-node', position: { x: 980, y }, data: { kind: 'end_flow', label: 'End', config: {} } },
+        ],
+        edges: [
+          { id: 'e1', source: 'b1', target: 'b2' },
+          { id: 'e2', source: 'b2', target: 'b3' },
+          { id: 'e3', source: 'b3', target: 'b4' },
+          { id: 'e4', source: 'b4', target: 'b5' },
+        ],
+      },
+    },
     {
       name: 'Lead Capture',
       description: 'Collects contact details and sends them to the CRM',

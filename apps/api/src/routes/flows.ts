@@ -3,6 +3,7 @@ import { requireRole } from '../middleware/auth.js'
 import { prisma } from '@ybot/db'
 import { z } from 'zod'
 import { attachDestination } from '../lib/welcome-routes.js'
+import { inspectFlowGraph } from '@ybot/shared'
 
 type JWT = { sub: string; tenantId: string; role: string }
 
@@ -116,6 +117,15 @@ export async function flowsRoutes(app: FastifyInstance) {
       orderBy: { version: 'desc' },
     })
     if (!latest) return reply.status(404).send({ error: { code: 'NO_VERSION', message: 'No flow version found' } })
+
+    const names = await prisma.flow.findMany({ where: { botId, tenantId }, select: { name: true } })
+    const blocking = inspectFlowGraph(latest.graph as { nodes: []; edges: [] } | null, { flowNames: names.map((item) => item.name) })
+      .filter((issue) => issue.level === 'repair' || issue.level === 'block')
+    if (blocking.length > 0) {
+      return reply.status(422).send({
+        error: { code: 'FLOW_CHECK', message: blocking[0]?.message ?? 'This flow still has connection gaps.', issues: blocking },
+      })
+    }
 
     const published = await prisma.flowVersion.update({
       where: { id: latest.id },
