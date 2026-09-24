@@ -36,11 +36,14 @@ export function useFlows() {
   })
 }
 
-export function useImportCorporatePack() {
+export function useImportStarterPack() {
   const qc = useQueryClient()
   const bid = botId()
   return useMutation({
-    mutationFn: () => api.bots.importCorporatePack(bid).then((r) => r.data),
+    mutationFn: (pack: 'corporate-services' | 'hair-studio') => {
+      const call = pack === 'hair-studio' ? api.bots.importHairStudioPack(bid) : api.bots.importCorporatePack(bid)
+      return call.then((r) => r.data)
+    },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['flows', bid] })
       qc.invalidateQueries({ queryKey: ['intents', bid] })

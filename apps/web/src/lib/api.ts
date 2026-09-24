@@ -70,6 +70,8 @@ export const bots = {
     apiFetch<void>(`/bots/${botId}/environments/${environmentId}`, { method: 'DELETE' }),
   importCorporatePack: (botId: string) =>
     apiFetch<{ data: CorporatePackResult }>(`/bots/${botId}/packs/corporate-services`, { method: 'POST', body: '{}' }),
+  importHairStudioPack: (botId: string) =>
+    apiFetch<{ data: CorporatePackResult }>(`/bots/${botId}/packs/hair-studio`, { method: 'POST', body: '{}' }),
 }
 
 // ── Flows ─────────────────────────────────────────────────────────────────────

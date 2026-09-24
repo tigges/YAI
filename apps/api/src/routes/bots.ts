@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify'
 import { requireRole } from '../middleware/auth.js'
 import { prisma } from '@ybot/db'
-import { installCorporatePack } from '../lib/install-corporate-pack.js'
+import { installCorporatePack, installHairStudioPack } from '../lib/install-corporate-pack.js'
 import { installStarterFlows } from '../lib/install-starter-flows.js'
 
 
@@ -66,9 +66,13 @@ export async function botsRoutes(app: FastifyInstance) {
     return reply.status(201).send({ data: bot })
   })
 
-  app.post('/:botId/packs/corporate-services', { preHandler: canBuild }, async (request, reply) => {
-    const { tenantId } = request.user as JwtPayload
-    const { botId } = request.params as { botId: string }
+  async function importPack(
+    request: { user: JwtPayload; params: { botId: string } },
+    reply: { status: (code: number) => { send: (body: unknown) => unknown } },
+    install: typeof installCorporatePack,
+  ) {
+    const { tenantId } = request.user
+    const { botId } = request.params
     const bot = await prisma.bot.findFirst({
       where: { id: botId, tenantId },
       include: { environments: true },
@@ -77,13 +81,21 @@ export async function botsRoutes(app: FastifyInstance) {
 
     const tenant = await prisma.tenant.findUnique({ where: { id: tenantId } })
     const sandbox = bot.environments.find((env) => env.kind === 'sandbox') ?? bot.environments[0]
-    const result = await installCorporatePack(tenantId, bot.id, tenant?.name ?? bot.name, sandbox?.id ?? null)
+    const result = await install(tenantId, bot.id, tenant?.name ?? bot.name, sandbox?.id ?? null)
     return {
       data: {
         ...result,
         environmentName: sandbox?.name ?? null,
       },
     }
+  }
+
+  app.post('/:botId/packs/corporate-services', { preHandler: canBuild }, async (request, reply) => {
+    return importPack(request as { user: JwtPayload; params: { botId: string } }, reply, installCorporatePack)
+  })
+
+  app.post('/:botId/packs/hair-studio', { preHandler: canBuild }, async (request, reply) => {
+    return importPack(request as { user: JwtPayload; params: { botId: string } }, reply, installHairStudioPack)
   })
 
   app.patch('/:botId', { preHandler: canBuild }, async (request, reply) => {

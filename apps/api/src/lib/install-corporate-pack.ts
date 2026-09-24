@@ -1,5 +1,5 @@
 import { prisma } from '@ybot/db'
-import { planCorporateImport } from '@ybot/shared'
+import { planCorporateImport, planHairStudioImport } from '@ybot/shared'
 
 export interface CorporateInstallResult {
   flowsAdded: string[]
@@ -20,6 +20,26 @@ export async function installCorporatePack(
   companyName: string,
   environmentId: string | null,
 ): Promise<CorporateInstallResult> {
+  return installPlannedPack(tenantId, botId, companyName, environmentId, planCorporateImport)
+}
+
+/** Adds the hair studio pack. A published welcome stays the widget entry. */
+export async function installHairStudioPack(
+  tenantId: string,
+  botId: string,
+  companyName: string,
+  environmentId: string | null,
+): Promise<CorporateInstallResult> {
+  return installPlannedPack(tenantId, botId, companyName, environmentId, planHairStudioImport)
+}
+
+async function installPlannedPack(
+  tenantId: string,
+  botId: string,
+  companyName: string,
+  environmentId: string | null,
+  planFor: typeof planCorporateImport,
+): Promise<CorporateInstallResult> {
   const [flows, intents, faqs, publishedWelcome] = await Promise.all([
     prisma.flow.findMany({ where: { tenantId, botId }, select: { name: true } }),
     prisma.intent.findMany({ where: { tenantId, botId }, select: { name: true } }),
@@ -37,7 +57,7 @@ export async function installCorporatePack(
     }),
   ])
 
-  const plan = planCorporateImport({
+  const plan = planFor({
     companyName,
     existingFlowNames: flows.map((flow) => flow.name),
     existingIntentNames: intents.map((intent) => intent.name),

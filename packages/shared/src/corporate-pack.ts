@@ -9,6 +9,7 @@
  */
 
 import { returnRequestFlow, starterFlows, supportUseCaseFlows, SUPPORT_USE_CASES, type StarterFlow } from './flow-templates.js'
+import { hairStudioPack } from './salon-pack.js'
 
 export const CORPORATE_PACK_ID = 'corporate-services'
 export const CORPORATE_WELCOME_NAME = 'Welcome & Routing'
@@ -302,11 +303,17 @@ export function corporateServicesPack(companyName: string): CorporatePack {
   }
 }
 
-/** Templates shown when someone starts one flow. Corporate answers come first. */
+/** Templates shown when someone starts one flow. Corporate answers come first, then the salon. */
 export function flowCatalog(companyName: string): StarterFlow[] {
-  const pack = corporateServicesPack(companyName).flows
-  const seen = new Set(pack.map((flow) => flow.name))
-  return [...pack, ...starterFlows(companyName).filter((flow) => !seen.has(flow.name))]
+  const pack = [...corporateServicesPack(companyName).flows, ...hairStudioPack(companyName).flows]
+  const seen = new Set<string>()
+  const flows: StarterFlow[] = []
+  for (const flow of pack) {
+    if (seen.has(flow.name)) continue
+    seen.add(flow.name)
+    flows.push(flow)
+  }
+  return [...flows, ...starterFlows(companyName).filter((flow) => !seen.has(flow.name))]
 }
 
 /**
