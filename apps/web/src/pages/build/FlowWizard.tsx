@@ -1,6 +1,6 @@
 import React, { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { guidedFlowGraph, starterFlows } from '@ybot/shared'
+import { flowCatalog, guidedFlowGraph } from '@ybot/shared'
 import { Button, Input, Dialog, DialogContent, DialogHeader, DialogTitle, DialogBody, DialogFooter } from '@ybot/ui'
 import { apiFetch } from '../../lib/api'
 import type { FlowGraph } from '../../lib/api'
@@ -14,6 +14,19 @@ interface FlowWizardProps {
   error: string
   onClose: () => void
   onCreate: (input: { name: string; description: string; tags: string[]; graph: FlowGraph }) => void
+}
+
+function TemplateButton({ template, onPick }: { template: { name: string; description: string }; onPick: (id: string) => void }) {
+  return (
+    <button
+      type="button"
+      onClick={() => onPick(template.name)}
+      className="rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--bg-surface)] p-3 text-left hover:bg-[var(--bg-hover)]"
+    >
+      <p className="text-sm font-medium text-[var(--text-primary)]">{template.name}</p>
+      <p className="mt-1 text-xs text-[var(--text-muted)]">{template.description}</p>
+    </button>
+  )
 }
 
 function freshName(base: string, existing: string[]) {
@@ -31,7 +44,10 @@ export function FlowWizard({ open, existingNames, pending, error, onClose, onCre
     queryFn: () => apiFetch<{ data: { name?: string } | null }>('/tenants/me').then((res) => res.data),
   })
   const company = tenant?.name?.trim() || 'your company'
-  const templates = starterFlows(company)
+  const templates = flowCatalog(company)
+  const corporate = templates.filter((template) => template.tags.includes('corporate') && template.name !== 'Welcome & Routing')
+  const welcome = templates.find((template) => template.name === 'Welcome & Routing')
+  const others = templates.filter((template) => !template.tags.includes('corporate'))
   const [step, setStep] = useState<Step>('pick')
   const [choice, setChoice] = useState<string>('guided')
   const [name, setName] = useState('')
@@ -97,26 +113,38 @@ export function FlowWizard({ open, existingNames, pending, error, onClose, onCre
         </DialogHeader>
         <DialogBody className="space-y-4">
           {step === 'pick' ? (
-            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-              <button
-                type="button"
-                onClick={() => pick('guided')}
-                className="rounded-[var(--radius-md)] border border-[var(--accent)] bg-[var(--accent-muted)] p-3 text-left"
-              >
-                <p className="text-sm font-medium text-[var(--text-primary)]">Guided</p>
-                <p className="mt-1 text-xs text-[var(--text-muted)]">Answer a few questions and we draw the steps.</p>
-              </button>
-              {templates.map((template) => (
+            <div className="space-y-4">
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                 <button
-                  key={template.name}
                   type="button"
-                  onClick={() => pick(template.name)}
-                  className="rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--bg-surface)] p-3 text-left hover:bg-[var(--bg-hover)]"
+                  onClick={() => pick('guided')}
+                  className="rounded-[var(--radius-md)] border border-[var(--accent)] bg-[var(--accent-muted)] p-3 text-left"
                 >
-                  <p className="text-sm font-medium text-[var(--text-primary)]">{template.name}</p>
-                  <p className="mt-1 text-xs text-[var(--text-muted)]">{template.description}</p>
+                  <p className="text-sm font-medium text-[var(--text-primary)]">Guided</p>
+                  <p className="mt-1 text-xs text-[var(--text-muted)]">Answer a few questions and we draw the steps.</p>
                 </button>
-              ))}
+                {welcome && (
+                  <TemplateButton template={welcome} onPick={pick} />
+                )}
+              </div>
+              <div>
+                <p className="mb-2 text-xs font-medium text-[var(--text-muted)]">Corporate services</p>
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                  {corporate.map((template) => (
+                    <TemplateButton key={template.name} template={template} onPick={pick} />
+                  ))}
+                </div>
+              </div>
+              {others.length > 0 && (
+                <div>
+                  <p className="mb-2 text-xs font-medium text-[var(--text-muted)]">More templates</p>
+                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                    {others.map((template) => (
+                      <TemplateButton key={template.name} template={template} onPick={pick} />
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           ) : (
             <div className="space-y-3">

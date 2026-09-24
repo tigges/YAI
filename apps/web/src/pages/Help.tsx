@@ -89,6 +89,9 @@ export function HelpPage() {
           <p className="text-sm leading-relaxed text-[var(--text-secondary)]">
             Rename and delete live on this list, next to each flow. Delete asks you to confirm. You can also rename the flow you have open by clicking its name on the canvas.
           </p>
+          <p className="text-sm leading-relaxed text-[var(--text-secondary)]">
+            Import starter pack adds the corporate services answers: hours, shipping, returns, tracking, payments, passwords, plans, and a person on the team. A new bot already has them. The widget says the words in the published flow. Intents and FAQs keep the same benchmark wording. Publish Corporate welcome in Sandbox when you want to try that greeting. Publish to Production when the live widget should use it.
+          </p>
           <Figure file="flows.jpg" alt="Flows list" />
           <Figure file="canvas.jpg" alt="Flow canvas with the node list folded" />
         </section>
