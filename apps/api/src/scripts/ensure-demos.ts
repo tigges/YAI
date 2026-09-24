@@ -268,7 +268,7 @@ async function ensureBella() {
   })
   await prisma.channel.upsert({
     where: { id: 'bella-whatsapp' },
-    update: {},
+    update: { isActive: false },
     create: {
       id: 'bella-whatsapp',
       tenantId: tenant.id,
@@ -276,7 +276,7 @@ async function ensureBella() {
       environmentId: env.id,
       name: 'WhatsApp',
       kind: 'whatsapp',
-      isActive: true,
+      isActive: false,
       config: { phoneNumberId: 'demo_phone', accessToken: 'demo_token', verifyToken: 'demo_verify' },
     },
   })

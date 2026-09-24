@@ -53,8 +53,59 @@ test('yes and no are restored from true and false', () => {
   const handles = repaired.graph.edges.filter((edge) => edge.source === 'check').map((edge) => edge.sourceHandle).sort()
   assert.deepEqual(handles, ['no', 'yes'])
   const after = inspectFlowGraph(repaired.graph)
-  assert.ok(after.some((issue) => issue.code === 'condition-field' && issue.level === 'note'))
+  const field = (repaired.graph.nodes.find((node) => node.id === 'check')?.data.config['conditions'] as Array<{ field: string }>)[0]?.field
+  assert.equal(field, 'ok')
+  assert.equal(after.some((issue) => issue.code === 'condition-field'), false)
   assert.equal(after.some((issue) => issue.level === 'block' || issue.level === 'repair'), false)
+})
+
+test('a jump with no line after it is a normal ending', () => {
+  const graph = {
+    nodes: [
+      { id: 'start', data: { kind: 'trigger_start', label: 'Start', config: {} } },
+      { id: 'go', data: { kind: 'execute_flow', label: 'Order Status', config: { flowName: 'Order Status' } } },
+    ],
+    edges: [
+      { id: 'e1', source: 'start', target: 'go', sourceHandle: 'out' },
+      { id: 'e2', source: 'go', target: 'start' },
+    ],
+  }
+  assert.ok(inspectFlowGraph(graph).some((issue) => issue.code === 'jump'))
+  const repaired = repairFlowGraph(graph)
+  assert.equal(repaired.graph.edges.some((edge) => edge.source === 'go'), false)
+  assert.equal(inspectFlowGraph(repaired.graph).some((issue) => issue.code === 'jump'), false)
+})
+
+test('an unmatched reply that loops is sent to the end', () => {
+  const graph = {
+    nodes: [
+      { id: 'start', data: { kind: 'trigger_start', label: 'Start', config: {} } },
+      { id: 'route', data: { kind: 'route_topic', label: 'Route by topic', config: { routes: [{ handle: 'orders', phrases: ['order'], flowName: 'Order Status' }] } } },
+      { id: 'route2', data: { kind: 'route_topic', label: 'Route the answer', config: { routes: [{ handle: 'orders', phrases: ['order'], flowName: 'Order Status' }] } } },
+      { id: 'go', data: { kind: 'execute_flow', label: 'Order Status', config: { flowName: 'Order Status' } } },
+      { id: 'hi', data: { kind: 'send_message', label: 'Welcome', config: { text: 'Hello' } } },
+      { id: 'ask', data: { kind: 'ask_question', label: 'Ask', config: { question: 'What do you need?' } } },
+      { id: 'menu', data: { kind: 'send_message', label: 'Offer the menu', config: { text: 'I can help with an order.' } } },
+      { id: 'end', data: { kind: 'end_flow', label: 'End', config: {} } },
+    ],
+    edges: [
+      { id: 'e-start', source: 'start', target: 'route', sourceHandle: 'out' },
+      { id: 'e-orders', source: 'route', target: 'go', sourceHandle: 'orders' },
+      { id: 'e-other', source: 'route', target: 'hi', sourceHandle: 'other' },
+      { id: 'e-hi', source: 'hi', target: 'ask' },
+      { id: 'e-ask', source: 'ask', target: 'menu' },
+      { id: 'e-orders-2', source: 'route2', target: 'go', sourceHandle: 'orders' },
+      { id: 'e-other-2', source: 'route2', target: 'menu', sourceHandle: 'other' },
+      { id: 'e-loop', source: 'menu', target: 'route' },
+    ],
+  }
+  assert.ok(inspectFlowGraph(graph).some((issue) => issue.code === 'cycle'))
+  const repaired = repairFlowGraph(graph)
+  const after = inspectFlowGraph(repaired.graph)
+  assert.equal(after.some((issue) => issue.code === 'cycle'), false)
+  assert.equal(after.some((issue) => issue.level === 'block' || issue.level === 'repair'), false)
+  assert.equal(repaired.graph.edges.some((edge) => edge.source === 'menu' && edge.target === 'end'), true)
+  assert.equal(repaired.graph.edges.some((edge) => edge.source === 'ask' && edge.target === 'route2'), true)
 })
 
 test('standard templates have no broken connections', () => {
