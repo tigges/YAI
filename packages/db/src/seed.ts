@@ -106,12 +106,12 @@ async function main() {
     }}),
     prisma.channel.create({ data: {
       tenantId: tenant.id, botId: bot.id, environmentId: production.id,
-      name: 'WhatsApp Business', kind: 'whatsapp', isActive: true,
+      name: 'WhatsApp Business', kind: 'whatsapp', isActive: false,
       config: { phone: '+44 7700 900000', business_id: 'WA-123456', display_name: 'Acme Support' },
     }}),
     prisma.channel.create({ data: {
       tenantId: tenant.id, botId: bot.id, environmentId: production.id,
-      name: 'Email', kind: 'email', isActive: true,
+      name: 'Email', kind: 'email', isActive: false,
       config: { address: 'support@acme.com', imap_host: 'imap.gmail.com', imap_port: '993' },
     }}),
     prisma.channel.create({ data: {
