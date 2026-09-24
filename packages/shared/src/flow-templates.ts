@@ -142,6 +142,36 @@ function welcomeGraph(companyName: string, y: number): { nodes: object[]; edges:
   return { nodes, edges }
 }
 
+/** Collects a return reason and opens a ticket. Draft until a pack publishes it. */
+export function returnRequestFlow(): StarterFlow {
+  const y = 120
+  return {
+    name: 'Return Request',
+    description: 'Handles a return and opens a ticket',
+    tags: ['returns'],
+    publish: false,
+    graph: {
+      nodes: [
+        { id: 'r1', type: 'flow-node', position: { x: 80, y }, data: { kind: 'trigger_start', label: 'Return Request', config: {} } },
+        { id: 'r2', type: 'flow-node', position: { x: 280, y }, data: { kind: 'send_message', label: 'Policy intro', config: { text: 'I can help with returns. Our return window is 30 days from purchase.' } } },
+        { id: 'r3', type: 'flow-node', position: { x: 480, y }, data: { kind: 'ask_question', label: 'Reason for return', config: { question: 'What is the reason for your return?', variable: 'return_reason', choices: ['Defective product', 'Wrong item', 'Changed mind', 'Not as described'] } } },
+        { id: 'r4', type: 'flow-node', position: { x: 680, y }, data: { kind: 'set_variable', label: 'Set return type', config: { variable: 'return_type', value: '{{return_reason}}' } } },
+        { id: 'r5', type: 'flow-node', position: { x: 880, y }, data: { kind: 'send_message', label: 'Return label', config: { text: 'I will send a return label to your email within 5 minutes.' } } },
+        { id: 'r6', type: 'flow-node', position: { x: 1080, y }, data: { kind: 'create_ticket', label: 'Create return ticket', config: { subject: 'Return request: {{return_reason}}', priority: 'normal', team: 'returns' } } },
+        { id: 'r7', type: 'flow-node', position: { x: 1280, y }, data: { kind: 'end_flow', label: 'End', config: {} } },
+      ],
+      edges: [
+        { id: 'e1', source: 'r1', target: 'r2' },
+        { id: 'e2', source: 'r2', target: 'r3' },
+        { id: 'e3', source: 'r3', target: 'r4' },
+        { id: 'e4', source: 'r4', target: 'r5' },
+        { id: 'e5', source: 'r5', target: 'r6' },
+        { id: 'e6', source: 'r6', target: 'r7' },
+      ],
+    },
+  }
+}
+
 export function starterFlows(companyName: string): StarterFlow[] {
   const y = 120
   return [
@@ -178,31 +208,7 @@ export function starterFlows(companyName: string): StarterFlow[] {
         ],
       },
     },
-    {
-      name: 'Return Request',
-      description: 'Handles a return and opens a ticket',
-      tags: ['returns'],
-      publish: false,
-      graph: {
-        nodes: [
-          { id: 'r1', type: 'flow-node', position: { x: 80, y }, data: { kind: 'trigger_start', label: 'Return Request', config: {} } },
-          { id: 'r2', type: 'flow-node', position: { x: 280, y }, data: { kind: 'send_message', label: 'Policy intro', config: { text: 'I can help with returns. Our return window is 30 days from purchase.' } } },
-          { id: 'r3', type: 'flow-node', position: { x: 480, y }, data: { kind: 'ask_question', label: 'Reason for return', config: { question: 'What is the reason for your return?', variable: 'return_reason', choices: ['Defective product', 'Wrong item', 'Changed mind', 'Not as described'] } } },
-          { id: 'r4', type: 'flow-node', position: { x: 680, y }, data: { kind: 'set_variable', label: 'Set return type', config: { variable: 'return_type', value: '{{return_reason}}' } } },
-          { id: 'r5', type: 'flow-node', position: { x: 880, y }, data: { kind: 'send_message', label: 'Return label', config: { text: 'I will send a return label to your email within 5 minutes.' } } },
-          { id: 'r6', type: 'flow-node', position: { x: 1080, y }, data: { kind: 'create_ticket', label: 'Create return ticket', config: { subject: 'Return request: {{return_reason}}', priority: 'normal', team: 'returns' } } },
-          { id: 'r7', type: 'flow-node', position: { x: 1280, y }, data: { kind: 'end_flow', label: 'End', config: {} } },
-        ],
-        edges: [
-          { id: 'e1', source: 'r1', target: 'r2' },
-          { id: 'e2', source: 'r2', target: 'r3' },
-          { id: 'e3', source: 'r3', target: 'r4' },
-          { id: 'e4', source: 'r4', target: 'r5' },
-          { id: 'e5', source: 'r5', target: 'r6' },
-          { id: 'e6', source: 'r6', target: 'r7' },
-        ],
-      },
-    },
+    returnRequestFlow(),
     ...supportUseCaseFlows(),
     {
       name: 'Billing',

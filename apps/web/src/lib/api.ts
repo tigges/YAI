@@ -68,6 +68,8 @@ export const bots = {
     apiFetch<{ data: { id: string; name: string; kind: string } }>(`/bots/${botId}/environments/${environmentId}`, { method: 'PATCH', body: JSON.stringify({ name }) }),
   deleteEnvironment: (botId: string, environmentId: string) =>
     apiFetch<void>(`/bots/${botId}/environments/${environmentId}`, { method: 'DELETE' }),
+  importCorporatePack: (botId: string) =>
+    apiFetch<{ data: CorporatePackResult }>(`/bots/${botId}/packs/corporate-services`, { method: 'POST', body: '{}' }),
 }
 
 // ── Flows ─────────────────────────────────────────────────────────────────────
@@ -375,6 +377,15 @@ export interface FlowVersion { id: string; version: number; status: string; grap
 export interface FlowGraph { nodes: FlowNode[]; edges: FlowEdge[] }
 export interface FlowNode { id: string; type: string; position: { x: number; y: number }; data: { kind: string; label: string; config: Record<string, unknown> } }
 export interface FlowEdge { id: string; source: string; target: string; sourceHandle?: string }
+export interface CorporatePackResult {
+  flowsAdded: string[]
+  publishedNames: string[]
+  draftNames: string[]
+  intentsAdded: number
+  faqsAdded: number
+  environmentName: string | null
+}
+
 export interface Intent { id: string; name: string; description?: string; utterances: string[]; responses: object[] }
 export interface Entity { id: string; name: string; kind: string; values: object[] }
 export interface Faq { id: string; question: string; answer: string; tags: string[] }

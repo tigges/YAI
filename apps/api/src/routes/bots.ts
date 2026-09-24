@@ -1,6 +1,7 @@
 import type { FastifyInstance } from 'fastify'
 import { requireRole } from '../middleware/auth.js'
 import { prisma } from '@ybot/db'
+import { installCorporatePack } from '../lib/install-corporate-pack.js'
 import { installStarterFlows } from '../lib/install-starter-flows.js'
 
 
@@ -58,9 +59,31 @@ export async function botsRoutes(app: FastifyInstance) {
 
     const tenant = await prisma.tenant.findUnique({ where: { id: tenantId } })
     const sandbox = bot.environments.find((env) => env.kind === 'sandbox')
-    await installStarterFlows(tenantId, bot.id, tenant?.name ?? name, sandbox?.id ?? null)
+    const companyName = tenant?.name ?? name
+    await installCorporatePack(tenantId, bot.id, companyName, sandbox?.id ?? null)
+    await installStarterFlows(tenantId, bot.id, companyName, sandbox?.id ?? null)
 
     return reply.status(201).send({ data: bot })
+  })
+
+  app.post('/:botId/packs/corporate-services', { preHandler: canBuild }, async (request, reply) => {
+    const { tenantId } = request.user as JwtPayload
+    const { botId } = request.params as { botId: string }
+    const bot = await prisma.bot.findFirst({
+      where: { id: botId, tenantId },
+      include: { environments: true },
+    })
+    if (!bot) return reply.status(404).send({ error: { code: 'NOT_FOUND', message: 'Bot not found' } })
+
+    const tenant = await prisma.tenant.findUnique({ where: { id: tenantId } })
+    const sandbox = bot.environments.find((env) => env.kind === 'sandbox') ?? bot.environments[0]
+    const result = await installCorporatePack(tenantId, bot.id, tenant?.name ?? bot.name, sandbox?.id ?? null)
+    return {
+      data: {
+        ...result,
+        environmentName: sandbox?.name ?? null,
+      },
+    }
   })
 
   app.patch('/:botId', { preHandler: canBuild }, async (request, reply) => {
