@@ -3,8 +3,8 @@ import { Workflow, Plus, Search, Play, Trash2, Pencil } from 'lucide-react'
 import { Button, Input, Badge, Table, THead, TBody, TR, TH, TD, EmptyState, PageHeader, Skeleton, Dialog, DialogContent, DialogHeader, DialogTitle, DialogBody, DialogFooter } from '@ybot/ui'
 import { SubNav } from '../../components/SubNav'
 import { useNavigate } from '@tanstack/react-router'
-import { useFlows, useCreateFlow, useDeleteFlow, useUpdateFlow, usePublishFlow, useSaveCanvas, useImportCorporatePack } from '../../lib/hooks'
-import type { CorporatePackResult } from '../../lib/api'
+import { useFlows, useCreateFlow, useDeleteFlow, useUpdateFlow, usePublishFlow, useSaveCanvas, useImportStarterPack, useRemoveStarterPack } from '../../lib/hooks'
+import type { CorporatePackResult, PackRemovalResult } from '../../lib/api'
 import { FlowWizard } from './FlowWizard'
 import { reviewFlow } from './PublishCheck'
 import type { FlowGraph } from '../../lib/api'
@@ -12,12 +12,14 @@ import { useAppStore } from '../../store/app'
 
 const NO_ENVIRONMENTS: Array<{ id: string; kind: string; name: string }> = []
 
-function PackResult({ result }: { result: CorporatePackResult }) {
+function PackResult({ result, pack }: { result: CorporatePackResult; pack: 'corporate-services' | 'hair-studio' }) {
   const added = result.flowsAdded.length + result.intentsAdded + result.faqsAdded
+  const label = pack === 'hair-studio' ? 'hair studio' : 'corporate services'
+  const draftName = pack === 'hair-studio' ? 'Salon welcome' : 'Corporate welcome'
   if (added === 0) {
-    return <p className="text-sm text-[var(--text-secondary)]">This bot already has the corporate services pack.</p>
+    return <p className="text-sm text-[var(--text-secondary)]">This bot already has the {label} pack.</p>
   }
-  const draft = result.draftNames.includes('Corporate welcome')
+  const draft = result.draftNames.includes(draftName)
   return (
     <div className="space-y-2 text-sm text-[var(--text-secondary)]">
       <p>Added {result.flowsAdded.length} flows, {result.intentsAdded} intents, and {result.faqsAdded} FAQs.</p>
@@ -25,7 +27,7 @@ function PackResult({ result }: { result: CorporatePackResult }) {
         <p>The new answers are published on {result.environmentName}.</p>
       )}
       {draft && (
-        <p>Corporate welcome is a draft on this list. Publish it in Sandbox when you want the widget to use that greeting.</p>
+        <p>{draftName} is a draft on this list. Publish it in Sandbox when you want the widget to use that greeting.</p>
       )}
     </div>
   )
@@ -44,7 +46,10 @@ export function FlowsPage() {
   const [renaming, setRenaming] = useState<{ id: string; name: string; description: string } | null>(null)
   const [deleting, setDeleting] = useState<{ id: string; name: string } | null>(null)
   const [showPack, setShowPack] = useState(false)
+  const [packChoice, setPackChoice] = useState<'corporate-services' | 'hair-studio' | null>(null)
   const [packResult, setPackResult] = useState<CorporatePackResult | null>(null)
+  const [packRemoved, setPackRemoved] = useState<PackRemovalResult | null>(null)
+  const [confirmRemove, setConfirmRemove] = useState(false)
   const [packError, setPackError] = useState('')
 
   const { data: flows = [], isLoading } = useFlows()
@@ -53,7 +58,8 @@ export function FlowsPage() {
   const updateFlow = useUpdateFlow()
   const deleteFlow = useDeleteFlow()
   const publishFlow = usePublishFlow()
-  const importPack = useImportCorporatePack()
+  const importPack = useImportStarterPack()
+  const removePack = useRemoveStarterPack()
   const environments = useAppStore((s) => s.bots.find((b) => b.id === s.selectedBotId)?.environments) ?? NO_ENVIRONMENTS
   const publishEnv = environments.find((env) => env.kind === 'sandbox') ?? environments.find((env) => env.kind === 'production')
   const suggested = flows.filter((flow) => flow.tags?.includes('proposed') && flow.versions?.[0]?.status !== 'published')
@@ -121,8 +127,8 @@ export function FlowsPage() {
         description="Visual conversation flow builder"
         actions={
           <div className="flex items-center gap-2">
-            <Button size="md" variant="secondary" onClick={() => { setPackResult(null); setPackError(''); setShowPack(true) }}>
-              Import starter pack
+            <Button size="md" variant="secondary" onClick={() => { setPackChoice(null); setPackResult(null); setPackRemoved(null); setConfirmRemove(false); setPackError(''); setShowPack(true) }}>
+              Starter packs
             </Button>
             <Button size="md" onClick={() => setShowNew(true)}>
               <Plus size={14} /> New Flow
@@ -262,31 +268,83 @@ export function FlowsPage() {
       <Dialog open={showPack} onOpenChange={(open) => { if (!open) setShowPack(false) }}>
         <DialogContent size="lg">
           <DialogHeader>
-            <DialogTitle>Corporate services</DialogTitle>
+            <DialogTitle>{packChoice === 'hair-studio' ? 'Hair studio' : packChoice === 'corporate-services' ? 'Corporate services' : 'Starter packs'}</DialogTitle>
           </DialogHeader>
           <DialogBody className="space-y-3">
-            {packResult ? (
-              <PackResult result={packResult} />
+            {packRemoved && packChoice ? (
+              <p className="text-sm text-[var(--text-secondary)]">
+                Removed {packRemoved.flowsRemoved.length} flows, {packRemoved.intentsRemoved} intents, and {packRemoved.faqsRemoved} FAQs from the {packChoice === 'hair-studio' ? 'hair studio' : 'corporate services'} pack. Flows that were already on this bot stay.
+              </p>
+            ) : packResult && packChoice ? (
+              <PackResult result={packResult} pack={packChoice} />
+            ) : confirmRemove && packChoice ? (
+              <>
+                <p className="text-sm text-[var(--text-secondary)]">
+                  Remove the {packChoice === 'hair-studio' ? 'hair studio' : 'corporate services'} pack from this bot? The flows, intents, and FAQs it added are deleted. Flows that were already here stay, including the welcome the widget is using.
+                </p>
+                {packError && <p className="text-xs text-[var(--danger)]">{packError}</p>}
+              </>
+            ) : packChoice === null ? (
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                <button type="button" onClick={() => setPackChoice('corporate-services')} className="rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--bg-surface)] p-3 text-left hover:bg-[var(--bg-hover)]">
+                  <p className="text-sm font-medium text-[var(--text-primary)]">Corporate services</p>
+                  <p className="mt-1 text-xs text-[var(--text-muted)]">Hours, shipping, returns, tracking, payments, passwords, and plans.</p>
+                </button>
+                <button type="button" onClick={() => setPackChoice('hair-studio')} className="rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--bg-surface)] p-3 text-left hover:bg-[var(--bg-hover)]">
+                  <p className="text-sm font-medium text-[var(--text-primary)]">Hair studio</p>
+                  <p className="mt-1 text-xs text-[var(--text-muted)]">Bookings, prices, walk-ins, and the salon address. The menu matches Bella.</p>
+                </button>
+              </div>
             ) : (
               <>
                 <p className="text-sm text-[var(--text-secondary)]">
-                  This pack is a starting point for a web widget. It greets the visitor and answers the questions customers ask first: hours, shipping, returns, tracking, payments, passwords, plans, and reaching a person. The wording is a benchmark. Edit each message so it matches your business. The guided wizard is how you reshape a flow after that.
+                  {packChoice === 'hair-studio'
+                    ? 'This pack greets a guest and answers the questions a salon hears first: a booking, a cancellation, prices, opening hours, walk-ins, the address, and a person at the studio. Cuts from £35 and 14 Rosewood Lane match the Bella demo page. Edit those lines for your own salon. A booking notes the service and the day. The studio confirms the time in the chat.'
+                    : 'This pack greets the visitor and answers the questions customers ask first: hours, shipping, returns, tracking, payments, passwords, plans, and reaching a person. The wording is a benchmark. Edit each message so it matches your business. The guided wizard is how you reshape a flow after that.'}
                 </p>
                 <p className="text-sm text-[var(--text-secondary)]">
-                  The widget says the words in the published flow. The same answers are added under Intents and FAQs so you can keep them together. Anything already on this bot stays as it is. Your current welcome stays the one the widget uses. A draft named Corporate welcome is added when you already have a welcome. Publish that draft in Sandbox when you want to try the new greeting. New answers are published on Sandbox. Publish a flow to Production when the live widget should use it.
+                  The widget says the words in the published flow. The same answers are added under Intents and FAQs. Anything already on this bot stays as it is. Your current welcome stays the one the widget uses. A draft named {packChoice === 'hair-studio' ? 'Salon welcome' : 'Corporate welcome'} is added when you already have a welcome. Publish that draft in Sandbox when you want to try the new greeting. Publish a flow to Production when the live widget should use it.
                 </p>
                 {packError && <p className="text-xs text-[var(--danger)]">{packError}</p>}
               </>
             )}
           </DialogBody>
           <DialogFooter>
-            <Button variant="ghost" onClick={() => setShowPack(false)}>{packResult ? 'Close' : 'Cancel'}</Button>
-            {!packResult && (
+            {packChoice && !packResult && !packRemoved ? (
+              <Button variant="ghost" onClick={() => { if (confirmRemove) { setConfirmRemove(false); setPackError('') } else { setPackChoice(null); setPackError('') } }}>Back</Button>
+            ) : (
+              <Button variant="ghost" onClick={() => setShowPack(false)}>{packResult || packRemoved ? 'Close' : 'Cancel'}</Button>
+            )}
+            {packChoice && !packResult && !packRemoved && !confirmRemove && (
+              <Button
+                variant="destructive"
+                disabled={removePack.isPending}
+                onClick={() => { setPackError(''); setConfirmRemove(true) }}
+              >
+                Remove pack
+              </Button>
+            )}
+            {packChoice && confirmRemove && !packRemoved && (
+              <Button
+                variant="destructive"
+                disabled={removePack.isPending}
+                onClick={() => {
+                  setPackError('')
+                  removePack.mutate(packChoice, {
+                    onSuccess: (result) => { setPackRemoved(result); setConfirmRemove(false) },
+                    onError: (err) => setPackError(err instanceof Error ? err.message : 'Could not remove the pack.'),
+                  })
+                }}
+              >
+                {removePack.isPending ? 'Removing…' : 'Remove pack'}
+              </Button>
+            )}
+            {packChoice && !packResult && !packRemoved && !confirmRemove && (
               <Button
                 disabled={importPack.isPending}
                 onClick={() => {
                   setPackError('')
-                  importPack.mutate(undefined, {
+                  importPack.mutate(packChoice, {
                     onSuccess: (result) => setPackResult(result),
                     onError: (err) => setPackError(err instanceof Error ? err.message : 'Could not import the pack.'),
                   })

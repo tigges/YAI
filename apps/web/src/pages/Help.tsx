@@ -90,7 +90,7 @@ export function HelpPage() {
             Rename and delete live on this list, next to each flow. Delete asks you to confirm. You can also rename the flow you have open by clicking its name on the canvas.
           </p>
           <p className="text-sm leading-relaxed text-[var(--text-secondary)]">
-            Import starter pack adds the corporate services answers: hours, shipping, returns, tracking, payments, passwords, plans, and a person on the team. A new bot already has them. The widget says the words in the published flow. Intents and FAQs keep the same benchmark wording. Publish Corporate welcome in Sandbox when you want to try that greeting. Publish to Production when the live widget should use it.
+            Starter packs on the Flows page add a ready widget. Remove pack deletes the flows, intents, and FAQs that pack added. Flows that were already on the bot stay. Corporate services covers hours, shipping, returns, tracking, payments, passwords, and plans. Hair studio covers bookings, prices, walk-ins, and the salon address, using the Bella demo menu as the benchmark. A new bot already has the corporate answers. The widget says the words in the published flow. Publish Corporate welcome or Salon welcome in Sandbox when you want to try that greeting. Publish to Production when the live widget should use it.
           </p>
           <Figure file="flows.jpg" alt="Flows list" />
           <Figure file="canvas.jpg" alt="Flow canvas with the node list folded" />

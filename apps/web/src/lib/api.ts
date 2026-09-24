@@ -70,6 +70,10 @@ export const bots = {
     apiFetch<void>(`/bots/${botId}/environments/${environmentId}`, { method: 'DELETE' }),
   importCorporatePack: (botId: string) =>
     apiFetch<{ data: CorporatePackResult }>(`/bots/${botId}/packs/corporate-services`, { method: 'POST', body: '{}' }),
+  importHairStudioPack: (botId: string) =>
+    apiFetch<{ data: CorporatePackResult }>(`/bots/${botId}/packs/hair-studio`, { method: 'POST', body: '{}' }),
+  removePack: (botId: string, pack: 'corporate-services' | 'hair-studio') =>
+    apiFetch<{ data: PackRemovalResult }>(`/bots/${botId}/packs/${pack}`, { method: 'DELETE' }),
 }
 
 // ── Flows ─────────────────────────────────────────────────────────────────────
@@ -377,6 +381,12 @@ export interface FlowVersion { id: string; version: number; status: string; grap
 export interface FlowGraph { nodes: FlowNode[]; edges: FlowEdge[] }
 export interface FlowNode { id: string; type: string; position: { x: number; y: number }; data: { kind: string; label: string; config: Record<string, unknown> } }
 export interface FlowEdge { id: string; source: string; target: string; sourceHandle?: string }
+export interface PackRemovalResult {
+  flowsRemoved: string[]
+  intentsRemoved: number
+  faqsRemoved: number
+}
+
 export interface CorporatePackResult {
   flowsAdded: string[]
   publishedNames: string[]

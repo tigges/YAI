@@ -46,8 +46,9 @@ export function FlowWizard({ open, existingNames, pending, error, onClose, onCre
   const company = tenant?.name?.trim() || 'your company'
   const templates = flowCatalog(company)
   const corporate = templates.filter((template) => template.tags.includes('corporate') && template.name !== 'Welcome & Routing')
+  const salon = templates.filter((template) => template.tags.includes('salon'))
   const welcome = templates.find((template) => template.name === 'Welcome & Routing')
-  const others = templates.filter((template) => !template.tags.includes('corporate'))
+  const others = templates.filter((template) => !template.tags.includes('corporate') && !template.tags.includes('salon'))
   const [step, setStep] = useState<Step>('pick')
   const [choice, setChoice] = useState<string>('guided')
   const [name, setName] = useState('')
@@ -131,6 +132,14 @@ export function FlowWizard({ open, existingNames, pending, error, onClose, onCre
                 <p className="mb-2 text-xs font-medium text-[var(--text-muted)]">Corporate services</p>
                 <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                   {corporate.map((template) => (
+                    <TemplateButton key={template.name} template={template} onPick={pick} />
+                  ))}
+                </div>
+              </div>
+              <div>
+                <p className="mb-2 text-xs font-medium text-[var(--text-muted)]">Hair studio</p>
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                  {salon.map((template) => (
                     <TemplateButton key={template.name} template={template} onPick={pick} />
                   ))}
                 </div>
