@@ -1,4 +1,5 @@
 import type { NodeContext, NodeResult } from '../types.js'
+import { matchTopic, type TopicRoute } from '../topic-route.js'
 import { interpolate } from '../utils.js'
 
 // ── trigger_start ────────────────────────────────────────────────────────────
@@ -84,6 +85,21 @@ export async function executeHttpRequest(ctx: NodeContext): Promise<NodeResult> 
   } catch (err) {
     return { output: { status: 0, ok: false }, error: String(err) }
   }
+}
+
+// ── route_topic ───────────────────────────────────────────────────────────────
+export async function executeRouteTopic(ctx: NodeContext): Promise<NodeResult> {
+  const { config, session } = ctx
+  const routes = (config['routes'] as TopicRoute[] | undefined) ?? []
+  const text = `${session.variables.flow['topic'] ?? ''} ${session.variables.flow['_last_user_message'] ?? ''}`
+  const handle = matchTopic(text, routes)
+  return { output: { route: handle }, nextNodeId: handle }
+}
+
+// ── execute_flow ──────────────────────────────────────────────────────────────
+export async function executeExecuteFlow(ctx: NodeContext): Promise<NodeResult> {
+  const flowName = String(ctx.config['flowName'] ?? '').trim()
+  return { output: { jump: flowName }, jumpToFlow: flowName }
 }
 
 // ── classify_intent ───────────────────────────────────────────────────────────

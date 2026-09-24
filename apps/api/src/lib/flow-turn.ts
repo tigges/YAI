@@ -19,7 +19,7 @@ export async function runFlowTurn(
   userText: string,
 ): Promise<RunResult> {
   const result = await machine.run(session, graph, userText)
-  if (spoke(result) || result.handover) return result
+  if (spoke(result) || result.handover || result.jumpToFlow) return result
   return machine.run(
     {
       ...session,

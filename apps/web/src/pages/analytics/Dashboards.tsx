@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogBody, DialogFoo
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator } from '@ybot/ui'
 import { SubNav } from '../../components/SubNav'
 import { cn } from '@ybot/ui'
-import { useDashboards, useCreateDashboard, useDeleteDashboard, useReports, useCreateReport, useRunReport, useDeleteReport } from '../../lib/hooks'
+import { useDashboards, useCreateDashboard, useDeleteDashboard, useReports, useCreateReport, useRunReport, useDeleteReport, useAnalyticsOverview } from '../../lib/hooks'
 import { useAppStore } from '../../store/app'
 import type { Dashboard } from '../../lib/api'
 
@@ -27,12 +27,23 @@ const DASHBOARD_ICONS: Record<string, React.ReactNode> = {
   inbox: <MessageSquare size={20} />,
 }
 
+function metricValue(metric: string, overview: { totalConversations: number; totalContacts: number; resolutionRate: number; botHandledPct: number } | undefined) {
+  if (!overview) return '—'
+  if (metric === 'totalConversations') return overview.totalConversations.toLocaleString()
+  if (metric === 'totalContacts') return overview.totalContacts.toLocaleString()
+  if (metric === 'resolutionRate') return `${overview.resolutionRate.toFixed(1)}%`
+  if (metric === 'botHandledPct') return `${overview.botHandledPct}%`
+  return '—'
+}
+
 function DashboardCard({
   dash,
   onDelete,
+  onOpen,
 }: {
   dash: Dashboard
   onDelete: (id: string) => void
+  onOpen: (id: string) => void
 }) {
   const icon = DASHBOARD_ICONS['bot'] ?? <LayoutDashboard size={20} />
   const widgetCount = dash.widgets?.length ?? 0
@@ -46,10 +57,13 @@ function DashboardCard({
     return `${Math.floor(h / 24)}d ago`
   }
   return (
-    <div className={cn(
-      'group rounded-[var(--radius-lg)] border bg-[var(--bg-surface)] p-5 cursor-pointer transition-all hover:border-[var(--accent)]/40 hover:shadow-[var(--shadow-md)]',
-      'border-[var(--border)]'
-    )}>
+    <div
+      className={cn(
+        'group rounded-[var(--radius-lg)] border bg-[var(--bg-surface)] p-5 cursor-pointer transition-all hover:border-[var(--accent)]/40 hover:shadow-[var(--shadow-md)]',
+        'border-[var(--border)]'
+      )}
+      onClick={() => onOpen(dash.id)}
+    >
       <div className="flex items-start justify-between mb-3">
         <div className={cn('p-2.5 rounded-[var(--radius-md)] bg-[var(--bg-overlay)] text-[var(--text-muted)]')}>
           {icon}
@@ -85,6 +99,9 @@ export function DashboardsPage() {
   const [newName, setNewName] = useState('')
   const [newTemplate, setNewTemplate] = useState('blank')
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null)
+  const [openId, setOpenId] = useState<string | null>(null)
+  const { data: overview } = useAnalyticsOverview()
+  const openDash = dashboards.find((dash) => dash.id === openId) ?? null
 
   async function handleCreate() {
     if (!newName.trim()) return
@@ -131,6 +148,23 @@ export function DashboardsPage() {
           </div>
         )}
 
+        {openDash && (
+          <section className="mb-6 rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--bg-surface)] p-5">
+            <h2 className="text-sm font-semibold text-[var(--text-primary)]">{openDash.name}</h2>
+            <p className="mt-1 text-xs text-[var(--text-muted)]">These numbers are the same chats as the overview.</p>
+            <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
+              {(openDash.widgets ?? []).map((widget) => (
+                <div key={widget.id} className="rounded-[var(--radius-md)] border border-[var(--border)] px-4 py-3">
+                  <p className="text-xs text-[var(--text-muted)]">{widget.title}</p>
+                  <p className="mt-1 text-2xl font-semibold text-[var(--text-primary)]">
+                    {metricValue(String(widget.config?.metric ?? ''), overview)}
+                  </p>
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
+
         {dashboards.length > 0 && (
           <section>
             <h2 className="text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wider mb-3">All dashboards ({dashboards.length})</h2>
@@ -139,6 +173,7 @@ export function DashboardsPage() {
                 <DashboardCard
                   key={d.id}
                   dash={d}
+                  onOpen={setOpenId}
                   onDelete={(id) => setDeleteConfirm(id)}
                 />
               ))}

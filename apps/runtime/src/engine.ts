@@ -3,7 +3,7 @@ import {
   executeTriggerStart, executeSendMessage, executeAskQuestion,
   executeSetVariable, executeCondition, executeHttpRequest,
   executeClassifyIntent, executeHandover, executeCreateTicket, executeEndFlow,
-  executeSearchKnowledge, executeLlmGenerate,
+  executeSearchKnowledge, executeLlmGenerate, executeRouteTopic, executeExecuteFlow,
 } from './nodes/executors.js'
 
 type NodeExecutor = (ctx: NodeContext) => Promise<NodeResult>
@@ -16,6 +16,8 @@ const EXECUTORS: Record<string, NodeExecutor> = {
   condition:        executeCondition,
   http_request:     executeHttpRequest,
   classify_intent:  executeClassifyIntent,
+  route_topic:      executeRouteTopic,
+  execute_flow:     executeExecuteFlow,
   handover:         executeHandover,
   create_ticket:    executeCreateTicket,
   end_flow:         executeEndFlow,
@@ -53,6 +55,7 @@ export class SessionMachine {
     newMessages: Array<{ direction: 'outbound'; content: { text: string } }>
     waitForInput?: Session['waitingFor']
     handover?: { team?: string; priority?: string; note?: string }
+    jumpToFlow?: string
     completed?: boolean
   }> {
     const nodeMap = new Map(graph.nodes.map((n) => [n.id, n]))
@@ -110,6 +113,11 @@ export class SessionMachine {
         session.status = 'handed_over'
         session.currentNodeId = currentId
         return { session, newMessages: allNewMessages, handover: result.handover }
+      }
+
+      if (result.jumpToFlow) {
+        session.currentNodeId = currentId
+        return { session, newMessages: allNewMessages, jumpToFlow: result.jumpToFlow }
       }
 
       if (result.waitForInput) {

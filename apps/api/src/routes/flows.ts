@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify'
 import { requireRole } from '../middleware/auth.js'
 import { prisma } from '@ybot/db'
 import { z } from 'zod'
+import { attachDestination } from '../lib/welcome-routes.js'
 
 type JWT = { sub: string; tenantId: string; role: string }
 
@@ -114,6 +115,8 @@ export async function flowsRoutes(app: FastifyInstance) {
       data: { status: 'published', environmentId, publishedAt: new Date() },
     })
     await prisma.activity.create({ data: { tenantId, userId: (request.user as JWT).sub, action: 'flow.published', resource: 'flow', resourceId: flowId, metadata: { version: latest.version, environmentId } } })
+    const flow = await prisma.flow.findFirst({ where: { id: flowId, botId, tenantId }, select: { name: true } })
+    if (flow) await attachDestination(botId, environmentId, flow.name).catch(() => {})
     return reply.status(200).send({ data: published })
   })
 }
