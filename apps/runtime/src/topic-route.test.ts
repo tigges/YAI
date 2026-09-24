@@ -4,14 +4,23 @@ import { SessionMachine, type FlowGraph } from './engine.js'
 import type { ExecutionServices, Session } from './types.js'
 import { matchTopic } from './topic-route.js'
 
-test('matchTopic picks the first handle', () => {
+test('matchTopic picks the longest phrase', () => {
   const routes = [
     { handle: 'orders', phrases: ['order', 'where is'] },
     { handle: 'returns', phrases: ['return'] },
+    { handle: 'cancel-order', phrases: ['cancel my order', 'cancellation'] },
   ]
   assert.equal(matchTopic('Where is my order?', routes), 'orders')
   assert.equal(matchTopic('I need to return a kettle', routes), 'returns')
+  assert.equal(matchTopic('Please cancel my order', routes), 'cancel-order')
   assert.equal(matchTopic('hello', routes), 'other')
+  assert.equal(
+    matchTopic('Please change the delivery address', [
+      { handle: 'orders', phrases: ['order', 'delivery'] },
+      { handle: 'change-address', phrases: ['delivery address', 'change address'] },
+    ]),
+    'change-address',
+  )
 })
 
 test('execute_flow hands off and route_topic selects a branch', async () => {

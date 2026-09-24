@@ -18,6 +18,7 @@ export async function conversationsRoutes(app: FastifyInstance) {
       botId: z.string().min(1),
       channelId: z.string().optional(),
       contactId: z.string().optional(),
+      environmentId: z.string().optional(),
       message: z.string().min(1).optional(),
     }).safeParse(request.body)
     if (!body.success) return reply.status(400).send({ error: { code: 'VALIDATION', details: body.error.flatten() } })
@@ -25,7 +26,10 @@ export async function conversationsRoutes(app: FastifyInstance) {
     const bot = await prisma.bot.findFirst({ where: { id: body.data.botId, tenantId } })
     if (!bot) return reply.status(404).send({ error: { code: 'NOT_FOUND', message: 'Bot not found' } })
 
-    const env = await prisma.environment.findFirst({ where: { botId: body.data.botId } })
+    const env = body.data.environmentId
+      ? await prisma.environment.findFirst({ where: { id: body.data.environmentId, botId: body.data.botId } })
+      : await prisma.environment.findFirst({ where: { botId: body.data.botId, kind: 'sandbox' } })
+        ?? await prisma.environment.findFirst({ where: { botId: body.data.botId } })
     if (!env) return reply.status(422).send({ error: { code: 'NO_ENVIRONMENT', message: 'Bot has no environment' } })
 
     const convo = await prisma.conversation.create({

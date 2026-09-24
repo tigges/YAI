@@ -13,6 +13,96 @@ export interface StarterFlow {
   graph: { nodes: object[]; edges: object[] }
 }
 
+export const SUPPORT_USE_CASES: Array<{ name: string; choice: string; phrases: string[] }> = [
+  {
+    name: 'Cancel order',
+    choice: 'Cancel an order',
+    phrases: ['cancel my order', 'cancel order', 'cancellation'],
+  },
+  {
+    name: 'Change address',
+    choice: 'Change address',
+    phrases: ['delivery address', 'change address', 'new address', 'wrong address'],
+  },
+  {
+    name: 'Talk to a person',
+    choice: 'Talk to a person',
+    phrases: ['speak to a person', 'talk to someone', 'talk to a person', 'real person', 'human agent'],
+  },
+]
+
+/** Extra Acme support flows. Drafts for a new company. Sandbox publishes them. */
+export function supportUseCaseFlows(): StarterFlow[] {
+  const y = 120
+  return [
+    {
+      name: 'Cancel order',
+      description: 'Takes an order number and a reason, then asks the team to confirm if it already shipped',
+      tags: ['orders', 'template'],
+      publish: false,
+      graph: {
+        nodes: [
+          { id: 'c1', type: 'flow-node', position: { x: 80, y }, data: { kind: 'trigger_start', label: 'Cancel order', config: {} } },
+          { id: 'c2', type: 'flow-node', position: { x: 280, y }, data: { kind: 'send_message', label: 'Intro', config: { text: 'I can cancel an order that has not shipped yet.' } } },
+          { id: 'c3', type: 'flow-node', position: { x: 480, y }, data: { kind: 'ask_question', label: 'Order number', config: { question: 'What is the order number?', variable: 'order_number' } } },
+          { id: 'c4', type: 'flow-node', position: { x: 700, y }, data: { kind: 'ask_question', label: 'Reason', config: { question: 'Why do you want to cancel?', variable: 'cancel_reason', choices: ['Changed my mind', 'Ordered by mistake', 'Taking too long'] } } },
+          { id: 'c5', type: 'flow-node', position: { x: 940, y }, data: { kind: 'send_message', label: 'Confirm', config: { text: 'I have noted order {{order_number}} ({{cancel_reason}}). If it has already shipped, a teammate will confirm the cancellation in this chat.' } } },
+          { id: 'c6', type: 'flow-node', position: { x: 1180, y }, data: { kind: 'end_flow', label: 'End', config: {} } },
+        ],
+        edges: [
+          { id: 'e1', source: 'c1', target: 'c2' },
+          { id: 'e2', source: 'c2', target: 'c3' },
+          { id: 'e3', source: 'c3', target: 'c4' },
+          { id: 'e4', source: 'c4', target: 'c5' },
+          { id: 'e5', source: 'c5', target: 'c6' },
+        ],
+      },
+    },
+    {
+      name: 'Change address',
+      description: 'Collects a new delivery address and asks the team to confirm if the parcel has left',
+      tags: ['orders', 'template'],
+      publish: false,
+      graph: {
+        nodes: [
+          { id: 'a1', type: 'flow-node', position: { x: 80, y }, data: { kind: 'trigger_start', label: 'Change address', config: {} } },
+          { id: 'a2', type: 'flow-node', position: { x: 280, y }, data: { kind: 'send_message', label: 'Intro', config: { text: 'I can update the delivery address before the order ships.' } } },
+          { id: 'a3', type: 'flow-node', position: { x: 500, y }, data: { kind: 'ask_question', label: 'Order number', config: { question: 'What is the order number?', variable: 'order_number' } } },
+          { id: 'a4', type: 'flow-node', position: { x: 720, y }, data: { kind: 'ask_question', label: 'New address', config: { question: 'What is the new delivery address?', variable: 'new_address' } } },
+          { id: 'a5', type: 'flow-node', position: { x: 960, y }, data: { kind: 'send_message', label: 'Confirm', config: { text: 'I have noted {{new_address}} for order {{order_number}}. A teammate will confirm the change if the parcel has already left.' } } },
+          { id: 'a6', type: 'flow-node', position: { x: 1200, y }, data: { kind: 'end_flow', label: 'End', config: {} } },
+        ],
+        edges: [
+          { id: 'e1', source: 'a1', target: 'a2' },
+          { id: 'e2', source: 'a2', target: 'a3' },
+          { id: 'e3', source: 'a3', target: 'a4' },
+          { id: 'e4', source: 'a4', target: 'a5' },
+          { id: 'e5', source: 'a5', target: 'a6' },
+        ],
+      },
+    },
+    {
+      name: 'Talk to a person',
+      description: 'Tells the visitor a person is taking over, then hands the chat to the team',
+      tags: ['handover', 'template'],
+      publish: false,
+      graph: {
+        nodes: [
+          { id: 't1', type: 'flow-node', position: { x: 80, y }, data: { kind: 'trigger_start', label: 'Talk to a person', config: {} } },
+          { id: 't2', type: 'flow-node', position: { x: 300, y }, data: { kind: 'send_message', label: 'Tell them', config: { text: 'I am passing this chat to the team. Someone will continue here.' } } },
+          { id: 't3', type: 'flow-node', position: { x: 540, y }, data: { kind: 'handover', label: 'Hand to the team', config: { team: 'support', priority: 'medium' } } },
+          { id: 't4', type: 'flow-node', position: { x: 760, y }, data: { kind: 'end_flow', label: 'End', config: {} } },
+        ],
+        edges: [
+          { id: 'e1', source: 't1', target: 't2' },
+          { id: 'e2', source: 't2', target: 't3' },
+          { id: 'e3', source: 't3', target: 't4' },
+        ],
+      },
+    },
+  ]
+}
+
 export function starterFlows(companyName: string): StarterFlow[] {
   const y = 120
   return [
@@ -90,6 +180,7 @@ export function starterFlows(companyName: string): StarterFlow[] {
         ],
       },
     },
+    ...supportUseCaseFlows(),
     {
       name: 'Lead Capture',
       description: 'Collects contact details and sends them to the CRM',
