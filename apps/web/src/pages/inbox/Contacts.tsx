@@ -18,6 +18,7 @@ import { useContacts, useCreateContact, useUpdateContact, useDeleteContact, useC
 import { useAppStore } from '../../store/app'
 import { useNavigate } from '@tanstack/react-router'
 import { useQueryClient } from '@tanstack/react-query'
+import { claimContact, queueChat } from '../../lib/inbox-nav'
 import * as api from '../../lib/api'
 
 const SUBNAV = [
@@ -202,7 +203,7 @@ export function ContactsPage() {
   })).filter((c) => !emailOnly || Boolean(c.email))
 
   function openChat(id: string) {
-    sessionStorage.setItem('ybot-open-chat', id)
+    queueChat(id)
     setSelected(null)
     void navigate({ to: '/inbox/chats' })
   }
@@ -221,12 +222,10 @@ export function ContactsPage() {
   }
 
   useEffect(() => {
-    const id = sessionStorage.getItem('ybot-open-contact')
+    const id = claimContact()
     if (!id) return
     const match = filtered.find((item) => item.id === id)
-    if (!match) return
-    sessionStorage.removeItem('ybot-open-contact')
-    setSelected(match)
+    if (match) setSelected(match)
   }, [rawContacts])
 
   async function handleCreate() {

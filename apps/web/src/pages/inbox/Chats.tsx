@@ -20,6 +20,7 @@ import { useAppStore } from '../../store/app'
 import * as api from '../../lib/api'
 import { useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from '@tanstack/react-router'
+import { claimChat, queueContact } from '../../lib/inbox-nav'
 import { useCannedReplies, useTeamMembers, useLabels, useCreateLabel, useCreateTicket } from '../../lib/hooks'
 
 const SUBNAV = [
@@ -136,9 +137,8 @@ export function ChatsPage() {
   useTenantWS()
 
   useEffect(() => {
-    const pending = sessionStorage.getItem('ybot-open-chat')
+    const pending = claimChat()
     if (pending) {
-      sessionStorage.removeItem('ybot-open-chat')
       setSelectedId(pending)
       return
     }
@@ -328,6 +328,8 @@ export function ChatsPage() {
             : filteredConvos.map((conv) => (
             <button
               key={conv.id}
+              data-convo-id={conv.id}
+              data-selected={selectedId === conv.id ? 'true' : 'false'}
               onClick={() => setSelectedId(conv.id)}
               className={cn(
                 'flex w-full items-start gap-2.5 px-3 py-3 text-left transition-colors',
@@ -455,7 +457,7 @@ export function ChatsPage() {
           )}
 
           {/* Messages */}
-          <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4">
+          <div data-thread="messages" className="flex-1 overflow-y-auto px-4 py-4 space-y-4">
             {messages.map((msg) => (
               <div key={msg.id}>
                 {msg.isNote ? (
@@ -689,7 +691,7 @@ export function ChatsPage() {
                   disabled={!selected.contactId}
                   onClick={() => {
                     if (!selected.contactId) return
-                    sessionStorage.setItem('ybot-open-contact', selected.contactId)
+                    queueContact(selected.contactId)
                     void navigate({ to: '/inbox/contacts' })
                   }}
                 >
