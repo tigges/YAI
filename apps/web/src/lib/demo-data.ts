@@ -20,7 +20,7 @@ const mkEdge = (id: string, source: string, target: string, label?: string) =>
 const WELCOME_GRAPH = {
   nodes: [
     mkNode('n1',   80, 'trigger',      'Start',          { event: 'conversation.started' }),
-    mkNode('n2',  320, 'send_message', 'Greeting',       { text: 'Hi there! 👋 I\'m the BotStudio assistant. How can I help you today?' }),
+    mkNode('n2',  320, 'send_message', 'Greeting',       { text: 'Sandbox greeting. This is the rehearsal copy.' }),
     mkNode('n3',  580, 'ask_question', 'Route',          { question: 'Choose an option:', options: ['Order / Delivery', 'Returns & Refunds', 'Billing', 'Speak to an agent'], variable: 'route' }),
     mkNode('n4',  840, 'condition',    'Route check',    { variable: 'route', operator: 'equals' }),
     mkNode('n5', 1100, 'handover',     'Agent handover', { team: 'support' }),
@@ -56,17 +56,30 @@ const RETURN_GRAPH = {
   edges: [mkEdge('e1','n1','n2'), mkEdge('e2','n2','n3'), mkEdge('e3','n3','n4'), mkEdge('e4','n4','n5'), mkEdge('e5','n5','n6')],
 }
 
+const WELCOME_PRODUCTION = {
+  nodes: WELCOME_GRAPH.nodes.map((node) => node.id === 'n2'
+    ? { ...node, data: { ...node.data, config: { text: 'Production greeting. This is the live widget copy.' } } }
+    : node),
+  edges: WELCOME_GRAPH.edges,
+}
+
 export const DEMO_FLOWS: Flow[] = [
   { id: 'f1', name: 'Welcome & Routing',  description: 'Greets visitors and routes to the right flow', kind: 'flow', tags: ['welcome', 'routing'], updatedAt: '2026-09-18T10:00:00Z',
-    versions: [{ id: 'fv1', version: 2, status: 'draft',     graph: WELCOME_GRAPH }] },
+    versions: [
+      { id: 'fv1s', version: 2, status: 'published', environmentId: 'demo-env-sandbox', graph: WELCOME_GRAPH, publishedAt: '2026-09-18T10:00:00Z' },
+      { id: 'fv1p', version: 1, status: 'published', environmentId: 'demo-env-prod', graph: WELCOME_PRODUCTION, publishedAt: '2026-09-11T10:00:00Z' },
+    ] },
   { id: 'f2', name: 'Order Status',       description: 'Looks up order details via API',                kind: 'flow', tags: ['orders', 'api'],     updatedAt: '2026-09-17T14:00:00Z',
-    versions: [{ id: 'fv2', version: 1, status: 'published', graph: ORDER_GRAPH,   publishedAt: '2026-09-10T09:00:00Z' }] },
+    versions: [
+      { id: 'fv2s', version: 2, status: 'published', environmentId: 'demo-env-sandbox', graph: ORDER_GRAPH, publishedAt: '2026-09-17T14:00:00Z' },
+      { id: 'fv2p', version: 1, status: 'published', environmentId: 'demo-env-prod', graph: ORDER_GRAPH, publishedAt: '2026-09-10T09:00:00Z' },
+    ] },
   { id: 'f3', name: 'Return Request',     description: 'Handles returns and creates tickets',            kind: 'flow', tags: ['returns', 'tickets'], updatedAt: '2026-09-15T08:00:00Z',
-    versions: [{ id: 'fv3', version: 1, status: 'published', graph: RETURN_GRAPH,  publishedAt: '2026-09-12T11:00:00Z' }] },
+    versions: [{ id: 'fv3', version: 1, status: 'published', environmentId: 'demo-env-sandbox', graph: RETURN_GRAPH, publishedAt: '2026-09-12T11:00:00Z' }] },
   { id: 'f4', name: 'Lead Capture',       description: 'Qualifies inbound leads and pushes to CRM',     kind: 'flow', tags: ['sales', 'crm'],       updatedAt: '2026-09-14T16:00:00Z',
     versions: [{ id: 'fv4', version: 1, status: 'draft', graph: { nodes: [mkNode('n1',80,'trigger','Start',{event:'conversation.started'})], edges: [] } }] },
   { id: 'f5', name: 'CSAT Survey',        description: 'Post-conversation satisfaction survey',          kind: 'flow', tags: ['csat', 'survey'],     updatedAt: '2026-09-13T12:00:00Z',
-    versions: [{ id: 'fv5', version: 1, status: 'published', graph: { nodes: [], edges: [] },            publishedAt: '2026-09-08T10:00:00Z' }] },
+    versions: [{ id: 'fv5', version: 1, status: 'published', environmentId: 'demo-env-prod', graph: { nodes: [], edges: [] }, publishedAt: '2026-09-08T10:00:00Z' }] },
 ]
 
 // ── Knowledge ─────────────────────────────────────────────────────────────────

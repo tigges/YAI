@@ -84,7 +84,7 @@ export function HelpPage() {
         <section id="flows" className="scroll-mt-6 space-y-2">
           <h2 className="text-base font-semibold text-[var(--text-primary)]">Flows</h2>
           <p className="text-sm leading-relaxed text-[var(--text-secondary)]">
-            Open a flow from the list. Fold the node list to make room for the canvas. Tidy stacks each step from top to bottom. Row and column line the nodes up. Test Bot puts the cursor in the chat box. After a publish succeeds, you return to this list.
+            Open a flow from the list. The list and the canvas follow Sandbox or Production in the top bar. Sandbox shows a draft that is not published yet. Production shows only the version published there. Fold the node list to make room for the canvas. Tidy stacks each step from top to bottom. Row and column line the nodes up. Test Bot puts the cursor in the chat box. After a publish succeeds, you return to this list.
           </p>
           <p className="text-sm leading-relaxed text-[var(--text-secondary)]">
             Rename and delete live on this list, next to each flow. Delete asks you to confirm. You can also rename the flow you have open by clicking its name on the canvas.

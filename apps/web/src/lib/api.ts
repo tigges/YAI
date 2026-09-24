@@ -90,8 +90,8 @@ export const flows = {
     apiFetch<{ data: FlowVersion }>(`/bots/${botId}/flows/${flowId}/versions/${version}/canvas`),
   saveCanvas: (botId: string, flowId: string, version: number, graph: FlowGraph) =>
     apiFetch<{ data: unknown }>(`/bots/${botId}/flows/${flowId}/versions/${version}/canvas`, { method: 'PUT', body: JSON.stringify({ graph }) }),
-  publish: (botId: string, flowId: string, environmentId: string) =>
-    apiFetch<{ data: FlowVersion }>(`/bots/${botId}/flows/${flowId}/publish`, { method: 'POST', body: JSON.stringify({ environmentId }) }),
+  publish: (botId: string, flowId: string, environmentId: string, version?: number) =>
+    apiFetch<{ data: FlowVersion }>(`/bots/${botId}/flows/${flowId}/publish`, { method: 'POST', body: JSON.stringify({ environmentId, ...(version ? { version } : {}) }) }),
 }
 
 // ── Knowledge ─────────────────────────────────────────────────────────────────
@@ -377,7 +377,7 @@ export const dashboards = {
 // ── Types ─────────────────────────────────────────────────────────────────────
 export interface BotSummary { id: string; name: string; description?: string; status: string; environments: Array<{ id: string; kind: string; name: string }> }
 export interface Flow { id: string; name: string; description?: string; kind: string; tags: string[]; updatedAt: string; versions: FlowVersion[] }
-export interface FlowVersion { id: string; version: number; status: string; graph: FlowGraph; publishedAt?: string }
+export interface FlowVersion { id: string; version: number; status: string; graph: FlowGraph; publishedAt?: string; environmentId?: string | null }
 export interface FlowGraph { nodes: FlowNode[]; edges: FlowEdge[] }
 export interface FlowNode { id: string; type: string; position: { x: number; y: number }; data: { kind: string; label: string; config: Record<string, unknown> } }
 export interface FlowEdge { id: string; source: string; target: string; sourceHandle?: string }

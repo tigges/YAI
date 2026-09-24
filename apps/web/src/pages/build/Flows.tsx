@@ -7,8 +7,9 @@ import { useFlows, useCreateFlow, useDeleteFlow, useUpdateFlow, usePublishFlow, 
 import type { CorporatePackResult, PackRemovalResult } from '../../lib/api'
 import { FlowWizard } from './FlowWizard'
 import { reviewFlow } from './PublishCheck'
-import type { FlowGraph } from '../../lib/api'
+import type { Flow, FlowGraph } from '../../lib/api'
 import { useAppStore } from '../../store/app'
+import { versionForEnvironment } from '@ybot/shared'
 
 const NO_ENVIRONMENTS: Array<{ id: string; kind: string; name: string }> = []
 
@@ -61,12 +62,16 @@ export function FlowsPage() {
   const importPack = useImportStarterPack()
   const removePack = useRemoveStarterPack()
   const environments = useAppStore((s) => s.bots.find((b) => b.id === s.selectedBotId)?.environments) ?? NO_ENVIRONMENTS
+  const selectedEnv = useAppStore((s) => s.selectedEnv)
+  const environmentId = useAppStore((s) => s.bots.find((b) => b.id === s.selectedBotId)?.environments.find((env) => env.kind === s.selectedEnv)?.id ?? '')
+  const envLabel = selectedEnv === 'production' ? 'Production' : 'Sandbox'
   const publishEnv = environments.find((env) => env.kind === 'sandbox') ?? environments.find((env) => env.kind === 'production')
-  const suggested = flows.filter((flow) => flow.tags?.includes('proposed') && flow.versions?.[0]?.status !== 'published')
+  const shown = (flow: Flow) => versionForEnvironment(flow.versions, environmentId, selectedEnv)
+  const suggested = flows.filter((flow) => flow.tags?.includes('proposed') && !flow.versions?.some((version) => version.status === 'published'))
 
   const flowNames = flows.map((flow) => flow.name)
   const checked = flows.flatMap((flow) => {
-    const latest = flow.versions?.[0]
+    const latest = shown(flow)
     if (!latest?.graph) return []
     const review = reviewFlow(latest.graph, { flowNames })
     const open = review.repairs.length + review.blocks.length + review.notes.length
@@ -143,7 +148,7 @@ export function FlowsPage() {
           <div className="mb-4 rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--bg-surface)] p-4">
             <p className="text-sm font-medium text-[var(--text-primary)]">Connection check</p>
             <p className="mt-1 text-xs text-[var(--text-muted)]">
-              A published flow with a missing line does not run that path. Repair fills the lines that have an obvious fix. The rest need a decision, then a walk-through in Test Bot.
+              This check uses the {envLabel} version. A published flow with a missing line does not run that path. Repair fills the lines that have an obvious fix. The rest need a decision, then a walk-through in Test Bot.
             </p>
             <div className="mt-3 flex flex-col gap-3">
               {checked.map(({ flow, version, review }) => (
@@ -188,7 +193,10 @@ export function FlowsPage() {
                   <Button
                     size="sm"
                     disabled={!publishEnv || publishFlow.isPending}
-                    onClick={() => publishEnv && publishFlow.mutate({ flowId: flow.id, environmentId: publishEnv.id })}
+                    onClick={() => {
+                      const draft = flow.versions?.find((version) => version.status !== 'published')
+                      if (publishEnv) publishFlow.mutate({ flowId: flow.id, environmentId: publishEnv.id, version: draft?.version })
+                    }}
                   >
                     {publishEnv?.kind === 'sandbox' ? 'Publish to Sandbox' : 'Publish'}
                   </Button>
@@ -231,7 +239,7 @@ export function FlowsPage() {
             </THead>
             <TBody>
               {filtered.map((flow) => {
-                const latest = flow.versions?.[0]
+                const latest = shown(flow)
                 return (
                   <TR key={flow.id} onClick={() => navigate({ to: '/build/flows/$flowId', params: { flowId: flow.id } })}>
                     <TD>
@@ -245,10 +253,10 @@ export function FlowsPage() {
                     </TD>
                     <TD>
                       <Badge variant={latest?.status === 'published' ? 'success' : 'muted'} dot>
-                        {latest?.status ?? 'draft'}
+                        {latest?.status ?? 'Not published'}
                       </Badge>
                     </TD>
-                    <TD className="text-[var(--text-muted)]">v{latest?.version ?? 1}</TD>
+                    <TD className="text-[var(--text-muted)]">{latest ? `v${latest.version}` : '—'}</TD>
                     <TD className="text-[var(--text-muted)]">{relativeTime(flow.updatedAt)}</TD>
                     <TD>
                       <div className="flex items-center gap-1 justify-end" onClick={(e) => e.stopPropagation()}>

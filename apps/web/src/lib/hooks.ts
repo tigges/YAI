@@ -220,8 +220,8 @@ export function useUpdateEntity() {
 export function usePublishFlow() {
   const qc = useQueryClient(); const bid = botId()
   return useMutation({
-    mutationFn: ({ flowId, environmentId }: { flowId: string; environmentId: string }) =>
-      api.flows.publish(bid, flowId, environmentId),
+    mutationFn: ({ flowId, environmentId, version }: { flowId: string; environmentId: string; version?: number }) =>
+      api.flows.publish(bid, flowId, environmentId, version),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['flows', bid] }),
   })
 }
