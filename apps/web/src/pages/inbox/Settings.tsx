@@ -52,6 +52,7 @@ export function InboxSettingsPage() {
   const saveConfig = useSaveInboxConfig()
   const [settings, setSettings] = useState(DEFAULTS)
   const [slaHours, setSlaHours] = useState({ first_response: '1', resolution: '24' })
+  const [limitQueue, setLimitQueue] = useState(false)
   const [workingHours, setWorkingHours] = useState({ start: '09:00', end: '18:00', timezone: 'Europe/London' })
   const [awayMessage, setAwayMessage] = useState(DEFAULT_AWAY)
   const [saved, setSaved] = useState(false)
@@ -62,7 +63,9 @@ export function InboxSettingsPage() {
     if (cfg['toggles']) setSettings({ ...DEFAULTS, ...(cfg['toggles'] as typeof DEFAULTS) })
     if (cfg['sla']) setSlaHours({ ...slaHours, ...(cfg['sla'] as typeof slaHours) })
     if (cfg['workingHours']) {
-      const hours = cfg['workingHours'] as { start?: string; end?: string; timezone?: string; awayMessage?: string }
+      const hours = cfg['workingHours'] as { enabled?: boolean; start?: string; end?: string; timezone?: string; awayMessage?: string }
+      const hasWindow = Boolean(hours.start && hours.end)
+      setLimitQueue(hours.enabled === false ? false : hasWindow)
       setWorkingHours({
         start: hours.start ?? workingHours.start,
         end: hours.end ?? workingHours.end,
@@ -78,7 +81,13 @@ export function InboxSettingsPage() {
   }
 
   async function save() {
-    await saveConfig.mutateAsync({ toggles: settings, sla: slaHours, workingHours: { ...workingHours, awayMessage } })
+    await saveConfig.mutateAsync({
+      toggles: settings,
+      sla: slaHours,
+      workingHours: limitQueue
+        ? { enabled: true, ...workingHours, awayMessage }
+        : { enabled: false, awayMessage },
+    })
     setSaved(true)
     setTimeout(() => setSaved(false), 2000)
   }
@@ -146,8 +155,16 @@ export function InboxSettingsPage() {
               <h2 className="text-sm font-semibold text-[var(--text-primary)]">Working Hours</h2>
             </div>
             <Card>
-              <p className="text-xs text-[var(--text-muted)] mb-3">The first customer message outside this window gets a single away reply on web chat and WhatsApp. Later messages still reach the bot.</p>
-              <div className="grid grid-cols-3 gap-4">
+              <p className="text-xs text-[var(--text-muted)] mb-3">The bot answers 24/7. Turn this on when the queue should follow office hours. The bot keeps answering outside that window.</p>
+              <ToggleRow
+                label="Limit the queue to working hours"
+                description="People and the queue clock use this window. Leave it off for a round-the-clock queue."
+                value={limitQueue}
+                onChange={setLimitQueue}
+              />
+              {limitQueue && (
+              <>
+              <div className="grid grid-cols-3 gap-4 mt-4">
                 <div>
                   <label className="text-xs font-medium text-[var(--text-muted)] mb-1.5 block">Start time</label>
                   <input type="time" value={workingHours.start} onChange={(e) => setWorkingHours((p) => ({ ...p, start: e.target.value }))}
@@ -169,7 +186,7 @@ export function InboxSettingsPage() {
                 </div>
               </div>
               <div className="mt-4">
-                <label className="text-xs font-medium text-[var(--text-muted)] mb-1.5 block">Away message</label>
+                <label className="text-xs font-medium text-[var(--text-muted)] mb-1.5 block">Note for the queue</label>
                 <textarea
                   rows={3}
                   value={awayMessage}
@@ -177,6 +194,8 @@ export function InboxSettingsPage() {
                   className="w-full rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--bg-overlay)] px-3 py-2 text-sm text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--accent)]/40"
                 />
               </div>
+              </>
+              )}
             </Card>
           </section>
 

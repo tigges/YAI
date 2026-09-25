@@ -159,6 +159,7 @@ export async function runFlowIfPublished(opts: {
   if (visible) {
     const finished = finishBotLines(outcome.messages, named.contact, named.spoken, {
       waiting: outcome.session.status === 'waiting_input',
+      conversationId,
     })
     outcome = { ...outcome, messages: finished.lines }
     if (named.contact?.id && finished.metadata) {

@@ -1,8 +1,7 @@
 import { prisma } from '@ybot/db'
 import { NAME_QUESTION, fillNameTokens, spokenFirstName, usableContactName } from '@ybot/shared'
 
-const ASKED = 'nameAsked'
-const AWAITING = 'awaitingName'
+const CHAT_NAME = 'chatName'
 
 export interface VisitorName {
   id?: string
@@ -24,16 +23,47 @@ export function contactMeta(value: unknown): Record<string, unknown> {
   return { ...(value as Record<string, unknown>) }
 }
 
+interface ChatNameState {
+  conversationId: string
+  spoken?: string
+  nameAsked?: boolean
+  awaitingName?: boolean
+}
+
+/** A name belongs to this conversation only. A stored contact name does not open the next chat. */
+function chatName(meta: Record<string, unknown>, conversationId: string): ChatNameState {
+  const raw = meta[CHAT_NAME]
+  if (!conversationId || !raw || typeof raw !== 'object' || Array.isArray(raw)) return { conversationId }
+  const row = raw as Record<string, unknown>
+  if (row['conversationId'] !== conversationId) return { conversationId }
+  return {
+    conversationId,
+    spoken: typeof row['spoken'] === 'string' ? row['spoken'] : undefined,
+    nameAsked: row['nameAsked'] === true,
+    awaitingName: row['awaitingName'] === true,
+  }
+}
+
+function rememberChat(meta: Record<string, unknown>, state: ChatNameState): Record<string, unknown> {
+  return { ...meta, [CHAT_NAME]: state }
+}
+
 /**
  * What this visitor line does to the name.
- * A real name is kept. "Hi" is not a name. We ask once, then carry on.
+ * A real name given in this chat is kept. A name from an earlier chat is not.
+ * "Hi" is not a name. We ask once, then carry on.
  */
-export function planNameTurn(contact: VisitorName | null | undefined, userText: string): NamePlan {
+export function planNameTurn(
+  contact: VisitorName | null | undefined,
+  userText: string,
+  conversationId = '',
+): NamePlan {
   const meta = contactMeta(contact?.metadata)
-  const known = spokenFirstName(contact?.displayName)
+  const state = chatName(meta, conversationId)
+  const known = spokenFirstName(state.spoken)
   if (known) return { spoken: known }
 
-  if (meta[AWAITING] === true) {
+  if (state.awaitingName) {
     const given = usableContactName(userText)
     if (given) {
       const first = given.split(' ')[0]!
@@ -41,10 +71,13 @@ export function planNameTurn(contact: VisitorName | null | undefined, userText: 
         spoken: first,
         thanks: `Thanks, ${first}.`,
         displayName: given,
-        metadata: { ...meta, [AWAITING]: false, [ASKED]: true },
+        metadata: rememberChat(meta, { conversationId, spoken: first, nameAsked: true, awaitingName: false }),
       }
     }
-    return { spoken: 'there', metadata: { ...meta, [AWAITING]: false } }
+    return {
+      spoken: 'there',
+      metadata: rememberChat(meta, { conversationId, nameAsked: true, awaitingName: false }),
+    }
   }
 
   const openedWith = usableContactName(userText)
@@ -53,7 +86,7 @@ export function planNameTurn(contact: VisitorName | null | undefined, userText: 
     return {
       spoken: first,
       displayName: openedWith,
-      metadata: { ...meta, [ASKED]: true, [AWAITING]: false },
+      metadata: rememberChat(meta, { conversationId, spoken: first, nameAsked: true, awaitingName: false }),
     }
   }
 
@@ -69,18 +102,23 @@ export function finishBotLines(
   lines: string[],
   contact: VisitorName | null | undefined,
   spoken: string,
-  options?: { waiting?: boolean },
+  options?: { waiting?: boolean; conversationId?: string },
 ): { lines: string[]; metadata?: Record<string, unknown> } {
   const cleaned = lines.map((line) => fillNameTokens(line, spoken))
   const meta = contactMeta(contact?.metadata)
-  const known = spokenFirstName(spoken) ?? spokenFirstName(contact?.displayName)
-  if (known || meta[ASKED] === true || !contact?.id) return { lines: cleaned }
+  const state = chatName(meta, options?.conversationId ?? '')
+  const known = spokenFirstName(spoken) ?? spokenFirstName(state.spoken)
+  if (known || state.nameAsked || !contact?.id) return { lines: cleaned }
   if (!cleaned.some((line) => line.trim().length > 0)) return { lines: cleaned }
   if (cleaned.some((line) => line.includes(NAME_QUESTION))) return { lines: cleaned }
   if (options?.waiting) return { lines: cleaned }
   return {
     lines: [...cleaned, NAME_QUESTION],
-    metadata: { ...meta, [ASKED]: true, [AWAITING]: true },
+    metadata: rememberChat(meta, {
+      conversationId: options?.conversationId ?? '',
+      nameAsked: true,
+      awaitingName: true,
+    }),
   }
 }
 
@@ -104,7 +142,7 @@ export async function takeNameTurn(conversationId: string, userText: string): Pr
     select: { contact: { select: { id: true, displayName: true, metadata: true } } },
   })
   const contact = convo?.contact ?? null
-  const plan = planNameTurn(contact, userText)
+  const plan = planNameTurn(contact, userText, conversationId)
   if (contact?.id && (plan.displayName || plan.metadata)) {
     await saveContactName(contact.id, plan).catch(() => {})
   }

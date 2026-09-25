@@ -14,7 +14,6 @@ import type { LlmMessage } from '@ybot/llm'
 import { readFile } from 'node:fs/promises'
 import { triggerRules } from '../lib/automation-engine.js'
 import { resolve, dirname } from 'node:path'
-import { usableContactName } from '../lib/contact-name.js'
 import { finishBotLines, saveContactName, takeNameTurn } from '../lib/visitor-name.js'
 import { fillNameTokens } from '@ybot/shared'
 import { proposeDraftFlows, textMightStartDraft } from '../lib/draft-flows.js'
@@ -79,16 +78,6 @@ const WIDGET_INLINE_JS = /* js */`
   if(script){try{var u=new URL(script.src);API_BASE=u.protocol+'//'+u.host+'/api/v1';}catch(e){}}
   var ACCENT=window.YBotAccentColor||'#6366f1';
   var TITLE=window.YBotTitle||'Chat with us';
-  // A name saved earlier in this tab is passed through. The published flow speaks first.
-  function looksLikeName(text){
-    var t=String(text||'').trim().replace(/\\s+/g,' ');
-    if(!t||t.length>40)return false;
-    if(/^(visitor|guest|there)$/i.test(t))return false;
-    if(/^(hi|hello|hey|hiya|yo|good morning|good afternoon|good evening)[!?.\\s]*$/i.test(t))return false;
-    return /^[\\p{L}][\\p{L}'’.\\-]*(?: [\\p{L}][\\p{L}'’.\\-]*){0,2}$/u.test(t);
-  }
-  var visitorName=sessionStorage.getItem('ybot_vname')||'';
-  if(visitorName&&!looksLikeName(visitorName)){visitorName='';sessionStorage.removeItem('ybot_vname');}
   var conversationId=null;
   var sessionId='ws_'+Date.now()+'_'+Math.random().toString(36).slice(2);
   var open=false,messages=[],loading=false;
@@ -160,7 +149,6 @@ const WIDGET_INLINE_JS = /* js */`
     var body={sessionId:sessionId,history:hist};
     if(conversationId)body.conversationId=conversationId;
     if(opening)body.opening=true; else body.message=text;
-    if(visitorName)body.visitorName=visitorName;
     var res=await fetch(API_BASE+'/public/chat/'+channelId,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
     if(!res.ok||!res.body){updMsg(bi,'Sorry, something went wrong. ('+res.status+')');return;}
     var reader=res.body.getReader(),dec=new TextDecoder(),buf='',botText='';
@@ -447,15 +435,11 @@ export async function widgetRoutes(app: FastifyInstance) {
       if (env) {
         // Upsert an anonymous contact keyed by sessionId
         const sessionId = body.sessionId ?? `anon_${Date.now()}`
-        const displayName = usableContactName(body.visitorName) ?? 'Visitor'
         let contact = await prisma.contact.findFirst({ where: { tenantId, externalId: sessionId } })
         if (!contact) {
           contact = await prisma.contact.create({
-            data: { tenantId, externalId: sessionId, displayName, channelId },
+            data: { tenantId, externalId: sessionId, displayName: 'Visitor', channelId },
           })
-        } else if (contact.displayName === 'Visitor' && displayName !== 'Visitor') {
-          // Upgrade "Visitor" to the real name once the user provides it
-          await prisma.contact.update({ where: { id: contact.id }, data: { displayName } })
         }
         const open = await prisma.conversation.findFirst({
           where: { tenantId, channelId, contactId: contact.id, status: 'active' },
@@ -583,7 +567,9 @@ export async function widgetRoutes(app: FastifyInstance) {
       send({ chunk: "I'm sorry, something went wrong. Please try again." })
     }
     if (named) {
-      const finished = finishBotLines([fullText], named.contact, named.spoken)
+      const finished = finishBotLines([fullText], named.contact, named.spoken, {
+        conversationId: conversationId ?? undefined,
+      })
       const next = finished.lines.filter((line) => line.trim().length > 0).join('\n\n')
       if (next.startsWith(fullText) && next.length > fullText.length) send({ chunk: next.slice(fullText.length) })
       fullText = next

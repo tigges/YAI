@@ -6,8 +6,8 @@
  *
  * First response is met by the first outbound reply (bot, agent, or the away message).
  * Resolution is met when the conversation is resolved or closed before resolutionDueAt.
- * Outside working hours the SLA clock still starts. The bot keeps answering;
- * the away sentence is for a human handover, not a substitute for the bot.
+ * The bot answers 24/7. Working hours are off until a queue window is saved.
+ * That window is for people and the queue clock. It does not replace the bot.
  */
 
 import { prisma } from '@ybot/db'
@@ -17,6 +17,8 @@ export const DEFAULT_AWAY_MESSAGE =
   "Thanks for your message. We're currently outside our working hours and will reply when the team is back."
 
 export interface WorkingHours {
+  /** False until someone limits the queue. The bot answers either way. */
+  enabled: boolean
   start: string
   end: string
   timezone: string
@@ -31,6 +33,7 @@ export interface InboxPolicy {
 export const DEFAULT_POLICY: InboxPolicy = {
   sla: { firstResponseHours: 1, resolutionHours: 24 },
   workingHours: {
+    enabled: false,
     start: '09:00',
     end: '18:00',
     timezone: 'Europe/London',
@@ -60,14 +63,18 @@ export function parseInboxPolicy(raw: unknown): InboxPolicy {
   const away = typeof hours['awayMessage'] === 'string' && hours['awayMessage'].trim()
     ? hours['awayMessage'].trim()
     : DEFAULT_AWAY_MESSAGE
+  const start = clock(hours['start'])
+  const end = clock(hours['end'])
+  const enabled = hours['enabled'] === false ? false : start != null && end != null
   return {
     sla: {
       firstResponseHours: positiveHours(sla['first_response'], DEFAULT_POLICY.sla.firstResponseHours),
       resolutionHours: positiveHours(sla['resolution'], DEFAULT_POLICY.sla.resolutionHours),
     },
     workingHours: {
-      start: clockOr(hours['start'], DEFAULT_POLICY.workingHours.start),
-      end: clockOr(hours['end'], DEFAULT_POLICY.workingHours.end),
+      enabled,
+      start: start ?? DEFAULT_POLICY.workingHours.start,
+      end: end ?? DEFAULT_POLICY.workingHours.end,
       timezone: typeof hours['timezone'] === 'string' && hours['timezone'] ? hours['timezone'] : DEFAULT_POLICY.workingHours.timezone,
       awayMessage: away,
     },
@@ -75,6 +82,7 @@ export function parseInboxPolicy(raw: unknown): InboxPolicy {
 }
 
 export function isWithinWorkingHours(hours: WorkingHours, now: Date): boolean {
+  if (!hours.enabled) return true
   const start = clockMinutes(hours.start)
   const end = clockMinutes(hours.end)
   if (start == null || end == null || start === end) return true
@@ -215,8 +223,8 @@ function positiveHours(value: unknown, fallback: number): number {
   return Number.isFinite(n) && n > 0 ? n : fallback
 }
 
-function clockOr(value: unknown, fallback: string): string {
-  return typeof value === 'string' && clockMinutes(value) != null ? value : fallback
+function clock(value: unknown): string | null {
+  return typeof value === 'string' && clockMinutes(value) != null ? value : null
 }
 
 function clockMinutes(value: string): number | null {

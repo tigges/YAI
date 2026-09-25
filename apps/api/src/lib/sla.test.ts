@@ -7,10 +7,21 @@ const policy: InboxPolicy = parseInboxPolicy({
   workingHours: { start: '09:00', end: '18:00', timezone: 'Europe/London', awayMessage: 'Away now' },
 })
 
+test('a bot with no queue hours stays open around the clock', () => {
+  const open = parseInboxPolicy({})
+  assert.equal(open.workingHours.enabled, false)
+  assert.equal(isWithinWorkingHours(open.workingHours, new Date('2026-09-22T02:00:00Z')), true)
+  assert.equal(isWithinWorkingHours(open.workingHours, new Date('2026-09-22T19:30:00Z')), true)
+  const turnedOff = parseInboxPolicy({ workingHours: { enabled: false, start: '09:00', end: '18:00', timezone: 'Europe/London' } })
+  assert.equal(turnedOff.workingHours.enabled, false)
+  assert.equal(isWithinWorkingHours(turnedOff.workingHours, new Date('2026-09-22T19:30:00Z')), true)
+})
+
 test('parses inbox settings and keeps a custom away message', () => {
   assert.equal(policy.sla.firstResponseHours, 1)
   assert.equal(policy.sla.resolutionHours, 24)
   assert.equal(policy.workingHours.awayMessage, 'Away now')
+  assert.equal(policy.workingHours.enabled, true)
 })
 
 test('treats London office hours in September as open at 11:00 and closed at 20:30', () => {
