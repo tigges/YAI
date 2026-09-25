@@ -12,9 +12,9 @@ import { SessionMachine } from '@ybot/runtime'
 import type { Session, SessionVariables, FlowGraph } from '@ybot/runtime'
 import { prisma } from '@ybot/db'
 import { createLlmAdapter, createLlmAdapterForModel } from '@ybot/llm'
-import { usableContactName } from './contact-name.js'
 import { pickEntry } from './entry-flow.js'
 import { runFlowTurn } from './flow-turn.js'
+import { finishBotLines, saveContactName, takeNameTurn } from './visitor-name.js'
 
 const defaultLlm = createLlmAdapter({
   provider: (process.env['LLM_PROVIDER'] as 'openai' | 'anthropic' | 'groq' | 'ollama' | 'gemini') ?? 'openai',
@@ -44,11 +44,6 @@ function startNodeId(graph: FlowGraph): string | undefined {
   return graph.nodes.find((node) => node.data.kind === 'trigger_start' || node.data.kind === 'start')?.id
 }
 
-function spoken(name: string | null | undefined): string {
-  const usable = usableContactName(name)
-  return usable ? usable.split(' ')[0]! : 'there'
-}
-
 export async function runFlowIfPublished(opts: {
   conversationId: string
   botId: string
@@ -56,10 +51,12 @@ export async function runFlowIfPublished(opts: {
   userText: string
 }): Promise<FlowRunResult> {
   const { conversationId, botId, tenantId, userText } = opts
+  const named = await takeNameTurn(conversationId, userText)
+  if (named.thanks) return { handled: true, messages: [named.thanks] }
 
   const convo = await prisma.conversation.findFirst({
     where: { id: conversationId },
-    select: { environmentId: true, subject: true, contact: { select: { displayName: true } } },
+    select: { environmentId: true, subject: true },
   })
   const envId = convo?.environmentId
   if (!envId) return { handled: false, messages: [] }
@@ -83,7 +80,7 @@ export async function runFlowIfPublished(opts: {
     botId,
     tenantId,
     userText,
-    contactName: spoken(convo?.contact?.displayName),
+    contactName: named.spoken,
   })
   if (!first) return { handled: false, messages: [] }
 
@@ -110,7 +107,7 @@ export async function runFlowIfPublished(opts: {
         botId,
         tenantId,
         userText,
-        contactName: spoken(convo?.contact?.displayName),
+        contactName: named.spoken,
       })
       if (jumped) {
         version = target
@@ -123,6 +120,13 @@ export async function runFlowIfPublished(opts: {
   }
 
   const visible = outcome.messages.some((message) => message.trim().length > 0)
+  if (visible) {
+    const finished = finishBotLines(outcome.messages, named.contact, named.spoken)
+    outcome = { ...outcome, messages: finished.lines }
+    if (named.contact?.id && finished.metadata) {
+      await saveContactName(named.contact.id, { metadata: finished.metadata }).catch(() => {})
+    }
+  }
   if (!visible && !outcome.handover) {
     await prisma.flowSession.delete({ where: { conversationId } }).catch(() => {})
     return { handled: false, messages: [] }

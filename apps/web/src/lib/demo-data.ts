@@ -134,6 +134,19 @@ const ago = (mins: number) => new Date(Date.now() - mins * 60_000).toISOString()
 
 export const DEMO_CONVERSATIONS: Conversation[] = [
   {
+    id: 'c0', status: 'active', assignedTo: undefined,
+    contact: { id: 'ct0', displayName: 'hi', metadata: {}, createdAt: ago(30) },
+    channel: { id: 'ch1', name: 'Web Widget', kind: 'web' },
+    // Stored the way an older welcome saved it. The inbox must say "there", never the braces.
+    messages: [
+      { id: 'm0a', direction: 'inbound', authorKind: 'user', content: { text: 'hi' }, createdAt: ago(4) },
+      { id: 'm0b', direction: 'outbound', authorKind: 'bot', content: { text: 'Hi {{contact.name}}! 👋 Welcome to Bella Hair Studio. How can I help you today? What do you need help with?' }, createdAt: ago(4) },
+      { id: 'm0c', direction: 'outbound', authorKind: 'bot', content: { text: "What's your name?" }, createdAt: ago(3) },
+    ],
+    labels: [],
+    updatedAt: ago(4),
+  },
+  {
     id: 'c1', status: 'active', assignedTo: 'sarah',
     contact: { id: 'ct1', displayName: 'Alice Johnson', email: 'alice@example.com', phone: '+44 7700 100001', metadata: { company: 'Startup Ltd', vip: true }, createdAt: ago(120) },
     channel: { id: 'ch1', name: 'Web Widget', kind: 'web' },

@@ -16,6 +16,8 @@ import { SessionMachine } from '@ybot/runtime'
 import type { Session, ExecutionServices } from '@ybot/runtime'
 import { createLlmAdapter, createEmbeddingAdapter } from '@ybot/llm'
 import type { LlmMessage } from '@ybot/llm'
+import { fillNameTokens } from '@ybot/shared'
+import { finishBotLines, saveContactName, takeNameTurn, type NamePlan, type VisitorName } from './lib/visitor-name.js'
 
 const llm = createLlmAdapter()
 const embedAdapter = createEmbeddingAdapter()
@@ -141,6 +143,7 @@ async function handleDirectLlm(
   botId: string,
   botName: string,
   incomingText: string,
+  named: NamePlan & { contact: VisitorName | null },
 ): Promise<void> {
   const [config, context, history] = await Promise.all([
     loadBotConfig(botId, botName),
@@ -162,8 +165,9 @@ async function handleDirectLlm(
 
   let fullContent = ''
   const onChunk = (chunk: string) => {
-    fullContent += chunk
-    app.broadcastToTenant(tenantId, { event: 'message.chunk', data: { conversationId, chunk } })
+    const clean = fillNameTokens(chunk, named.spoken)
+    fullContent += clean
+    app.broadcastToTenant(tenantId, { event: 'message.chunk', data: { conversationId, chunk: clean } })
   }
 
   await llm.stream({
@@ -177,6 +181,11 @@ async function handleDirectLlm(
 
   if (!fullContent.trim()) {
     fullContent = "I'm sorry, I couldn't find a good answer for that right now."
+  }
+  const finished = finishBotLines([fullContent], named.contact, named.spoken)
+  fullContent = finished.lines.join('\n\n')
+  if (named.contact?.id && finished.metadata) {
+    await saveContactName(named.contact.id, { metadata: finished.metadata }).catch(() => {})
   }
 
   const saved = await prisma.message.create({
@@ -209,13 +218,22 @@ export async function processInboundMessage(
     })
     if (!convo?.bot) return
 
+    const named = await takeNameTurn(conversationId, incomingText)
+    if (named.thanks) {
+      const saved = await prisma.message.create({
+        data: { tenantId, conversationId, direction: 'outbound', authorKind: 'bot', content: { text: named.thanks } },
+      })
+      app.broadcastToTenant(tenantId, { event: 'message.created', data: saved })
+      return
+    }
+
     const flow = convo.bot.flows?.[0]
     const version = flow?.versions?.[0]
     const botId = convo.botId ?? convo.bot.id
 
     // ── No published flow → direct RAG + LLM path ──────────────────────────
     if (!flow || !version?.graph) {
-      await handleDirectLlm(app, conversationId, tenantId, botId, convo.bot.name, incomingText)
+      await handleDirectLlm(app, conversationId, tenantId, botId, convo.bot.name, incomingText, named)
       return
     }
 
@@ -235,13 +253,14 @@ export async function processInboundMessage(
         flowId: flow.id,
         flowVersionId: version.id,
         currentNodeId: startNode.id,
-        variables: { flow: { last_user_message: incomingText }, global: {}, contact: {} },
+        variables: { flow: { last_user_message: incomingText }, global: {}, contact: { name: named.spoken } },
         status: 'running',
         createdAt: new Date(),
         updatedAt: new Date(),
       }
     } else {
       session.variables.flow['last_user_message'] = incomingText
+      session.variables.contact = { ...session.variables.contact, name: named.spoken }
     }
 
     const machine = new SessionMachine(buildServices())
@@ -251,9 +270,18 @@ export async function processInboundMessage(
     }
     const result = await machine.run(session, graph, incomingText, flowStreamChunk)
 
-    for (const msg of result.newMessages) {
+    const finished = finishBotLines(
+      result.newMessages.map((msg) => msg.content.text),
+      named.contact,
+      named.spoken,
+    )
+    if (named.contact?.id && finished.metadata) {
+      await saveContactName(named.contact.id, { metadata: finished.metadata }).catch(() => {})
+    }
+    for (const text of finished.lines) {
+      if (!text.trim()) continue
       const saved = await prisma.message.create({
-        data: { tenantId, conversationId, direction: 'outbound', authorKind: 'bot', content: msg.content },
+        data: { tenantId, conversationId, direction: 'outbound', authorKind: 'bot', content: { text } },
       })
       app.broadcastToTenant(tenantId, { event: 'message.created', data: saved })
     }

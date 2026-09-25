@@ -7,6 +7,8 @@
 
 import { prisma } from '@ybot/db'
 import { onInboundCustomerMessage, onOutboundReply } from './sla.js'
+import { finishBotLines, saveContactName, takeNameTurn } from './visitor-name.js'
+import { fillNameTokens } from '@ybot/shared'
 import { createLlmAdapter, createLlmAdapterForModel, createEmbeddingAdapter } from '@ybot/llm'
 import type { LlmMessage } from '@ybot/llm'
 
@@ -102,6 +104,15 @@ export async function getBotReply(params: BotReplyParams): Promise<BotReplyResul
     await onInboundCustomerMessage({ conversationId, botId }).catch(() => null)
   }
 
+  const named = conversationId ? await takeNameTurn(conversationId, userText) : null
+  if (named?.thanks && conversationId) {
+    await prisma.message.create({
+      data: { tenantId, conversationId, direction: 'outbound', authorKind: 'bot', content: { text: named.thanks } },
+    }).catch(() => {})
+    await onOutboundReply(conversationId).catch(() => {})
+    return { reply: named.thanks, conversationId }
+  }
+
   // ── LLM config ────────────────────────────────────────────────────────────
   const cfg = await prisma.botConfig.findUnique({ where: { botId } }).catch(() => null)
   const systemPromptBase = cfg?.systemPrompt ?? `You are a helpful assistant for ${bot.name}. Answer using the knowledge base context.`
@@ -139,6 +150,14 @@ export async function getBotReply(params: BotReplyParams): Promise<BotReplyResul
   } catch (err) {
     console.error('[bot-engine] LLM error:', err)
     reply = "I'm sorry, something went wrong. Please try again."
+  }
+
+  if (named) {
+    const finished = finishBotLines([fillNameTokens(reply, named.spoken)], named.contact, named.spoken)
+    reply = finished.lines.join('\n\n')
+    if (named.contact?.id && finished.metadata) {
+      await saveContactName(named.contact.id, { metadata: finished.metadata }).catch(() => {})
+    }
   }
 
   // ── Save bot reply ────────────────────────────────────────────────────────

@@ -18,6 +18,7 @@ import { useContacts, useCreateContact, useUpdateContact, useDeleteContact, useC
 import { useAppStore } from '../../store/app'
 import { useNavigate } from '@tanstack/react-router'
 import { useQueryClient } from '@tanstack/react-query'
+import { chatText } from '../../lib/chat-text'
 import { claimContact, queueChat } from '../../lib/inbox-nav'
 import * as api from '../../lib/api'
 
@@ -138,7 +139,7 @@ function ContactDetail({ contact, onClose, onOpenChat, onStart, starting }: Cont
                 <CheckCircle2 size={14} className={c.status === 'resolved' ? 'text-[var(--success)]' : 'text-[var(--accent)]'} />
                 <div className="flex-1 min-w-0">
                   <p className="text-sm text-[var(--text-primary)] truncate">
-                    {c.messages?.[0]?.content?.text ?? 'Conversation'}
+                    {chatText(c.messages?.[0]?.content?.text, contact.name) || 'Conversation'}
                   </p>
                   <p className="text-xs text-[var(--text-muted)] capitalize">{c.status} · {new Date(c.updatedAt).toLocaleDateString()}</p>
                   {channel?.name && (
