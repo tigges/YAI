@@ -30,7 +30,7 @@ import { NodePalette } from '../../../components/canvas/NodePalette'
 import { NodeConfigPanel } from '../../../components/canvas/NodeConfigPanel'
 import { ChatWidget } from '../../../components/ChatWidget'
 import type { FlowNodeData } from '../../../components/canvas/FlowNode'
-import type { NodeKind } from '@ybot/shared'
+import { versionForEnvironment, type NodeKind } from '@ybot/shared'
 
 let nodeIdCounter = 1
 function newId() {
@@ -163,21 +163,38 @@ export function FlowCanvasPage() {
   const [saving, setSaving] = useState(false)
   const { data: flows } = useFlows()
   const flow = (flows ?? []).find((item) => item.id === flowId)
-  const canvasVersion = flow?.versions[0]?.version ?? 0
+  const envLabel = selectedEnv === 'production' ? 'Production' : 'Sandbox'
+  const shown = versionForEnvironment(flow?.versions, environmentId, selectedEnv)
+  const canvasVersion = shown?.version ?? 0
 
   const saveCanvas = useSaveCanvas()
   // Load the latest saved version. Welcome & Routing lives on version 2.
   const { data: savedCanvas } = useFlowCanvas(flowId ?? '', canvasVersion)
+  const activeCanvas = savedCanvas?.version === canvasVersion
+    ? savedCanvas
+    : shown?.graph
+      ? { version: shown.version, status: shown.status, graph: shown.graph }
+      : undefined
   const loadedGraph = useRef<string | null>(null)
   React.useEffect(() => {
-    if (!savedCanvas?.graph?.nodes?.length) return
-    const key = JSON.stringify(savedCanvas.graph)
+    if (!activeCanvas?.graph?.nodes?.length) {
+      if (loadedGraph.current !== 'empty') {
+        loadedGraph.current = 'empty'
+        setNodes([])
+        setEdges([])
+        if (canvasVersion === 0) setStatus('draft')
+      }
+      return
+    }
+    const key = `${activeCanvas.version}:${JSON.stringify(activeCanvas.graph)}`
     if (loadedGraph.current === key) return
     loadedGraph.current = key
-    setNodes(savedCanvas.graph.nodes.map((n, index) => normalizeCanvasNode(n as Node, index)))
-    setEdges((savedCanvas.graph.edges as Edge[]).map(normalizeCanvasEdge))
-    setStatus(savedCanvas.status as 'draft' | 'saved' | 'published')
-  }, [savedCanvas, setNodes, setEdges])
+    historyPast.current = []
+    historyFuture.current = []
+    setNodes(activeCanvas.graph.nodes.map((n, index) => normalizeCanvasNode(n as Node, index)))
+    setEdges((activeCanvas.graph.edges as Edge[]).map(normalizeCanvasEdge))
+    setStatus(activeCanvas.status as 'draft' | 'saved' | 'published')
+  }, [activeCanvas, canvasVersion, setNodes, setEdges])
 
   const [showTestPanel, setShowTestPanel] = useState(false)
   const [checkOpen, setCheckOpen] = useState(false)
@@ -350,7 +367,7 @@ export function FlowCanvasPage() {
         version: canvasVersion,
         graph: { nodes: graph.nodes as unknown as import('../../../lib/api').FlowNode[], edges: graph.edges as unknown as import('../../../lib/api').FlowEdge[] },
       })
-      await publishFlow.mutateAsync({ flowId: flowId ?? '', environmentId })
+      await publishFlow.mutateAsync({ flowId: flowId ?? '', environmentId, version: canvasVersion })
       setStatus('published')
       setSaving(false)
       setCheckOpen(false)
@@ -410,7 +427,7 @@ export function FlowCanvasPage() {
                 {flow?.name ?? 'Flow'}
               </button>
             )}
-            <p className="text-xs text-[var(--text-muted)]">{canvasVersion > 0 ? `v${canvasVersion}` : 'Loading…'}</p>
+            <p className="text-xs text-[var(--text-muted)]">{canvasVersion > 0 ? `${envLabel} · v${canvasVersion}` : `${envLabel} · not published`}</p>
           </div>
           <Badge
             variant={status === 'published' ? 'success' : status === 'saved' ? 'info' : 'muted'}
@@ -431,7 +448,7 @@ export function FlowCanvasPage() {
           <Button variant="ghost" size="icon-sm" title={`Undo (${selectedEnv})`} onClick={undo}><Undo2 size={14} /></Button>
           <Button variant="ghost" size="icon-sm" title="Redo" onClick={redo}><Redo2 size={14} /></Button>
           <div className="h-4 w-px bg-[var(--border)]" />
-          <Button variant="ghost" size="sm" onClick={handleSave} disabled={saving}>
+          <Button variant="ghost" size="sm" onClick={handleSave} disabled={saving || canvasVersion === 0}>
             <Save size={13} /> {saving ? 'Saving…' : 'Save'}
           </Button>
           <Button
@@ -444,7 +461,7 @@ export function FlowCanvasPage() {
           <Button variant="ghost" size="sm" onClick={() => setCheckOpen(true)}>
             Check
           </Button>
-          <Button size="sm" onClick={handlePublish} disabled={saving || !environmentId}>
+          <Button size="sm" onClick={handlePublish} disabled={saving || !environmentId || canvasVersion === 0}>
             <Share2 size={13} /> Publish
           </Button>
         </div>
@@ -456,10 +473,22 @@ export function FlowCanvasPage() {
 
         <div
           ref={reactFlowWrapper}
-          className="flex-1 overflow-hidden"
+          className="relative flex-1 overflow-hidden"
           onDrop={handleDrop}
           onDragOver={(e) => e.preventDefault()}
         >
+          {canvasVersion === 0 && (
+            <div className="absolute inset-0 z-10 flex items-center justify-center bg-[var(--bg-base)] px-6">
+              <div className="max-w-sm text-center">
+                <p className="text-sm font-medium text-[var(--text-primary)]">Nothing is published to {envLabel} yet.</p>
+                <p className="mt-1 text-xs text-[var(--text-secondary)]">
+                  {selectedEnv === 'production'
+                    ? 'Switch to Sandbox to open the working copy.'
+                    : 'This flow has no Sandbox version to edit.'}
+                </p>
+              </div>
+            </div>
+          )}
           <ReactFlow
             nodes={nodes}
             edges={edges}

@@ -4,6 +4,8 @@
  * at copy time. Each company keeps its own copy.
  */
 
+import { SAMPLE_ORDER_QUESTION, SAMPLE_ORDER_REPLY, SAMPLE_ORDER_NUMBER } from './sample-order.js'
+
 export interface StarterFlow {
   name: string
   description: string
@@ -190,16 +192,21 @@ export function starterFlows(companyName: string): StarterFlow[] {
       graph: {
         nodes: [
           { id: 's1', type: 'flow-node', position: { x: 80, y }, data: { kind: 'trigger_start', label: 'Order Status Trigger', config: {} } },
-          { id: 's2', type: 'flow-node', position: { x: 280, y }, data: { kind: 'ask_question', label: 'Ask order number', config: { question: 'Please share your order number so I can look it up.', variable: 'order_number' } } },
-          { id: 's3', type: 'flow-node', position: { x: 480, y }, data: { kind: 'http_request', label: 'Fetch order', config: { method: 'GET', url: 'https://api.acme.com/orders/{{order_number}}', headers: {} } } },
-          { id: 's4', type: 'flow-node', position: { x: 680, y }, data: { kind: 'condition', label: 'Order found?', config: { conditions: [{ field: 'ok', operator: 'equals', value: 'true' }] } } },
-          { id: 's5', type: 'flow-node', position: { x: 880, y: 60 }, data: { kind: 'send_message', label: 'Order details', config: { text: 'Order {{order_number}} came back with status {{status}}.' } } },
-          { id: 's6', type: 'flow-node', position: { x: 880, y: 200 }, data: { kind: 'handover', label: 'Escalate to agent', config: { team: 'support', priority: 'medium' } } },
-          { id: 's7', type: 'flow-node', position: { x: 1080, y }, data: { kind: 'end_flow', label: 'End', config: {} } },
+          { id: 's2', type: 'flow-node', position: { x: 300, y }, data: { kind: 'ask_question', label: 'Ask order number', config: { question: SAMPLE_ORDER_QUESTION, variable: 'order_number' } } },
+          { id: 'sample-order', type: 'flow-node', position: { x: 540, y }, data: { kind: 'condition', label: 'Sample order?', config: { conditions: [{ field: 'order_number', operator: 'equals', value: SAMPLE_ORDER_NUMBER }] } } },
+          { id: 'sample-reply', type: 'flow-node', position: { x: 780, y: y - 140 }, data: { kind: 'send_message', label: 'Sample order', config: { text: SAMPLE_ORDER_REPLY } } },
+          { id: 's3', type: 'flow-node', position: { x: 780, y: y + 140 }, data: { kind: 'http_request', label: 'Fetch order', config: { method: 'GET', url: 'https://api.acme.com/orders/{{order_number}}', headers: {} } } },
+          { id: 's4', type: 'flow-node', position: { x: 1020, y: y + 140 }, data: { kind: 'condition', label: 'Order found?', config: { conditions: [{ field: 'ok', operator: 'equals', value: 'true' }] } } },
+          { id: 's5', type: 'flow-node', position: { x: 1260, y }, data: { kind: 'send_message', label: 'Order details', config: { text: 'Order {{order_number}} came back with status {{status}}.' } } },
+          { id: 's6', type: 'flow-node', position: { x: 1260, y: y + 220 }, data: { kind: 'handover', label: 'Escalate to agent', config: { team: 'support', priority: 'medium' } } },
+          { id: 's7', type: 'flow-node', position: { x: 1500, y }, data: { kind: 'end_flow', label: 'End', config: {} } },
         ],
         edges: [
           { id: 'e1', source: 's1', target: 's2' },
-          { id: 'e2', source: 's2', target: 's3' },
+          { id: 'e2', source: 's2', target: 'sample-order' },
+          { id: 'e-sample-yes', source: 'sample-order', target: 'sample-reply', sourceHandle: 'yes' },
+          { id: 'e-sample-no', source: 'sample-order', target: 's3', sourceHandle: 'no' },
+          { id: 'e-sample-end', source: 'sample-reply', target: 's7' },
           { id: 'e3', source: 's3', target: 's4' },
           { id: 'e4', source: 's4', sourceHandle: 'yes', target: 's5' },
           { id: 'e5', source: 's4', sourceHandle: 'no', target: 's6' },

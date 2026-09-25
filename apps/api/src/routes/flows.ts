@@ -3,7 +3,7 @@ import { requireRole } from '../middleware/auth.js'
 import { prisma } from '@ybot/db'
 import { z } from 'zod'
 import { attachDestination } from '../lib/welcome-routes.js'
-import { inspectFlowGraph } from '@ybot/shared'
+import { inspectFlowGraph, versionsForEnvironmentList } from '@ybot/shared'
 
 type JWT = { sub: string; tenantId: string; role: string }
 
@@ -17,10 +17,15 @@ export async function flowsRoutes(app: FastifyInstance) {
     const { botId } = request.params as { botId: string }
     const flows = await prisma.flow.findMany({
       where: { botId, tenantId },
-      include: { versions: { orderBy: { version: 'desc' }, take: 1 } },
+      include: { versions: { orderBy: { version: 'desc' } } },
       orderBy: { updatedAt: 'desc' },
     })
-    return { data: flows }
+    return {
+      data: flows.map((flow) => ({
+        ...flow,
+        versions: versionsForEnvironmentList(flow.versions),
+      })),
+    }
   })
 
   // POST /bots/:botId/flows
@@ -109,11 +114,14 @@ export async function flowsRoutes(app: FastifyInstance) {
   app.post('/:botId/flows/:flowId/publish', async (request, reply) => {
     const { tenantId } = request.user as JWT
     const { botId, flowId } = request.params as { botId: string; flowId: string }
-    const { environmentId } = request.body as { environmentId: string }
-
-    if (!environmentId) return reply.status(400).send({ error: { code: 'VALIDATION', message: 'environmentId is required' } })
+    const body = z.object({
+      environmentId: z.string().min(1),
+      version: z.number().int().positive().optional(),
+    }).safeParse(request.body)
+    if (!body.success) return reply.status(400).send({ error: { code: 'VALIDATION', message: 'environmentId is required' } })
+    const { environmentId, version } = body.data
     const latest = await prisma.flowVersion.findFirst({
-      where: { flowId, flow: { botId, tenantId } },
+      where: { flowId, flow: { botId, tenantId }, ...(version ? { version } : {}) },
       orderBy: { version: 'desc' },
     })
     if (!latest) return reply.status(404).send({ error: { code: 'NO_VERSION', message: 'No flow version found' } })

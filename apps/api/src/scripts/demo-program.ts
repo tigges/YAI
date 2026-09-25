@@ -10,6 +10,8 @@ import { prisma } from '@ybot/db'
 import bcrypt from 'bcryptjs'
 import { proposeDraftFlows } from '../lib/draft-flows.js'
 import { attachDestination, extendWelcomeGraph } from '../lib/welcome-routes.js'
+import { withSampleOrder } from '@ybot/shared'
+import { graphAction, publishedSource } from '../lib/copy-graphs.js'
 import { SUPPORT_USE_CASES, supportUseCaseFlows } from './starter-flows.js'
 
 const DEMO_PASSWORD = 'Demo1234!'
@@ -304,40 +306,83 @@ async function ensureSandboxUseCases() {
   return { status: 'ok' as const, published, renamed, routed }
 }
 
-async function copyRows(sourceBotId: string, tenantId: string, botId: string) {
+async function syncFlowCopies(sourceBotId: string, tenantId: string, botId: string) {
+  const [sourceEnvs, labEnvs, sourceFlows] = await Promise.all([
+    prisma.environment.findMany({ where: { botId: sourceBotId } }),
+    prisma.environment.findMany({ where: { botId } }),
+    prisma.flow.findMany({
+      where: { botId: sourceBotId },
+      include: { versions: { orderBy: { version: 'desc' } } },
+    }),
+  ])
   let flows = 0
-  const sourceFlows = await prisma.flow.findMany({
-    where: { botId: sourceBotId },
-    include: { versions: { orderBy: { version: 'desc' }, take: 1 } },
-  })
+  let updated = 0
   for (const source of sourceFlows) {
-    const found = await prisma.flow.findFirst({ where: { botId, name: source.name } })
-    if (found) continue
-    const version = source.versions[0]
-    if (!version) continue
-    const flow = await prisma.flow.create({
-      data: {
-        tenantId,
-        botId,
-        name: source.name,
-        description: source.description,
-        kind: source.kind,
-        tags: source.tags,
-      },
-    })
+    let labFlow = await prisma.flow.findFirst({ where: { botId, name: source.name } })
+    if (!labFlow) {
+      labFlow = await prisma.flow.create({
+        data: {
+          tenantId,
+          botId,
+          name: source.name,
+          description: source.description,
+          kind: source.kind,
+          tags: source.tags,
+        },
+      })
+      flows += 1
+    }
+    for (const kind of ['sandbox', 'production']) {
+      const sourceEnv = sourceEnvs.find((env) => env.kind === kind)
+      const labEnv = labEnvs.find((env) => env.kind === kind)
+      if (!sourceEnv || !labEnv) continue
+      const sourceVersion = publishedSource(source.versions, sourceEnv.id)
+      if (!sourceVersion) continue
+      const current = await prisma.flowVersion.findFirst({
+        where: { flowId: labFlow.id, status: 'published', environmentId: labEnv.id },
+        orderBy: { version: 'desc' },
+      })
+      const action = graphAction(current?.graph ?? null, sourceVersion.graph)
+      if (action === 'keep') continue
+      if (action === 'update' && current) {
+        await prisma.flowVersion.update({ where: { id: current.id }, data: { graph: sourceVersion.graph as object } })
+        updated += 1
+        continue
+      }
+      const latest = await prisma.flowVersion.findFirst({ where: { flowId: labFlow.id }, orderBy: { version: 'desc' } })
+      await prisma.flowVersion.create({
+        data: {
+          tenantId,
+          flowId: labFlow.id,
+          version: (latest?.version ?? 0) + 1,
+          status: 'published',
+          environmentId: labEnv.id,
+          graph: sourceVersion.graph as object,
+          publishedAt: new Date(),
+        },
+      })
+      updated += 1
+    }
+    const sourceDraft = source.versions.find((version) => version.status !== 'published')
+    if (!sourceDraft) continue
+    const labDraft = await prisma.flowVersion.findFirst({ where: { flowId: labFlow.id, status: { not: 'published' } } })
+    if (labDraft) continue
+    const latest = await prisma.flowVersion.findFirst({ where: { flowId: labFlow.id }, orderBy: { version: 'desc' } })
     await prisma.flowVersion.create({
       data: {
         tenantId,
-        flowId: flow.id,
-        version: 1,
-        status: version.status === 'published' ? 'published' : 'draft',
-        environmentId: version.status === 'published' ? 'acme-ref-env-production' : null,
-        graph: version.graph as object,
-        publishedAt: version.status === 'published' ? new Date() : null,
+        flowId: labFlow.id,
+        version: (latest?.version ?? 0) + 1,
+        status: 'draft',
+        graph: sourceDraft.graph as object,
       },
     })
-    flows += 1
   }
+  return { flows, updated }
+}
+
+async function copyRows(sourceBotId: string, tenantId: string, botId: string) {
+  const { flows, updated } = await syncFlowCopies(sourceBotId, tenantId, botId)
 
   let intents = 0
   for (const row of await prisma.intent.findMany({ where: { botId: sourceBotId } })) {
@@ -371,7 +416,7 @@ async function copyRows(sourceBotId: string, tenantId: string, botId: string) {
     }
     sources += 1
   }
-  return { flows, intents, faqs, sources }
+  return { flows, updated, intents, faqs, sources }
 }
 
 async function copySampleChats(sourceBotId: string, tenantId: string, botId: string) {
@@ -674,7 +719,29 @@ async function linkPublishedDrafts(botId: string) {
   return linked
 }
 
+async function ensureSampleOrderReply() {
+  const bot = await acmeBot()
+  if (!bot) return { status: 'skipped' as const }
+  const flows = await prisma.flow.findMany({
+    where: { botId: bot.id, name: 'Order Status' },
+    include: { versions: true },
+  })
+  let updated = 0
+  for (const flow of flows) {
+    for (const version of flow.versions) {
+      const raw = version.graph
+      if (!raw || typeof raw !== 'object' || !Array.isArray((raw as { nodes?: unknown }).nodes)) continue
+      const next = withSampleOrder(raw as { nodes: Array<{ id: string; data?: { kind?: string; config?: Record<string, unknown> } }>; edges: Array<{ id: string; source: string; target: string }> })
+      if (!next.changed) continue
+      await prisma.flowVersion.update({ where: { id: version.id }, data: { graph: next.graph as object } })
+      updated += 1
+    }
+  }
+  return { status: 'ok' as const, updated }
+}
+
 export async function applyDemoProgram() {
+  const sampleOrders = await ensureSampleOrderReply()
   const routing = await ensureSupportRouting()
   const useCases = await ensureSandboxUseCases()
   const reference = await copyAcmeIntoQaLab()
@@ -689,5 +756,5 @@ export async function applyDemoProgram() {
   if (acme) dashboard = await ensureDashboard('acme-ops-dashboard', acme.tenantId, acme.id, 'Live operations')
   const lab = await prisma.tenant.findUnique({ where: { slug: 'qa-lab' } })
   if (lab) await ensureDashboard('acme-ref-ops-dashboard', lab.id, REF_BOT_ID, 'Live operations')
-  return { routing, useCases, reference, synthetic, product, drafts, productDrafts, linked, productLinked, dashboard }
+  return { sampleOrders, routing, useCases, reference, synthetic, product, drafts, productDrafts, linked, productLinked, dashboard }
 }

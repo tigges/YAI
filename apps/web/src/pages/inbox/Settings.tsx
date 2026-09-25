@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react'
 import { Clock, Save, ToggleLeft, ToggleRight, Loader2, Users, Zap, MessageSquare } from 'lucide-react'
 import { Button, Card } from '@ybot/ui'
 import { SubNav } from '../../components/SubNav'
+import { PlannedBadge } from '../../components/PlannedFeature'
 import { useInboxConfig, useSaveInboxConfig } from '../../lib/hooks'
 
 const SUBNAV = [
@@ -12,6 +13,18 @@ const SUBNAV = [
 ]
 
 interface ToggleRowProps { label: string; description: string; value: boolean; onChange: (v: boolean) => void }
+function PlannedRow({ label, description }: { label: string; description: string }) {
+  return (
+    <div className="flex items-center justify-between gap-3 py-3 border-b border-[var(--border)] last:border-0">
+      <div>
+        <p className="text-sm font-medium text-[var(--text-primary)]">{label}</p>
+        <p className="text-xs text-[var(--text-muted)] mt-0.5">{description}</p>
+      </div>
+      <PlannedBadge />
+    </div>
+  )
+}
+
 function ToggleRow({ label, description, value, onChange }: ToggleRowProps) {
   return (
     <div className="flex items-center justify-between py-3 border-b border-[var(--border)] last:border-0">
@@ -93,9 +106,9 @@ export function InboxSettingsPage() {
               <h2 className="text-sm font-semibold text-[var(--text-primary)]">Assignment</h2>
             </div>
             <Card>
-              <ToggleRow label="Auto-assign conversations" description="Automatically assign incoming conversations to available agents" value={settings.autoAssign} onChange={() => toggle('autoAssign')} />
-              <ToggleRow label="Round-robin assignment" description="Distribute conversations evenly across agents in sequence" value={settings.roundRobin} onChange={() => toggle('roundRobin')} />
-              <ToggleRow label="Bot handover on agent idle" description="Return conversation to bot if agent doesn't respond within 10 minutes" value={settings.botHandoverOnIdle} onChange={() => toggle('botHandoverOnIdle')} />
+              <PlannedRow label="Auto-assign conversations" description="Automatically assign incoming conversations to available agents" />
+              <PlannedRow label="Round-robin assignment" description="Distribute conversations evenly across agents in sequence" />
+              <PlannedRow label="Bot handover on agent idle" description="Return conversation to bot if agent doesn't respond within 10 minutes" />
             </Card>
           </section>
 

@@ -84,7 +84,7 @@ export function HelpPage() {
         <section id="flows" className="scroll-mt-6 space-y-2">
           <h2 className="text-base font-semibold text-[var(--text-primary)]">Flows</h2>
           <p className="text-sm leading-relaxed text-[var(--text-secondary)]">
-            Open a flow from the list. Fold the node list to make room for the canvas. Tidy stacks each step from top to bottom. Row and column line the nodes up. Test Bot puts the cursor in the chat box. After a publish succeeds, you return to this list.
+            Open a flow from the list. The list and the canvas follow Sandbox or Production in the top bar. Sandbox shows a draft that is not published yet. Production shows only the version published there. Fold the node list to make room for the canvas. Tidy stacks each step from top to bottom. Row and column line the nodes up. Test Bot puts the cursor in the chat box. After a publish succeeds, you return to this list.
           </p>
           <p className="text-sm leading-relaxed text-[var(--text-secondary)]">
             Rename and delete live on this list, next to each flow. Delete asks you to confirm. You can also rename the flow you have open by clicking its name on the canvas.
@@ -107,7 +107,7 @@ export function HelpPage() {
         <section id="admin-training" className="scroll-mt-6 space-y-2">
           <h2 className="text-base font-semibold text-[var(--text-primary)]">Admin walkthrough</h2>
           <p className="text-sm leading-relaxed text-[var(--text-secondary)]">
-            Sign in with the Acme demo account and open Acme Support Bot. Choose Production. On the widget test page for the website channel, ask where an order is. The reply comes from the Order Status flow.
+            Sign in with the Acme demo account and open Acme Support Bot. Choose Production. On the widget test page for the website channel, ask where an order is. When the bot asks for the order number, enter 1001. The reply says that order is on its way. A different number is handed to a person, because the sample shop address is not a real shop.
           </p>
           <p className="text-sm leading-relaxed text-[var(--text-secondary)]">
             Open Inbox in another window. The same chat is there. Open Flows and you will see Welcome & Routing hand off to Order Status, Returns, and Billing. Analytics, then Dashboards, opens Live operations. Those numbers are the same chats as the overview.
@@ -130,7 +130,7 @@ export function HelpPage() {
         <section id="planned" className="scroll-mt-6 space-y-2">
           <h2 className="text-base font-semibold text-[var(--text-primary)]">Planned features</h2>
           <p className="text-sm leading-relaxed text-[var(--text-secondary)]">
-            A Planned badge means that control will become a real feature. Stripe on Integrations is the one still marked Planned. Billing, single sign-on, and live SMS, email, and WhatsApp connections are not in the product yet.
+            A Planned badge means that control will become a real feature. Stripe on Integrations is marked Planned. In Inbox settings, Auto-assign, Round-robin, and Bot handover on agent idle are marked Planned too. Those three do not change who answers a chat. Billing, single sign-on, and live SMS, email, and WhatsApp connections are not in the product yet.
           </p>
           <Figure file="integrations.jpg" alt="Integrations page with Stripe marked Planned" />
         </section>
