@@ -15,13 +15,17 @@
  *
  * Running this again does not duplicate chats, does not edit an existing
  * Order Status graph, and does not reset passwords.
- * Bella gains a Sandbox. The hair studio pack is published there.
- * Her Production welcome stays the live widget. Owned Bella demo chats
- * are rewritten when they still contain the old Sunday hours or a booked slot.
+ * Bella gains a Sandbox. The hair studio pack is her live welcome on
+ * Sandbox and Production. The retail shop menu is not her widget.
+ * Owned Bella demo chats are rewritten when they still contain the old
+ * Sunday hours or a booked slot.
  */
 
 import bcrypt from 'bcryptjs'
 import { prisma } from '@ybot/db'
+import { hairStudioPack } from '@ybot/shared'
+import { environmentsNeedingGraph, isShopWelcomeGraph } from '../lib/bella-salon-sync.js'
+import { publishedSource } from '../lib/copy-graphs.js'
 import { installStarterFlows } from '../lib/install-starter-flows.js'
 import { installHairStudioPack } from '../lib/install-corporate-pack.js'
 
@@ -281,7 +285,8 @@ async function ensureBella() {
     },
   })
 
-  const flowsAdded = await ensureFlows(tenant.id, bot.id, BELLA_NAME, env.id)
+  // The shop starter pack would publish a retail welcome on this page.
+  const flowsAdded = 0
   const flowsBound = await bindPublishedFlows(bot.id, env.id)
   const ruleAdded = await ensureRule(tenant.id, bot.id)
   const chatsAdded = await ensureChats({
@@ -298,7 +303,7 @@ async function ensureBella() {
   return { status: 'ok', tenant: tenant.slug, flowsAdded, flowsBound, ruleAdded, chatsAdded, benchmark }
 }
 
-const BELLA_RETAIL_DRAFTS = ['Order Status', 'Billing', 'Lead Capture', 'Return Request', 'Cancel order', 'Change address']
+const BELLA_RETAIL_DRAFTS = ['Welcome & Routing', 'Order Status', 'Billing', 'Lead Capture', 'Return Request', 'Cancel order', 'Change address']
 
 const STALE_BELLA_LINES = [
   'Sunday 10 am to 4 pm',
@@ -316,9 +321,9 @@ function messageText(content: unknown): string {
 }
 
 /**
- * Gives Bella a Sandbox and the hair studio pack on that Sandbox.
- * The published Production welcome stays the live widget.
- * Retail drafts that do not belong on a salon are removed when they are still drafts.
+ * Gives Bella a Sandbox and the hair studio pack.
+ * Sandbox and Production both speak that pack, so the public page is the salon.
+ * A published retail welcome is retired. Retail drafts are removed.
  */
 export async function ensureBellaBenchmark() {
   const bot = await prisma.bot.findUnique({ where: { id: 'bella-bot' } })
@@ -353,9 +358,90 @@ export async function ensureBellaBenchmark() {
   })
 
   const pack = await installHairStudioPack(bot.tenantId, bot.id, BELLA_NAME, sandbox.id)
+  const production = await prisma.environment.upsert({
+    where: { botId_kind: { botId: bot.id, kind: 'production' } },
+    update: { name: 'Production', isActive: true },
+    create: {
+      id: 'bella-env-production',
+      tenantId: bot.tenantId,
+      botId: bot.id,
+      kind: 'production',
+      name: 'Production',
+      isActive: true,
+    },
+  })
+  const environmentIds = [sandbox.id, production.id]
+  const refreshed = await refreshBellaSalonGraphs(bot.tenantId, bot.id, environmentIds)
+  const shopWelcome = await retireBellaShopWelcome(bot.id)
   const retired = await retireBellaRetailDrafts(bot.tenantId, bot.id)
   const chatsRefreshed = await refreshStaleBellaChats()
-  return { status: 'ok' as const, sandboxId: sandbox.id, pack, retired, chatsRefreshed }
+  return { status: 'ok' as const, sandboxId: sandbox.id, pack, refreshed, shopWelcome, retired, chatsRefreshed }
+}
+
+/** Publishes the current hair studio pack onto Bella where the saved graph differs. */
+async function refreshBellaSalonGraphs(tenantId: string, botId: string, environmentIds: string[]) {
+  const pack = hairStudioPack(BELLA_NAME)
+  let published = 0
+  for (const starter of pack.flows) {
+    let flow = await prisma.flow.findFirst({ where: { tenantId, botId, name: starter.name } })
+    if (!flow) {
+      flow = await prisma.flow.create({
+        data: {
+          tenantId,
+          botId,
+          name: starter.name,
+          description: starter.description,
+          kind: 'flow',
+          tags: starter.tags,
+        },
+      })
+    } else {
+      const tags = [...new Set([...flow.tags, ...starter.tags])]
+      if (tags.length !== flow.tags.length || flow.description !== starter.description) {
+        flow = await prisma.flow.update({
+          where: { id: flow.id },
+          data: { tags, description: starter.description },
+        })
+      }
+    }
+    const versions = await prisma.flowVersion.findMany({ where: { flowId: flow.id }, orderBy: { version: 'desc' } })
+    const latest = environmentIds.flatMap((environmentId) => {
+      const current = publishedSource(versions, environmentId)
+      return current ? [{ environmentId, graph: current.graph }] : []
+    })
+    let version = versions[0]?.version ?? 0
+    for (const environmentId of environmentsNeedingGraph(starter.graph, latest, environmentIds)) {
+      version += 1
+      await prisma.flowVersion.create({
+        data: {
+          tenantId,
+          flowId: flow.id,
+          version,
+          status: 'published',
+          environmentId,
+          graph: starter.graph as object,
+          publishedAt: new Date(),
+        },
+      })
+      published += 1
+    }
+  }
+  return published
+}
+
+async function retireBellaShopWelcome(botId: string) {
+  const flow = await prisma.flow.findFirst({
+    where: { botId, name: 'Welcome & Routing' },
+    include: { versions: true },
+  })
+  if (!flow) return 0
+  let retired = 0
+  for (const version of flow.versions) {
+    if (version.status !== 'published' || !isShopWelcomeGraph(flow.name, version.graph)) continue
+    await prisma.flowVersion.update({ where: { id: version.id }, data: { status: 'draft' } })
+    retired += 1
+  }
+  return retired
 }
 
 async function retireBellaRetailDrafts(tenantId: string, botId: string): Promise<string[]> {

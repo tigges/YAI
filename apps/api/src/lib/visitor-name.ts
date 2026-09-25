@@ -60,11 +60,16 @@ export function planNameTurn(contact: VisitorName | null | undefined, userText: 
   return { spoken: 'there' }
 }
 
-/** Drop leftover name tokens. Ask once when we still do not know who this is. */
+/**
+ * Drop leftover name tokens. Ask once when we still do not know who this is.
+ * A flow that is waiting gets to ask on its own next turn, so the name is not
+ * glued onto the line the visitor is already reading.
+ */
 export function finishBotLines(
   lines: string[],
   contact: VisitorName | null | undefined,
   spoken: string,
+  options?: { waiting?: boolean },
 ): { lines: string[]; metadata?: Record<string, unknown> } {
   const cleaned = lines.map((line) => fillNameTokens(line, spoken))
   const meta = contactMeta(contact?.metadata)
@@ -72,6 +77,7 @@ export function finishBotLines(
   if (known || meta[ASKED] === true || !contact?.id) return { lines: cleaned }
   if (!cleaned.some((line) => line.trim().length > 0)) return { lines: cleaned }
   if (cleaned.some((line) => line.includes(NAME_QUESTION))) return { lines: cleaned }
+  if (options?.waiting) return { lines: cleaned }
   return {
     lines: [...cleaned, NAME_QUESTION],
     metadata: { ...meta, [ASKED]: true, [AWAITING]: true },

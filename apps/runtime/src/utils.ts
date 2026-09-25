@@ -35,7 +35,10 @@ export function evaluateCondition(
   expected: string,
   variables: Record<string, unknown>,
 ): boolean {
-  const actual = String(variables[field] ?? '')
+  // Dotted names such as contact.name live on the contact object.
+  // A flat field stays a flat lookup, which is how ok and order_number work.
+  const raw = field.includes('.') ? lookup(variables, field) : variables[field]
+  const actual = String(raw ?? '')
   switch (operator) {
     case 'equals':       return actual === expected
     case 'not_equals':   return actual !== expected
