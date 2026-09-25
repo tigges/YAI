@@ -330,7 +330,7 @@ function cancelFlow(topic: Topic): StarterFlow {
     graph: {
       nodes: [
         { id: 'c1', type: 'flow-node', position: { x: 80, y }, data: { kind: 'trigger_start', label: 'Cancel', config: {} } },
-        { id: 'c2', type: 'flow-node', position: { x: 300, y }, data: { kind: 'send_message', label: 'Intro', config: { text: topic.answer } } },
+        { id: 'c2', type: 'flow-node', position: { x: 300, y }, data: { kind: 'ask_question', label: 'Intro', config: { question: topic.answer, variable: 'cancel_note' } } },
         { id: 'c3', type: 'flow-node', position: { x: 540, y }, data: { kind: 'ask_question', label: 'Name', config: { question: 'What name is the appointment under?', variable: 'guest_name' } } },
         { id: 'c4', type: 'flow-node', position: { x: 780, y }, data: { kind: 'ask_question', label: 'When', config: { question: 'Which day and time should I cancel?', variable: 'appointment_time' } } },
         { id: 'c5', type: 'flow-node', position: { x: 1020, y }, data: { kind: 'send_message', label: 'Confirm', config: { text: 'I have noted the cancellation for {{guest_name}} on {{appointment_time}}. The studio will confirm it in this chat.' } } },
@@ -380,7 +380,7 @@ function rescheduleFlow(topic: Topic): StarterFlow {
     graph: {
       nodes: [
         { id: 'm1', type: 'flow-node', position: { x: 80, y }, data: { kind: 'trigger_start', label: 'Reschedule', config: {} } },
-        { id: 'm2', type: 'flow-node', position: { x: 300, y }, data: { kind: 'send_message', label: 'Intro', config: { text: topic.answer } } },
+        { id: 'm2', type: 'flow-node', position: { x: 300, y }, data: { kind: 'ask_question', label: 'Intro', config: { question: topic.answer, variable: 'move_note' } } },
         { id: 'm3', type: 'flow-node', position: { x: 540, y }, data: { kind: 'ask_question', label: 'Name', config: { question: 'What name is the appointment under?', variable: 'guest_name' } } },
         { id: 'm4', type: 'flow-node', position: { x: 780, y }, data: { kind: 'ask_question', label: 'Current time', config: { question: 'Which day and time is it now?', variable: 'appointment_time' } } },
         { id: 'm5', type: 'flow-node', position: { x: 1020, y }, data: { kind: 'ask_question', label: 'New day', config: { question: 'Which day would you like instead?', variable: 'new_day' } } },
@@ -409,7 +409,7 @@ function consultationFlow(topic: Topic): StarterFlow {
     graph: {
       nodes: [
         { id: 'n1', type: 'flow-node', position: { x: 80, y }, data: { kind: 'trigger_start', label: 'Consultation', config: {} } },
-        { id: 'n2', type: 'flow-node', position: { x: 300, y }, data: { kind: 'send_message', label: 'Intro', config: { text: topic.answer } } },
+        { id: 'n2', type: 'flow-node', position: { x: 300, y }, data: { kind: 'ask_question', label: 'Intro', config: { question: topic.answer, variable: 'consult_note' } } },
         { id: 'n3', type: 'flow-node', position: { x: 540, y }, data: { kind: 'ask_question', label: 'Time', config: { question: TIME_PREFERENCE, variable: 'preferred_day' } } },
         { id: 'n4', type: 'flow-node', position: { x: 780, y }, data: { kind: 'send_message', label: 'Confirm', config: { text: 'I have noted a consultation for {{preferred_day}}. The studio will confirm the exact time in this chat.' } } },
         { id: 'n5', type: 'flow-node', position: { x: 1020, y }, data: { kind: 'end_flow', label: 'End', config: {} } },

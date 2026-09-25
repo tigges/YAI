@@ -358,8 +358,19 @@ export async function ensureBellaBenchmark() {
   })
 
   const pack = await installHairStudioPack(bot.tenantId, bot.id, BELLA_NAME, sandbox.id)
-  const production = await prisma.environment.findFirst({ where: { botId: bot.id, kind: 'production' } })
-  const environmentIds = [sandbox.id, production?.id].filter((id): id is string => Boolean(id))
+  const production = await prisma.environment.upsert({
+    where: { botId_kind: { botId: bot.id, kind: 'production' } },
+    update: { name: 'Production', isActive: true },
+    create: {
+      id: 'bella-env-production',
+      tenantId: bot.tenantId,
+      botId: bot.id,
+      kind: 'production',
+      name: 'Production',
+      isActive: true,
+    },
+  })
+  const environmentIds = [sandbox.id, production.id]
   const refreshed = await refreshBellaSalonGraphs(bot.tenantId, bot.id, environmentIds)
   const shopWelcome = await retireBellaShopWelcome(bot.id)
   const retired = await retireBellaRetailDrafts(bot.tenantId, bot.id)

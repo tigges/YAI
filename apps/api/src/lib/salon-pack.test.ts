@@ -9,6 +9,7 @@ import {
   inspectFlowGraph,
   planHairStudioImport,
 } from '@ybot/shared'
+import { environmentsNeedingGraph } from './bella-salon-sync.js'
 
 function session(text: string, name = 'Ada', start = 'start'): Session {
   return {
@@ -29,6 +30,23 @@ function session(text: string, name = 'Ada', start = 'start'): Session {
 function atStart(graph: FlowGraph, text: string, name = 'Ada'): Session {
   const start = graph.nodes.find((node) => node.data.kind === 'trigger_start')?.id ?? 'start'
   return session(text, name, start)
+}
+
+/** A message followed straight into a question lands in one bubble. Each line may ask once. */
+function stackedTurn(graph: { nodes?: Array<{ id: string; data?: { kind?: string; config?: Record<string, unknown> } }>; edges?: Array<{ source: string; target: string }> }): string | undefined {
+  const nodes = graph.nodes ?? []
+  const byId = new Map(nodes.map((node) => [node.id, node]))
+  for (const edge of graph.edges ?? []) {
+    const source = byId.get(edge.source)
+    const target = byId.get(edge.target)
+    if (source?.data?.kind === 'send_message' && target?.data?.kind === 'ask_question') return `${source.id}->${target.id}`
+  }
+  for (const node of nodes) {
+    const config = node.data?.config ?? {}
+    const text = String(config['text'] ?? config['question'] ?? '')
+    if ((text.match(/\?/g) ?? []).length > 1) return node.id
+  }
+  return undefined
 }
 
 function spoken(result: { newMessages: Array<{ content: { text: string } }> }): string {
@@ -64,6 +82,12 @@ test('a salon widget answers prices, bookings, and the Bella address', async () 
     const blocking = issues.filter((issue) => issue.level === 'block' || issue.level === 'repair')
     assert.deepEqual(blocking, [], flow.name)
     assert.equal(JSON.stringify(flow.graph).includes('http_request'), false, flow.name)
+    assert.equal(stackedTurn(flow.graph), undefined, flow.name)
+    assert.deepEqual(
+      environmentsNeedingGraph(flow.graph, [], ['bella-env-sandbox', 'bella-env-production']),
+      ['bella-env-sandbox', 'bella-env-production'],
+      flow.name,
+    )
   }
 
   const welcome = pack.flows.find((flow) => flow.name === SALON_WELCOME_NAME)!
@@ -202,6 +226,29 @@ test('a salon widget answers prices, bookings, and the Bella address', async () 
   const handed = await machine.run(atStart(correctionGraph, 'home dye'), correctionGraph, 'home dye')
   assert.equal(handed.handover?.team, 'salon')
   assert.match(spoken(handed), /passing this chat to the studio/)
+})
+
+test('cancel, reschedule, and consultation ask one thing, then wait', async () => {
+  const pack = hairStudioPack('Bella Hair Studio')
+  const machine = new SessionMachine({ llm: {}, db: {}, httpFetch: fetch } as unknown as ExecutionServices)
+  const steps: Array<[string, string[]]> = [
+    ['Cancel appointment', ['note a cancellation', 'What name is the appointment under', 'Which day and time should I cancel']],
+    ['Reschedule', ['note a new time', 'What name is the appointment under', 'Which day and time is it now', 'Which day would you like instead']],
+    ['Consultation', ['free and takes about 15 minutes', 'Saturday morning or a weekday after 5']],
+  ]
+  for (const [name, prompts] of steps) {
+    const graph = pack.flows.find((flow) => flow.name === name)!.graph as unknown as FlowGraph
+    let turn = await machine.run(atStart(graph, name), graph, name)
+    for (let index = 0; index < prompts.length; index += 1) {
+      assert.match(spoken(turn), new RegExp(prompts[index]!.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')))
+      assert.equal((spoken(turn).match(/\?/g) ?? []).length <= 1, true, `${name} turn ${index}`)
+      if (index < prompts.length - 1) {
+        assert.equal(turn.session.status, 'waiting_input', name)
+        assert.equal(spoken(turn).includes(prompts[index + 1]!), false, name)
+        turn = await reply(machine, turn, graph, 'Sophie')
+      }
+    }
+  }
 })
 
 test('a salon with no welcome publishes Salon welcome', () => {
