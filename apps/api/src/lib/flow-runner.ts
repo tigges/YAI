@@ -121,7 +121,9 @@ export async function runFlowIfPublished(opts: {
 
   const visible = outcome.messages.some((message) => message.trim().length > 0)
   if (visible) {
-    const finished = finishBotLines(outcome.messages, named.contact, named.spoken)
+    const finished = finishBotLines(outcome.messages, named.contact, named.spoken, {
+      waiting: outcome.session.status === 'waiting_input',
+    })
     outcome = { ...outcome, messages: finished.lines }
     if (named.contact?.id && finished.metadata) {
       await saveContactName(named.contact.id, { metadata: finished.metadata }).catch(() => {})

@@ -274,6 +274,7 @@ export async function processInboundMessage(
       result.newMessages.map((msg) => msg.content.text),
       named.contact,
       named.spoken,
+      { waiting: result.session.status === 'waiting_input' },
     )
     if (named.contact?.id && finished.metadata) {
       await saveContactName(named.contact.id, { metadata: finished.metadata }).catch(() => {})

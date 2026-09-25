@@ -32,6 +32,15 @@ test('an unknown visitor is greeted, then asked once', () => {
   )
   assert.deepEqual(again.lines, ['We are open Monday to Saturday.'])
   assert.equal(again.metadata, undefined)
+
+  const waiting = finishBotLines(
+    ["Hi, I'm Bella at Bella Hair Studio."],
+    { id: 'c', displayName: 'hi' },
+    'there',
+    { waiting: true },
+  )
+  assert.deepEqual(waiting.lines, ["Hi, I'm Bella at Bella Hair Studio."])
+  assert.equal(waiting.metadata, undefined)
 })
 
 test('a real name is used and a later reply is saved', () => {
