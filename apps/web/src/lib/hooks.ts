@@ -1,6 +1,7 @@
 /**
  * TanStack Query hooks wrapping the typed API client.
- * Automatically falls back to demo data when the backend is unreachable.
+ * Demo mode uses the sample catalog. A live session shows the API error
+ * instead of that catalog, so a salon bot never looks like the shop sample.
  */
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import React from 'react'
@@ -17,12 +18,7 @@ function botId() { return useAppStore.getState().selectedBotId ?? 'demo' }
 function withDemoFallback<T>(apiFn: () => Promise<T>, demoValue: T): () => Promise<T> {
   return async () => {
     if (isDemoMode()) return demoValue
-    try {
-      return await apiFn()
-    } catch {
-      // API not available (no backend, network error, JSON parse error, etc.) — use demo data
-      return demoValue
-    }
+    return apiFn()
   }
 }
 

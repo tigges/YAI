@@ -24,11 +24,18 @@ export interface Bot {
   }>
 }
 
+/** Keep the saved bot when it is still in the list. Otherwise use the first bot. */
+export function selectedBotAfterLoad(current: string | null, bots: Array<{ id: string }>): string | null {
+  if (current && bots.some((bot) => bot.id === current)) return current
+  return bots[0]?.id ?? null
+}
+
 interface AppStore {
   user: CurrentUser | null
   token: string | null
   bots: Bot[]
   botsLoading: boolean
+  botsError: string | null
   selectedBotId: string | null
   selectedEnv: 'sandbox' | 'production'
 
@@ -36,6 +43,7 @@ interface AppStore {
   clearAuth: () => void
   setBots: (bots: Bot[]) => void
   setBotsLoading: (loading: boolean) => void
+  setBotsError: (message: string | null) => void
   selectBot: (botId: string) => void
   setEnv: (env: 'sandbox' | 'production') => void
 }
@@ -47,18 +55,21 @@ export const useAppStore = create<AppStore>()(
       token: null,
       bots: [],
       botsLoading: false,
+      botsError: null,
       selectedBotId: null,
       selectedEnv: 'sandbox',
 
       setAuth: (user, token) => set({ user, token }),
-      clearAuth: () => set({ user: null, token: null, bots: [], botsLoading: false, selectedBotId: null }),
+      clearAuth: () => set({ user: null, token: null, bots: [], botsLoading: false, botsError: null, selectedBotId: null }),
       setBots: (bots) =>
         set((state) => ({
           bots,
           botsLoading: false,
-          selectedBotId: state.selectedBotId ?? bots[0]?.id ?? null,
+          botsError: null,
+          selectedBotId: selectedBotAfterLoad(state.selectedBotId, bots),
         })),
       setBotsLoading: (loading) => set({ botsLoading: loading }),
+      setBotsError: (message) => set({ botsError: message, botsLoading: false }),
       selectBot: (botId) => set({ selectedBotId: botId }),
       setEnv: (env) => set({ selectedEnv: env }),
     }),
