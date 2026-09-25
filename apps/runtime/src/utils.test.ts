@@ -13,6 +13,14 @@ test('an unknown contact name is addressed as there', () => {
 
 test('a known contact name is used', () => {
   assert.equal(interpolate('Hi {{contact.name}}!', { contact: { name: 'Sarah' } }), 'Hi Sarah!')
+  assert.equal(interpolate('Hi {{contact.name}}!', { contact: { name: 'Sarah Jones' } }), 'Hi Sarah!')
+})
+
+test('a greeting or the raw token is not a name', () => {
+  assert.equal(interpolate('Hi {{contact.name}}!', { contact: { name: 'hi' } }), 'Hi there!')
+  assert.equal(interpolate('Hi {{contact.name}}!', { contact: { name: '{{contact.name}}' } }), 'Hi there!')
+  assert.equal(interpolate('Hi {{ user.name }}!', {}), 'Hi there!')
+  assert.equal(interpolate('Thanks {{customer.name}}.', { customer: { name: 'Maya' } }), 'Thanks Maya.')
 })
 
 test('other missing variables stay visible', () => {

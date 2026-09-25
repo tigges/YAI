@@ -75,7 +75,7 @@ export function HelpPage() {
         <section id="widget" className="scroll-mt-6 space-y-2">
           <h2 className="text-base font-semibold text-[var(--text-primary)]">Widget to inbox</h2>
           <p className="text-sm leading-relaxed text-[var(--text-secondary)]">
-            A visitor message on the website widget is answered by the published flow. Working hours start the queue clock for people. They do not replace the bot. The same chat then shows in Inbox and on the overview.
+            A visitor message on the website widget is answered by the published flow. A greeting uses the visitor's name when we know it. Otherwise it says hello neutrally and asks for their name. The chat never shows an empty name field. Working hours start the queue clock for people. They do not replace the bot. The same chat then shows in Inbox and on the overview.
           </p>
           <Figure file="widget.jpg" alt="Website widget on the Bella demo page" />
           <Figure file="inbox.jpg" alt="Inbox chats" />

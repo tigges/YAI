@@ -1,4 +1,4 @@
-const UNKNOWN_NAME = /^(visitor|guest|there)$/i
+import { fillNameTokens, isNameVariable, nameForSpeech } from '@ybot/shared'
 
 function lookup(variables: Record<string, unknown>, path: string): unknown {
   const keys = path.trim().split('.')
@@ -16,15 +16,15 @@ function lookup(variables: Record<string, unknown>, path: string): unknown {
 // Lightweight variable interpolation: "Hello {{contact.name}}" → "Hello Alice".
 // A missing name is "there", so a greeting never shows the raw placeholder.
 export function interpolate(template: string, variables: Record<string, unknown>): string {
-  return template.replace(/\{\{([^}]+)\}\}/g, (_, path: string) => {
+  const spoken = nameForSpeech(lookup(variables, 'contact.name'))
+  const filled = template.replace(/\{\{([^}]+)\}\}/g, (_, path: string) => {
     const trimmed = path.trim()
     const val = lookup(variables, trimmed)
-    if (trimmed === 'contact.name') {
-      const name = typeof val === 'string' ? val.trim() : ''
-      return name && !UNKNOWN_NAME.test(name) ? name : 'there'
-    }
-    return val !== undefined && val !== null && val !== '' ? String(val) : `{{${path}}}`
+    if (isNameVariable(trimmed)) return nameForSpeech(val)
+    if (val !== undefined && val !== null && val !== '') return fillNameTokens(String(val), spoken)
+    return `{{${path}}}`
   })
+  return fillNameTokens(filled, spoken)
 }
 
 // Resolve a condition: { field, operator, value }

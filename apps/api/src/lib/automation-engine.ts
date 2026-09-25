@@ -40,6 +40,7 @@
  */
 
 import { prisma } from '@ybot/db'
+import { fillNameTokens } from '@ybot/shared'
 import { dispatchWebhookEvent } from '../queues.js'
 
 // ── Context ───────────────────────────────────────────────────────────────────
@@ -182,7 +183,7 @@ async function executeAction(action: string, ctx: RuleContext, ruleId: string, r
             conversationId: ctx.conversationId,
             direction: 'outbound',
             authorKind: 'bot',
-            content: { text: param },
+            content: { text: fillNameTokens(param, undefined) },
           },
         })
       }

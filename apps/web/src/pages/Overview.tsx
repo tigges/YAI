@@ -3,6 +3,7 @@ import { MessageSquare, Users, CheckCircle, Clock, Loader2 } from 'lucide-react'
 import { Card, CardHeader, CardTitle, Badge } from '@ybot/ui'
 import { useAppStore } from '../store/app'
 import { useAnalyticsOverview, useConversationTrends, useConversations, useAnalyticsChannels } from '../lib/hooks'
+import { chatText } from '../lib/chat-text'
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   BarChart, Bar,
@@ -182,7 +183,7 @@ export function OverviewPage() {
                   <div key={c.id} className="flex items-center gap-3 px-4 py-3">
                     <div className="h-1.5 w-1.5 rounded-full shrink-0" style={{ background: statusColor[c.status] ?? 'var(--text-muted)' }} />
                     <p className="flex-1 text-sm text-[var(--text-secondary)] truncate">
-                      {contact?.displayName ?? 'Visitor'}{lastMsg ? ` — ${lastMsg.content.text ?? ''}` : ''}
+                      {contact?.displayName ?? 'Visitor'}{lastMsg ? ` — ${chatText(lastMsg.content.text, contact?.displayName)}` : ''}
                     </p>
                     <Badge variant={c.status === 'resolved' ? 'success' : c.status === 'escalated' ? 'warning' : 'info'} className="shrink-0 capitalize">{c.status}</Badge>
                     <span className="text-xs text-[var(--text-muted)] shrink-0">{new Date(c.updatedAt as string).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>

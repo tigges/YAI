@@ -15,6 +15,8 @@ import { readFile } from 'node:fs/promises'
 import { triggerRules } from '../lib/automation-engine.js'
 import { resolve, dirname } from 'node:path'
 import { usableContactName } from '../lib/contact-name.js'
+import { finishBotLines, saveContactName, takeNameTurn } from '../lib/visitor-name.js'
+import { fillNameTokens } from '@ybot/shared'
 import { proposeDraftFlows, textMightStartDraft } from '../lib/draft-flows.js'
 import { runFlowIfPublished } from '../lib/flow-runner.js'
 import { streamDoneEvent } from '../lib/widget-rating.js'
@@ -511,26 +513,52 @@ export async function widgetRoutes(app: FastifyInstance) {
 
     const messages: LlmMessage[] = [...history, { role: 'user', content: userText }]
 
+    const named = conversationId ? await takeNameTurn(conversationId, userText) : null
+    if (named?.thanks) {
+      send({ chunk: named.thanks })
+      if (conversationId) {
+        await prisma.message.create({
+          data: { tenantId, conversationId, direction: 'outbound', authorKind: 'bot', content: { text: named.thanks } },
+        }).catch(() => {})
+        await onOutboundReply(conversationId).catch(() => {})
+      }
+      send(streamDoneEvent(false))
+      reply.raw.end()
+      return
+    }
+
     let fullText = ''
     try {
       const adapter = model ? createLlmAdapterForModel(model) : llm
       await adapter.stream({
         messages, systemPrompt: systemPrompt + contextBlock, model, temperature, maxTokens,
-        onChunk: (chunk) => { fullText += chunk; send({ chunk }) },
+        onChunk: (chunk) => {
+          const clean = fillNameTokens(chunk, named?.spoken)
+          fullText += clean
+          send({ chunk: clean })
+        },
       })
-      send({ done: true })
     } catch {
-      send({ chunk: "I'm sorry, something went wrong. Please try again.", done: true })
       fullText = "I'm sorry, something went wrong."
-    } finally {
-      if (conversationId && fullText.trim()) {
-        await prisma.message.create({
-          data: { tenantId, conversationId, direction: 'outbound', authorKind: 'bot', content: { text: fullText } },
-        }).catch(() => {})
-        await onOutboundReply(conversationId).catch(() => {})
-      }
-      reply.raw.end()
+      send({ chunk: "I'm sorry, something went wrong. Please try again." })
     }
+    if (named) {
+      const finished = finishBotLines([fullText], named.contact, named.spoken)
+      const next = finished.lines.filter((line) => line.trim().length > 0).join('\n\n')
+      if (next.startsWith(fullText) && next.length > fullText.length) send({ chunk: next.slice(fullText.length) })
+      fullText = next
+      if (named.contact?.id && finished.metadata) {
+        await saveContactName(named.contact.id, { metadata: finished.metadata }).catch(() => {})
+      }
+    }
+    send({ done: true })
+    if (conversationId && fullText.trim()) {
+      await prisma.message.create({
+        data: { tenantId, conversationId, direction: 'outbound', authorKind: 'bot', content: { text: fullText } },
+      }).catch(() => {})
+      await onOutboundReply(conversationId).catch(() => {})
+    }
+    reply.raw.end()
   })
 
   // ── POST /public/csat/:channelId — rate a bot response ────────────────────

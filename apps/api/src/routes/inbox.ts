@@ -5,6 +5,7 @@ import { processInboundMessage } from '../runtime-bridge.js'
 import { enqueueConversationAnalysis } from '../queues.js'
 import { triggerRules } from '../lib/automation-engine.js'
 import { attachSlaLabels, onOutboundReply } from '../lib/sla.js'
+import { presentConversation, presentMessages } from '../lib/present-chat.js'
 
 type JWT = { sub: string; tenantId: string; role: string }
 
@@ -95,7 +96,7 @@ export async function conversationsRoutes(app: FastifyInstance) {
       skip: parseInt(q['offset'] ?? '0'),
     })
     const data = await attachSlaLabels(conversations).catch(() => conversations.map((c) => ({ ...c, sla: null as string | null })))
-    return { data }
+    return { data: data.map((conversation) => presentConversation(conversation)) }
   })
 
   // GET /conversations/:id
@@ -108,7 +109,7 @@ export async function conversationsRoutes(app: FastifyInstance) {
     })
     if (!convo) return reply.status(404).send({ error: { code: 'NOT_FOUND' } })
     const [labeled] = await attachSlaLabels([convo]).catch(() => [{ ...convo, sla: null as string | null }])
-    return { data: labeled }
+    return { data: labeled ? presentConversation(labeled) : convo }
   })
 
   // PATCH /conversations/:id  (assign, resolve, escalate, etc.)
@@ -149,10 +150,13 @@ export async function conversationsRoutes(app: FastifyInstance) {
   app.get('/:id/messages', async (request, reply) => {
     const { tenantId } = request.user as JWT
     const { id } = request.params as { id: string }
-    const exists = await prisma.conversation.findFirst({ where: { id, tenantId } })
+    const exists = await prisma.conversation.findFirst({
+      where: { id, tenantId },
+      include: { contact: { select: { displayName: true } } },
+    })
     if (!exists) return reply.status(404).send({ error: { code: 'NOT_FOUND' } })
     const messages = await prisma.message.findMany({ where: { conversationId: id, tenantId }, orderBy: { createdAt: 'asc' } })
-    return { data: messages }
+    return { data: presentMessages(messages, exists.contact?.displayName) }
   })
 
   // POST /conversations/:id/messages  (agent reply or inbound user message)

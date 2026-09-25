@@ -21,6 +21,7 @@ import * as api from '../../lib/api'
 import { useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from '@tanstack/react-router'
 import { claimChat, queueContact } from '../../lib/inbox-nav'
+import { chatText } from '../../lib/chat-text'
 import { useCannedReplies, useTeamMembers, useLabels, useCreateLabel, useCreateTicket } from '../../lib/hooks'
 
 const SUBNAV = [
@@ -172,7 +173,7 @@ export function ChatsPage() {
   const convos: Convo[] = conversations.map((c) => ({
     id: c.id,
     name: c.contact?.displayName ?? 'Unknown',
-    message: c.messages?.[c.messages.length - 1]?.content?.text ?? '',
+    message: chatText(c.messages?.[c.messages.length - 1]?.content?.text, c.contact?.displayName),
     time: formatRelative(c.updatedAt),
     status: (c.status as ConvoStatus) ?? 'active',
     unread: c.messages?.filter((m) => m.direction === 'inbound').length ?? 0,
@@ -192,7 +193,7 @@ export function ChatsPage() {
     id: m.id,
     from: (m.authorKind ?? m.direction === 'inbound' ? 'user' : 'agent') as 'user' | 'bot' | 'agent',
     name: m.authorKind === 'user' ? selectedConvo!.contact?.displayName ?? 'User' : m.authorKind === 'bot' ? 'BotStudio' : 'Agent',
-    text: m.content?.text ?? '',
+    text: chatText(m.content?.text, selectedConvo?.contact?.displayName),
     time: new Date(m.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
     isNote: Boolean(m.content?.internal),
   }))
