@@ -8,6 +8,7 @@
  * say something new. The wizard is how a company reshapes a flow later.
  */
 
+import { assistantGreeting, greetingWelcomeGraph } from './greeting-welcome.js'
 import { returnRequestFlow, starterFlows, supportUseCaseFlows, SUPPORT_USE_CASES, type StarterFlow } from './flow-templates.js'
 import { hairStudioPack } from './salon-pack.js'
 
@@ -210,68 +211,18 @@ function welcomeFlow(companyName: string, topics: Topic[]): StarterFlow {
     phrases: topic.phrases,
     flowName: topic.flowName,
   }))
-  const y = 80
-  const nodes: object[] = [
-    { id: 'start', type: 'flow-node', position: { x: 80, y }, data: { kind: 'trigger_start', label: 'Start', config: {} } },
-    {
-      id: 'hi',
-      type: 'flow-node',
-      position: { x: 300, y },
-      data: {
-        kind: 'send_message',
-        label: 'Welcome',
-        config: { text: `Hi {{contact.name}}. Welcome to ${company}. I can help with orders, shipping, returns, billing, your account, or a person on the team.` },
-      },
-    },
-    { id: 'route', type: 'flow-node', position: { x: 620, y }, data: { kind: 'route_topic', label: 'Route by topic', config: { routes } } },
-    {
-      id: 'ask',
-      type: 'flow-node',
-      position: { x: 620, y: 520 },
-      data: {
-        kind: 'ask_question',
-        label: 'Ask for topic',
-        config: { question: 'What do you need help with?', variable: 'topic', choices: topics.map((topic) => topic.choice) },
-      },
-    },
-    { id: 'route2', type: 'flow-node', position: { x: 900, y: 520 }, data: { kind: 'route_topic', label: 'Route the answer', config: { routes } } },
-    {
-      id: 'menu',
-      type: 'flow-node',
-      position: { x: 1180, y: 520 },
-      data: {
-        kind: 'send_message',
-        label: 'Offer the menu',
-        config: { text: 'I can help with opening hours, shipping, a return, order tracking, payments, a password, plans, or a person on the team. Tell me which one you need.' },
-      },
-    },
-    { id: 'end', type: 'flow-node', position: { x: 1460, y: 520 }, data: { kind: 'end_flow', label: 'End', config: {} } },
-  ]
-  const edges: object[] = [
-    { id: 'e-start', source: 'start', target: 'hi', sourceHandle: 'out' },
-    { id: 'e-route', source: 'hi', target: 'route' },
-    { id: 'e-other', source: 'route', target: 'ask', sourceHandle: 'other' },
-    { id: 'e-ask', source: 'ask', target: 'route2' },
-    { id: 'e-other-2', source: 'route2', target: 'menu', sourceHandle: 'other' },
-    { id: 'e-end', source: 'menu', target: 'end' },
-  ]
-  topics.forEach((topic, index) => {
-    const id = `go-${handleFor(topic.flowName)}`
-    nodes.push({
-      id,
-      type: 'flow-node',
-      position: { x: 980, y: y + index * 72 },
-      data: { kind: 'execute_flow', label: topic.flowName, config: { flowName: topic.flowName } },
-    })
-    edges.push({ id: `e-${handleFor(topic.flowName)}`, source: 'route', target: id, sourceHandle: handleFor(topic.flowName) })
-    edges.push({ id: `e2-${handleFor(topic.flowName)}`, source: 'route2', target: id, sourceHandle: handleFor(topic.flowName) })
-  })
   return {
     name: CORPORATE_WELCOME_NAME,
     description: `Greets visitors and answers the usual customer questions for ${company}`,
     tags: ['welcome', 'routing', 'corporate'],
     publish: true,
-    graph: { nodes, edges },
+    graph: greetingWelcomeGraph({
+      greeting: assistantGreeting(company),
+      followUp: 'Hi {{contact.name}}. What do you need help with?',
+      routes,
+      menu: 'I can help with opening hours, shipping, a return, order tracking, payments, a password, plans, or a person on the team. Tell me which one you need.',
+      choices: topics.map((topic) => topic.choice),
+    }),
   }
 }
 

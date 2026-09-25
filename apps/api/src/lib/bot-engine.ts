@@ -42,6 +42,7 @@ export interface BotReplyParams {
   userText: string
   /** Stable external identifier for the sender (e.g. WhatsApp phone number, session ID) */
   externalId: string
+  /** Not used to open a chat. A profile or earlier name stays off the first line. */
   displayName?: string
   /** Optional existing conversation ID */
   conversationId?: string | null
@@ -59,7 +60,7 @@ export interface BotReplyResult {
  * Creates/upserts Contact and Conversation records as needed.
  */
 export async function getBotReply(params: BotReplyParams): Promise<BotReplyResult> {
-  const { channelId, botId, tenantId, userText, externalId, displayName = 'Visitor', conversationId: incomingConvoId, history = [] } = params
+  const { channelId, botId, tenantId, userText, externalId, conversationId: incomingConvoId, history = [] } = params
 
   const channel = await prisma.channel.findFirst({
     where: { id: channelId, isActive: true },
@@ -82,10 +83,8 @@ export async function getBotReply(params: BotReplyParams): Promise<BotReplyResul
       let contact = await prisma.contact.findFirst({ where: { tenantId, externalId } })
       if (!contact) {
         contact = await prisma.contact.create({
-          data: { tenantId, externalId, displayName, channelId },
+          data: { tenantId, externalId, displayName: 'Visitor', channelId },
         })
-      } else if (contact.displayName === 'Visitor' && displayName !== 'Visitor') {
-        await prisma.contact.update({ where: { id: contact.id }, data: { displayName } })
       }
       const convo = await prisma.conversation.create({
         data: { tenantId, botId, environmentId: env.id, channelId, contactId: contact.id, status: 'active' },
@@ -153,7 +152,9 @@ export async function getBotReply(params: BotReplyParams): Promise<BotReplyResul
   }
 
   if (named) {
-    const finished = finishBotLines([fillNameTokens(reply, named.spoken)], named.contact, named.spoken)
+    const finished = finishBotLines([fillNameTokens(reply, named.spoken)], named.contact, named.spoken, {
+      conversationId: conversationId ?? undefined,
+    })
     reply = finished.lines.join('\n\n')
     if (named.contact?.id && finished.metadata) {
       await saveContactName(named.contact.id, { metadata: finished.metadata }).catch(() => {})

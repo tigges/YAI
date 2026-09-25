@@ -182,7 +182,7 @@ async function handleDirectLlm(
   if (!fullContent.trim()) {
     fullContent = "I'm sorry, I couldn't find a good answer for that right now."
   }
-  const finished = finishBotLines([fullContent], named.contact, named.spoken)
+  const finished = finishBotLines([fullContent], named.contact, named.spoken, { conversationId })
   fullContent = finished.lines.join('\n\n')
   if (named.contact?.id && finished.metadata) {
     await saveContactName(named.contact.id, { metadata: finished.metadata }).catch(() => {})
@@ -274,7 +274,7 @@ export async function processInboundMessage(
       result.newMessages.map((msg) => msg.content.text),
       named.contact,
       named.spoken,
-      { waiting: result.session.status === 'waiting_input' },
+      { waiting: result.session.status === 'waiting_input', conversationId },
     )
     if (named.contact?.id && finished.metadata) {
       await saveContactName(named.contact.id, { metadata: finished.metadata }).catch(() => {})
