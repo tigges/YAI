@@ -9,9 +9,7 @@ test('show the Bella demo', { tag: '@smoke' }, async ({ page }) => {
   await expect(page.getByText('Book an appointment', { exact: true })).toBeVisible()
 
   await page.getByText('Salon welcome').click()
-  await expect(page.getByText('Hello').first()).toBeVisible()
-  await page.getByText('Hello').first().click()
-  await expect(page.getByText('Bella Hair Studio')).toBeVisible()
+  await expect(page.getByText("Hi, I'm Bella at Bella Hair Studio.").first()).toBeVisible()
 
   await page.goto('/inbox/chats')
   await page.getByText('Emma Clarke').first().click()

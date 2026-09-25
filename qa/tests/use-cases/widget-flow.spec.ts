@@ -1,7 +1,6 @@
 import { test, expect } from '@playwright/test'
 import { bellaEmail, bellaPassword, signIn } from '../helpers'
 
-const visitor = `QA Widget ${Date.now()}`
 const sessionId = `qa-widget-bella-${Date.now()}`
 const line = 'QA check from the website widget'
 
@@ -20,7 +19,6 @@ test('a widget flow is processed and shows in the inbox and on the dashboard', {
     data: {
       message: line,
       sessionId,
-      visitorName: visitor,
     },
     timeout: 45_000,
   })
@@ -29,15 +27,17 @@ test('a widget flow is processed and shows in the inbox and on the dashboard', {
   expect(body).not.toContain('outside our working hours')
   expect(body).toMatch(/Hi, I'm Bella at Bella Hair Studio/)
   expect(body).not.toContain("What's your name?")
+  const conversationId = body.match(/"conversationId":"([^"]+)"/)?.[1]
+  expect(conversationId).toBeTruthy()
 
   await signIn(page, bellaEmail, bellaPassword)
 
   await page.goto('/inbox/chats')
-  await page.getByText(visitor).first().click()
+  await page.locator(`[data-convo-id="${conversationId}"]`).click()
   await expect(page.getByText(line).first()).toBeVisible()
   await expect(page.getByText("Hi, I'm Bella at Bella Hair Studio.").first()).toBeVisible()
 
   await page.goto('/overview')
   await expect(page.getByRole('heading', { name: 'Recent Conversations' })).toBeVisible()
-  await expect(page.getByText(visitor).first()).toBeVisible()
+  await expect(page.getByText("Hi, I'm Bella at Bella Hair Studio.").first()).toBeVisible()
 })

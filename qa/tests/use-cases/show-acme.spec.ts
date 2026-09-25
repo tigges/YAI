@@ -26,6 +26,6 @@ test('show the Acme demo', { tag: '@smoke' }, async ({ page, request }) => {
   const team = await request.get('/api/v1/team/members', {
     headers: { Authorization: `Bearer ${token}` },
   })
-  expect(team.ok()).toBeTruthy()
+  expect(team.ok(), `team members HTTP ${team.status()}`).toBeTruthy()
   expect(await team.text()).not.toContain('passwordHash')
 })
