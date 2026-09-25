@@ -99,6 +99,35 @@ export const flows = {
     apiFetch<{ data: FlowVersion }>(`/bots/${botId}/flows/${flowId}/publish`, { method: 'POST', body: JSON.stringify({ environmentId, ...(version ? { version } : {}) }) }),
 }
 
+export interface LearnCard {
+  flowId: string
+  version: number
+  phrase: string
+  sentence: string
+  fromLabel: string
+  keeps: string
+  preview: Array<{ role: 'visitor' | 'bot'; text: string }>
+}
+
+export interface LearnSnapshot {
+  week: { finished: number; helpful: number; notHelpful: number }
+  suggestion: LearnCard | null
+  note: string | null
+}
+
+export const learn = {
+  summary: (botId: string, environmentId: string) =>
+    apiFetch<{ data: LearnSnapshot }>(`/bots/${botId}/learn?environmentId=${encodeURIComponent(environmentId)}`),
+  samples: (botId: string, environmentId: string, text: string) =>
+    apiFetch<{ data: LearnSnapshot }>(`/bots/${botId}/learn/samples`, { method: 'POST', body: JSON.stringify({ environmentId, text }) }),
+  rated: (botId: string, environmentId: string) =>
+    apiFetch<{ data: LearnSnapshot }>(`/bots/${botId}/learn/rated`, { method: 'POST', body: JSON.stringify({ environmentId }) }),
+  publish: (botId: string, flowId: string, environmentId: string) =>
+    apiFetch<{ data: { welcomeUpdated: boolean } }>(`/bots/${botId}/learn/publish`, { method: 'POST', body: JSON.stringify({ flowId, environmentId }) }),
+  dismiss: (botId: string, flowId: string) =>
+    apiFetch<void>(`/bots/${botId}/learn/dismiss`, { method: 'POST', body: JSON.stringify({ flowId }) }),
+}
+
 // ── Knowledge ─────────────────────────────────────────────────────────────────
 export const knowledge = {
   intents: {

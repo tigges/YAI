@@ -4,6 +4,7 @@ import { prisma } from '@ybot/db'
 import { z } from 'zod'
 import { attachDestination } from '../lib/welcome-routes.js'
 import { inspectFlowGraph, versionsForEnvironmentList } from '@ybot/shared'
+import { LearnError, dismissLearningDraft, learnFromRated, learnFromSamples, learnSnapshot, publishLearningDraft } from '../lib/learn-store.js'
 
 type JWT = { sub: string; tenantId: string; role: string }
 
@@ -143,5 +144,66 @@ export async function flowsRoutes(app: FastifyInstance) {
     const flow = await prisma.flow.findFirst({ where: { id: flowId, botId, tenantId }, select: { name: true } })
     if (flow) await attachDestination(botId, environmentId, flow.name).catch(() => {})
     return reply.status(200).send({ data: published })
+  })
+
+  app.get('/:botId/learn', async (request, reply) => {
+    const { tenantId } = request.user as JWT
+    const { botId } = request.params as { botId: string }
+    const query = z.object({ environmentId: z.string().min(1) }).safeParse(request.query)
+    if (!query.success) return reply.status(400).send({ error: { code: 'VALIDATION', message: 'Choose an environment.' } })
+    const data = await learnSnapshot(botId, tenantId, query.data.environmentId)
+    return { data }
+  })
+
+  app.post('/:botId/learn/samples', async (request, reply) => {
+    const { tenantId } = request.user as JWT
+    const { botId } = request.params as { botId: string }
+    const body = z.object({
+      environmentId: z.string().min(1),
+      text: z.string().min(1),
+    }).safeParse(request.body)
+    if (!body.success) return reply.status(400).send({ error: { code: 'VALIDATION', message: 'Paste a sample chat first.' } })
+    const data = await learnFromSamples({ botId, tenantId, ...body.data })
+    return { data }
+  })
+
+  app.post('/:botId/learn/rated', async (request, reply) => {
+    const { tenantId } = request.user as JWT
+    const { botId } = request.params as { botId: string }
+    const body = z.object({ environmentId: z.string().min(1) }).safeParse(request.body)
+    if (!body.success) return reply.status(400).send({ error: { code: 'VALIDATION', message: 'Choose an environment.' } })
+    const data = await learnFromRated({ botId, tenantId, environmentId: body.data.environmentId })
+    return { data }
+  })
+
+  app.post('/:botId/learn/publish', async (request, reply) => {
+    const { tenantId } = request.user as JWT
+    const { botId } = request.params as { botId: string }
+    const body = z.object({
+      flowId: z.string().min(1),
+      environmentId: z.string().min(1),
+    }).safeParse(request.body)
+    if (!body.success) return reply.status(400).send({ error: { code: 'VALIDATION', message: 'Choose the Sandbox draft to publish.' } })
+    try {
+      const data = await publishLearningDraft({ botId, tenantId, ...body.data })
+      return { data }
+    } catch (err) {
+      if (err instanceof LearnError) return reply.status(err.status).send({ error: { code: 'LEARN', message: err.message } })
+      throw err
+    }
+  })
+
+  app.post('/:botId/learn/dismiss', async (request, reply) => {
+    const { tenantId } = request.user as JWT
+    const { botId } = request.params as { botId: string }
+    const body = z.object({ flowId: z.string().min(1) }).safeParse(request.body)
+    if (!body.success) return reply.status(400).send({ error: { code: 'VALIDATION', message: 'Choose the draft to dismiss.' } })
+    try {
+      await dismissLearningDraft({ botId, tenantId, flowId: body.data.flowId })
+      return reply.status(204).send()
+    } catch (err) {
+      if (err instanceof LearnError) return reply.status(err.status).send({ error: { code: 'LEARN', message: err.message } })
+      throw err
+    }
   })
 }
