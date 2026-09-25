@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   ReactFlow,
   Background,
@@ -166,6 +166,21 @@ export function FlowCanvasPage() {
   const envLabel = selectedEnv === 'production' ? 'Production' : 'Sandbox'
   const shown = versionForEnvironment(flow?.versions, environmentId, selectedEnv)
   const canvasVersion = shown?.version ?? 0
+  const previewGraph = useMemo(() => ({
+    nodes: nodes.map((node) => {
+      const data = node.data as unknown as FlowNodeData
+      return {
+        id: node.id,
+        data: { kind: data.kind, label: data.label, config: data.config ?? {} },
+      }
+    }),
+    edges: edges.map((edge) => ({
+      id: edge.id,
+      source: edge.source,
+      target: edge.target,
+      ...(edge.sourceHandle ? { sourceHandle: edge.sourceHandle } : {}),
+    })),
+  }), [nodes, edges])
 
   const saveCanvas = useSaveCanvas()
   // Load the latest saved version. Welcome & Routing lives on version 2.
@@ -584,9 +599,11 @@ export function FlowCanvasPage() {
               </button>
             </div>
             <ChatWidget
+              key={flowId}
               botId={selectedBotId}
               botName="Bot Preview"
               autoFocus
+              flowGraph={previewGraph}
               className="flex-1 rounded-none border-0 shadow-none"
             />
           </div>

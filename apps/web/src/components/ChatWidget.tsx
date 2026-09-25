@@ -32,6 +32,18 @@ interface ChatMessage {
   ragChunks?: number
 }
 
+export interface PreviewGraph {
+  nodes: Array<{ id: string; data: { kind: string; label?: string; config?: Record<string, unknown> } }>
+  edges: Array<{ id: string; source: string; target: string; sourceHandle?: string }>
+}
+
+interface PreviewSnapshot {
+  currentNodeId: string
+  status: string
+  waitingFor?: { nodeId: string; variable: string; type: string; choices?: string[] }
+  variables: { flow: Record<string, unknown>; global: Record<string, unknown>; contact: Record<string, unknown> }
+}
+
 interface ChatWidgetProps {
   botId: string
   botName?: string
@@ -39,18 +51,24 @@ interface ChatWidgetProps {
   onClose?: () => void
   className?: string
   autoFocus?: boolean
+  /** The chart on screen. Test Bot walks this, one question at a time. */
+  flowGraph?: PreviewGraph
 }
 
-export function ChatWidget({ botId, botName = 'Bot', systemPrompt, onClose, className, autoFocus = false }: ChatWidgetProps) {
-  const [messages, setMessages] = useState<ChatMessage[]>([
-    {
-      id: 'welcome',
-      role: 'assistant',
-      content: isDemoMode()
-        ? `Hi! I'm ${botName} (demo mode). Type a message to see the streaming chat UI in action. In production, I'd use RAG + Claude to answer from your knowledge base.`
-        : `Hi! I'm ${botName}. Ask me anything — I'll search my knowledge base and answer.`,
-    },
-  ])
+function welcomeLine(name: string, followsChart: boolean): string {
+  if (followsChart) return ''
+  if (isDemoMode()) {
+    return `Hi! I'm ${name} (demo mode). Type a message to see the streaming chat UI in action. In production, I'd use RAG + Claude to answer from your knowledge base.`
+  }
+  return `Hi! I'm ${name}. Ask me anything — I'll search my knowledge base and answer.`
+}
+
+export function ChatWidget({ botId, botName = 'Bot', systemPrompt, onClose, className, autoFocus = false, flowGraph }: ChatWidgetProps) {
+  const followsChart = Boolean(flowGraph)
+  const [messages, setMessages] = useState<ChatMessage[]>(() => {
+    const content = welcomeLine(botName, followsChart)
+    return content ? [{ id: 'welcome', role: 'assistant', content }] : []
+  })
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
   const [ragStats, setRagStats] = useState<{ chunkCount: number; sourceCount: number } | null>(null)
@@ -58,14 +76,18 @@ export function ChatWidget({ botId, botName = 'Bot', systemPrompt, onClose, clas
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
   const abortRef = useRef<AbortController | null>(null)
+  const sessionRef = useRef<PreviewSnapshot | undefined>(undefined)
+  const graphRef = useRef(flowGraph)
+  graphRef.current = flowGraph
   const token = useAppStore((s: { token: string | null }) => s.token)
+  const openedRef = useRef(false)
 
   useEffect(() => {
-    if (!token || isDemoMode()) return
+    if (!token || isDemoMode() || flowGraph) return
     preview.knowledgeStats(botId)
       .then((r) => setRagStats(r.data))
       .catch(() => {})
-  }, [botId, token])
+  }, [botId, token, flowGraph])
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -84,18 +106,22 @@ export function ChatWidget({ botId, botName = 'Bot', systemPrompt, onClose, clas
       .slice(-10) // keep last 10 turns for context
   }, [messages])
 
-  async function sendMessage() {
-    const text = input.trim()
-    if (!text || loading) return
+  const busyRef = useRef(false)
 
-    setInput('')
+  async function deliver(openingText?: string) {
+    const opening = openingText !== undefined
+    const text = (opening ? openingText : input).trim()
+    if (!text || busyRef.current) return
+
+    if (!opening) setInput('')
+    busyRef.current = true
     setLoading(true)
 
     const userMsg: ChatMessage = { id: `u_${Date.now()}`, role: 'user', content: text }
     const assistantId = `a_${Date.now()}`
     const assistantMsg: ChatMessage = { id: assistantId, role: 'assistant', content: '', streaming: true }
 
-    setMessages((prev) => [...prev, userMsg, assistantMsg])
+    setMessages((prev) => opening ? [...prev, assistantMsg] : [...prev, userMsg, assistantMsg])
 
     // Demo mode: simulate a typed reply without hitting the API
     if (isDemoMode()) {
@@ -113,6 +139,7 @@ export function ChatWidget({ botId, botName = 'Bot', systemPrompt, onClose, clas
             prev.map((m) => m.id === assistantId ? { ...m, streaming: false, ragChunks: 0 } : m)
           )
           setLoading(false)
+          busyRef.current = false
           inputRef.current?.focus()
         }
       }, 25)
@@ -127,7 +154,8 @@ export function ChatWidget({ botId, botName = 'Bot', systemPrompt, onClose, clas
       const res = await preview.chatStream(botId, {
         message: text,
         systemPrompt,
-        history: historyForApi(),
+        history: opening ? [] : historyForApi(),
+        ...(graphRef.current ? { graph: graphRef.current, session: sessionRef.current } : {}),
       })
 
       if (!res.ok || !res.body) {
@@ -139,6 +167,7 @@ export function ChatWidget({ botId, botName = 'Bot', systemPrompt, onClose, clas
           prev.map((m) => m.id === assistantId ? { ...m, content: fullText, streaming: false } : m)
         )
         setLoading(false)
+        busyRef.current = false
         inputRef.current?.focus()
         return
       }
@@ -158,7 +187,8 @@ export function ChatWidget({ botId, botName = 'Bot', systemPrompt, onClose, clas
           if (line.startsWith('event: ')) continue
           if (!line.startsWith('data: ')) continue
           try {
-            const data = JSON.parse(line.slice(6)) as { text?: string; fullText?: string; ragChunks?: number; message?: string }
+            const data = JSON.parse(line.slice(6)) as { text?: string; fullText?: string; ragChunks?: number; message?: string; session?: PreviewSnapshot }
+            if (data.session) sessionRef.current = data.session
             if (data.text !== undefined) {
               fullText += data.text
               setMessages((prev) =>
@@ -186,22 +216,39 @@ export function ChatWidget({ botId, botName = 'Bot', systemPrompt, onClose, clas
         )
       )
       setLoading(false)
+      busyRef.current = false
       inputRef.current?.focus()
     }
   }
 
+  const deliverRef = useRef(deliver)
+  deliverRef.current = deliver
+
+  useEffect(() => {
+    if (!followsChart || isDemoMode() || openedRef.current) return
+    openedRef.current = true
+    void deliverRef.current('hi')
+  }, [followsChart])
+
   function handleKeyDown(e: React.KeyboardEvent) {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault()
-      sendMessage()
+      void deliver()
     }
   }
 
   function reset() {
     abortRef.current?.abort()
-    setMessages([{ id: 'welcome', role: 'assistant', content: `Hi! I'm ${botName}. Ask me anything — I'll search my knowledge base and answer.` }])
+    sessionRef.current = undefined
+    busyRef.current = false
     setLoading(false)
     setInput('')
+    if (followsChart && !isDemoMode()) {
+      setMessages([])
+      void deliverRef.current('hi')
+      return
+    }
+    setMessages([{ id: 'welcome', role: 'assistant', content: welcomeLine(botName, false) }])
     inputRef.current?.focus()
   }
 
@@ -216,7 +263,7 @@ export function ChatWidget({ botId, botName = 'Bot', systemPrompt, onClose, clas
           </div>
           <div>
             <p className="text-[13px] font-semibold text-[var(--text-primary)]">{botName}</p>
-            <p className="text-[11px] text-[var(--text-muted)]">Test Preview</p>
+            <p className="text-[11px] text-[var(--text-muted)]">{followsChart ? 'This chart' : 'Test Preview'}</p>
           </div>
         </div>
         <div className="flex items-center gap-1">
@@ -318,7 +365,7 @@ export function ChatWidget({ botId, botName = 'Bot', systemPrompt, onClose, clas
           <Button
             size="icon-sm"
             variant={input.trim() ? 'default' : 'ghost'}
-            onClick={sendMessage}
+            onClick={() => void deliver()}
             disabled={!input.trim() || loading}
             className="shrink-0"
           >
@@ -326,7 +373,7 @@ export function ChatWidget({ botId, botName = 'Bot', systemPrompt, onClose, clas
           </Button>
         </div>
         <p className="mt-1.5 text-center text-[10px] text-[var(--text-muted)]">
-          Powered by BotStudio · RAG + {import.meta.env.VITE_LLM_LABEL ?? 'Claude'}
+          {followsChart ? 'This chat follows the chart. One question at a time.' : `Powered by BotStudio · RAG + ${import.meta.env.VITE_LLM_LABEL ?? 'Claude'}`}
         </p>
       </div>
     </div>
