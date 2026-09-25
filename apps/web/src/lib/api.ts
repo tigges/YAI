@@ -356,7 +356,13 @@ export const preview = {
   knowledgeStats: (botId: string) =>
     apiFetch<{ data: { chunkCount: number; sourceCount: number } }>(`/bots/${botId}/preview/knowledge-stats`),
   /** Returns the raw fetch Response so the caller can consume the SSE stream. */
-  chatStream: (botId: string, body: { message: string; systemPrompt?: string; history?: Array<{ role: 'user' | 'assistant'; content: string }> }): Promise<Response> => {
+  chatStream: (botId: string, body: {
+    message: string
+    systemPrompt?: string
+    history?: Array<{ role: 'user' | 'assistant'; content: string }>
+    graph?: { nodes: unknown[]; edges: unknown[] }
+    session?: unknown
+  }): Promise<Response> => {
     const token = (() => { try { const r = localStorage.getItem('ybot-app'); if (!r) return null; const p = JSON.parse(r) as { state?: { token?: string } }; return p?.state?.token ?? null } catch { return null } })()
     return fetch(`${BASE}/bots/${botId}/preview/chat`, {
       method: 'POST',
