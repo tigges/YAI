@@ -28,4 +28,26 @@ test('the booking chart asks once, including a mistyped cut', async () => {
   assert.match(cut.text, /been to us before/)
   assert.equal(cut.text.includes('preferred time'), false)
   assert.equal(cut.text.includes('stylist'), false)
+  assert.equal(cut.session?.variables.flow['guest_name'], undefined)
+  assert.equal(cut.text.toLowerCase().includes('wnat'), false)
+
+  const slipped = await runCanvasPreview({ graph, message: 'wnat a ctu', session: hello.session })
+  assert.equal((slipped.text.match(/\?/g) ?? []).length, 1)
+  assert.match(slipped.text, /been to us before/)
+  assert.equal(slipped.session?.variables.flow['guest_name'], undefined)
+  assert.equal(slipped.session?.variables.contact['name'], 'there')
+
+  const known = await runCanvasPreview({
+    graph,
+    message: 'wnat a ctu',
+    session: {
+      currentNodeId: 'b-start',
+      status: 'running',
+      variables: { flow: {}, global: {}, contact: { name: 'Ada' } },
+    },
+  })
+  assert.equal((known.text.match(/\?/g) ?? []).length, 1)
+  assert.match(known.text, /been to us before/)
+  assert.equal(known.session?.variables.contact['name'], 'Ada')
+  assert.equal(known.session?.variables.flow['guest_name'], undefined)
 })
