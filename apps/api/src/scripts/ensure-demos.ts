@@ -24,7 +24,7 @@
 import bcrypt from 'bcryptjs'
 import { prisma } from '@ybot/db'
 import { hairStudioPack } from '@ybot/shared'
-import { environmentsNeedingGraph, isShopWelcomeGraph } from '../lib/bella-salon-sync.js'
+import { environmentsToRefresh, isShopWelcomeGraph } from '../lib/bella-salon-sync.js'
 import { publishedSource } from '../lib/copy-graphs.js'
 import { installStarterFlows } from '../lib/install-starter-flows.js'
 import { installHairStudioPack } from '../lib/install-corporate-pack.js'
@@ -410,7 +410,7 @@ async function refreshBellaSalonGraphs(tenantId: string, botId: string, environm
       return current ? [{ environmentId, graph: current.graph }] : []
     })
     let version = versions[0]?.version ?? 0
-    for (const environmentId of environmentsNeedingGraph(starter.graph, latest, environmentIds)) {
+    for (const environmentId of environmentsToRefresh(starter.graph, latest, environmentIds)) {
       version += 1
       await prisma.flowVersion.create({
         data: {
