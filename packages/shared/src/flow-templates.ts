@@ -4,6 +4,7 @@
  * at copy time. Each company keeps its own copy.
  */
 
+import { assistantGreeting, greetingWelcomeGraph } from './greeting-welcome.js'
 import { SAMPLE_ORDER_QUESTION, SAMPLE_ORDER_REPLY, SAMPLE_ORDER_NUMBER } from './sample-order.js'
 
 export interface StarterFlow {
@@ -105,7 +106,7 @@ export function supportUseCaseFlows(): StarterFlow[] {
   ]
 }
 
-function welcomeGraph(companyName: string, y: number): { nodes: object[]; edges: object[] } {
+function welcomeGraph(companyName: string): { nodes: object[]; edges: object[] } {
   const routes = [
     { handle: 'orders', phrases: ['order', 'tracking', 'where is my order'], flowName: 'Order Status' },
     { handle: 'returns', phrases: ['return', 'refund'], flowName: 'Return Request' },
@@ -116,32 +117,13 @@ function welcomeGraph(companyName: string, y: number): { nodes: object[]; edges:
       flowName: item.name,
     })),
   ]
-  const nodes: object[] = [
-    { id: 'start', type: 'flow-node', position: { x: 80, y }, data: { kind: 'trigger_start', label: 'Start', config: {} } },
-    { id: 'hi', type: 'flow-node', position: { x: 320, y }, data: { kind: 'send_message', label: 'Welcome', config: { text: `Hi {{contact.name}}. Welcome to ${companyName}. How can I help?` } } },
-    { id: 'ask', type: 'flow-node', position: { x: 560, y }, data: { kind: 'ask_question', label: 'Ask for topic', config: { question: 'What do you need help with?', variable: 'topic', choices: routes.map((route) => route.flowName) } } },
-    { id: 'route', type: 'flow-node', position: { x: 820, y }, data: { kind: 'route_topic', label: 'Route by topic', config: { routes } } },
-    { id: 'menu', type: 'flow-node', position: { x: 1100, y: 280 }, data: { kind: 'send_message', label: 'Offer the menu', config: { text: 'I can help with an order, a return, billing, a cancellation, a delivery address, or a person on the team.' } } },
-    { id: 'end', type: 'flow-node', position: { x: 1340, y: 280 }, data: { kind: 'end_flow', label: 'End', config: {} } },
-  ]
-  const edges: object[] = [
-    { id: 'e-start', source: 'start', target: 'hi', sourceHandle: 'out' },
-    { id: 'e-ask', source: 'hi', target: 'ask' },
-    { id: 'e-route', source: 'ask', target: 'route' },
-    { id: 'e-other', source: 'route', target: 'menu', sourceHandle: 'other' },
-    { id: 'e-end', source: 'menu', target: 'end' },
-  ]
-  routes.forEach((route, index) => {
-    const id = `go-${route.handle}`
-    nodes.push({
-      id,
-      type: 'flow-node',
-      position: { x: 1100, y: y - 80 + index * 70 },
-      data: { kind: 'execute_flow', label: route.flowName, config: { flowName: route.flowName } },
-    })
-    edges.push({ id: `e-${route.handle}`, source: 'route', target: id, sourceHandle: route.handle })
+  return greetingWelcomeGraph({
+    greeting: assistantGreeting(companyName),
+    followUp: 'Hi {{contact.name}}. What do you need help with?',
+    routes,
+    menu: 'I can help with an order, a return, billing, a cancellation, a delivery address, or a person on the team.',
+    choices: routes.map((route) => route.flowName),
   })
-  return { nodes, edges }
 }
 
 /** Collects a return reason and opens a ticket. Draft until a pack publishes it. */
@@ -182,7 +164,7 @@ export function starterFlows(companyName: string): StarterFlow[] {
       description: 'Greets visitors and routes them to the right flow',
       tags: ['welcome', 'routing'],
       publish: true,
-      graph: welcomeGraph(companyName, y),
+      graph: welcomeGraph(companyName),
     },
     {
       name: 'Order Status',
@@ -303,11 +285,11 @@ export interface GuidedFlowInput {
 /** A straight line of steps from a few answers: greeting, optional question, then end or handoff. */
 export function guidedFlowGraph(input: GuidedFlowInput): { nodes: object[]; edges: object[] } {
   const y = 120
-  const greeting = input.greeting.trim() || 'Hi {{contact.name}}. How can I help?'
+  const greeting = input.greeting.trim() || "Hi, I'm the assistant."
   const question = input.question.trim()
   const nodes: object[] = [
     { id: 'g1', type: 'flow-node', position: { x: 80, y }, data: { kind: 'trigger_start', label: 'Start', config: {} } },
-    { id: 'g2', type: 'flow-node', position: { x: 300, y }, data: { kind: 'send_message', label: 'Opening', config: { text: greeting } } },
+    { id: 'g2', type: 'flow-node', position: { x: 300, y }, data: { kind: 'ask_question', label: 'Opening', config: { question: greeting, variable: 'greeting_reply' } } },
   ]
   const edges: Array<{ id: string; source: string; target: string }> = [
     { id: 'e1', source: 'g1', target: 'g2' },

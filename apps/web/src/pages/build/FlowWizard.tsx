@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { flowCatalog, guidedFlowGraph } from '@ybot/shared'
 import { Button, Input, Dialog, DialogContent, DialogHeader, DialogTitle, DialogBody, DialogFooter } from '@ybot/ui'
@@ -53,17 +53,24 @@ export function FlowWizard({ open, existingNames, pending, error, onClose, onCre
   const [choice, setChoice] = useState<string>('guided')
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
-  const [greeting, setGreeting] = useState('Hi {{contact.name}}. How can I help?')
-  const [question, setQuestion] = useState('What do you need help with?')
+  const [greeting, setGreeting] = useState("Hi, I'm the assistant.")
+  const [greetingEdited, setGreetingEdited] = useState(false)
+  const [question, setQuestion] = useState("What's your name?")
   const [handoff, setHandoff] = useState(false)
+
+  useEffect(() => {
+    if (!open || greetingEdited || company === 'your company') return
+    setGreeting(`Hi, I'm the assistant at ${company}.`)
+  }, [open, company, greetingEdited])
 
   function reset() {
     setStep('pick')
     setChoice('guided')
     setName('')
     setDescription('')
-    setGreeting('Hi {{contact.name}}. How can I help?')
-    setQuestion('What do you need help with?')
+    setGreeting(company === 'your company' ? "Hi, I'm the assistant." : `Hi, I'm the assistant at ${company}.`)
+    setGreetingEdited(false)
+    setQuestion("What's your name?")
     setHandoff(false)
   }
 
@@ -169,7 +176,7 @@ export function FlowWizard({ open, existingNames, pending, error, onClose, onCre
                 <>
                   <label className="block">
                     <span className="mb-1.5 block text-xs font-medium text-[var(--text-muted)]">Opening line</span>
-                    <Input value={greeting} onChange={(e) => setGreeting(e.target.value)} />
+                    <Input value={greeting} onChange={(e) => { setGreetingEdited(true); setGreeting(e.target.value) }} />
                   </label>
                   <label className="block">
                     <span className="mb-1.5 block text-xs font-medium text-[var(--text-muted)]">Question for the visitor</span>

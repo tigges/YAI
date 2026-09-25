@@ -13,7 +13,7 @@ import {
   starterPackScope,
 } from '@ybot/shared'
 
-function session(text: string): Session {
+function session(text: string, name = 'Ada'): Session {
   return {
     id: 's1',
     conversationId: 'c1',
@@ -22,11 +22,17 @@ function session(text: string): Session {
     flowId: 'f1',
     flowVersionId: 'v1',
     currentNodeId: 'start',
-    variables: { flow: { _last_user_message: text }, global: {}, contact: { name: 'Ada' } },
+    variables: { flow: { _last_user_message: text }, global: {}, contact: { name } },
     status: 'running',
     createdAt: new Date(),
     updatedAt: new Date(),
   }
+}
+
+async function reply(machine: SessionMachine, previous: { session: Session }, graph: FlowGraph, text: string, name?: string) {
+  previous.session.variables.flow['_last_user_message'] = text
+  if (name) previous.session.variables.contact = { name }
+  return machine.run(previous.session, graph, text)
 }
 
 test('the pack answers ordinary questions from the flow itself', async () => {
@@ -53,7 +59,7 @@ test('the pack answers ordinary questions from the flow itself', async () => {
 
   const hours = await machine.run(session('What are your opening hours?'), graph, 'What are your opening hours?')
   assert.equal(hours.jumpToFlow, 'Opening hours')
-  assert.match(hours.newMessages.map((message) => message.content.text).join('\n'), /Welcome to Acme Corp/)
+  assert.match(hours.newMessages.map((message) => message.content.text).join('\n'), /Hi, I'm the assistant at Acme Corp/)
 
   const tracking = await machine.run(session('where is my order'), graph, 'where is my order')
   assert.equal(tracking.jumpToFlow, 'Order tracking')
@@ -69,9 +75,17 @@ test('the pack answers ordinary questions from the flow itself', async () => {
 
   const hello = await machine.run(session('hello'), graph, 'hello')
   assert.equal(hello.jumpToFlow, undefined)
-  assert.match(hello.newMessages.map((message) => message.content.text).join('\n'), /What do you need help with/)
+  assert.equal(hello.session.status, 'waiting_input')
+  assert.equal(hello.newMessages.map((message) => message.content.text).join('\n'), 'Hi Ada.')
+  const again = await reply(machine, hello, graph, 'hi')
+  assert.equal(again.newMessages.map((message) => message.content.text).join('\n'), 'Hi Ada. What do you need help with?')
 
-  const chosen = await machine.run(hello.session, graph, 'Opening hours')
+  const stranger = await machine.run(session('hello', 'there'), graph, 'hello')
+  assert.equal(stranger.newMessages.map((message) => message.content.text).join('\n'), "Hi, I'm the assistant at Acme Corp.")
+  const askName = await reply(machine, stranger, graph, 'hi')
+  assert.equal(askName.newMessages.map((message) => message.content.text).join('\n'), "What's your name?")
+
+  const chosen = await reply(machine, again, graph, 'Opening hours')
   assert.equal(chosen.jumpToFlow, 'Opening hours')
 
   const address = await machine.run(session('Please change the delivery address'), graph, 'Please change the delivery address')
@@ -95,7 +109,7 @@ test('a new company gets a published welcome and no second draft', () => {
   assert.equal(welcome?.publish, true)
   assert.equal(plan.flows.some((flow) => flow.name === CORPORATE_WELCOME_DRAFT), false)
   assert.equal(plan.flows.find((flow) => flow.name === 'Opening hours')?.publish, true)
-  assert.match(JSON.stringify(welcome?.graph), /Welcome to Northwind/)
+  assert.match(JSON.stringify(welcome?.graph), /Hi, I'm the assistant at Northwind/)
   assert.equal(plan.intents.length > 0, true)
 })
 

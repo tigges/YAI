@@ -10,8 +10,9 @@ import { prisma } from '@ybot/db'
 import bcrypt from 'bcryptjs'
 import { proposeDraftFlows } from '../lib/draft-flows.js'
 import { attachDestination, extendWelcomeGraph } from '../lib/welcome-routes.js'
-import { withSampleOrder } from '@ybot/shared'
+import { assistantGreeting, greetingWelcomeGraph, starterFlows, withSampleOrder } from '@ybot/shared'
 import { graphAction, publishedSource } from '../lib/copy-graphs.js'
+import { stockWelcomeKind, type StockWelcomeKind } from '../lib/stock-welcome.js'
 import { SUPPORT_USE_CASES, supportUseCaseFlows } from './starter-flows.js'
 
 const DEMO_PASSWORD = 'Demo1234!'
@@ -26,13 +27,6 @@ const SUPPORT_ROUTES = [
   { handle: 'orders', phrases: ['order', 'tracking', 'delivery', 'where is'], flowName: 'Order Status' },
   { handle: 'returns', phrases: ['return', 'refund', 'damaged', 'broken'], flowName: 'Return Request' },
   { handle: 'billing', phrases: ['invoice', 'billing', 'payment', 'charge', 'seat'], flowName: 'Billing' },
-]
-
-const PRODUCT_ROUTES = [
-  { handle: 'features', phrases: ['feature', 'benefit'] },
-  { handle: 'inbox', phrases: ['inbox', 'dashboard', 'flowchart', 'flow chart'] },
-  { handle: 'plan', phrases: ['price', 'pricing', 'free plan', 'cost', 'credit card'] },
-  { handle: 'start', phrases: ['sign up', 'signup', 'register', 'start free', 'create an account'] },
 ]
 
 const PRODUCT_GUIDE = [
@@ -54,36 +48,13 @@ function node(id: string, x: number, y: number, kind: string, label: string, con
 }
 
 function supportWelcomeGraph(companyName: string) {
-  const y = 160
-  const routes = SUPPORT_ROUTES.map(({ handle, phrases }) => ({ handle, phrases }))
-  return {
-    nodes: [
-      node('start', 80, y, 'trigger_start', 'Conversation Start'),
-      node('route', 300, y, 'route_topic', 'Route by topic', { routes }),
-      node('go-orders', 560, 40, 'execute_flow', 'Order Status', { flowName: 'Order Status' }),
-      node('go-returns', 560, 160, 'execute_flow', 'Return Request', { flowName: 'Return Request' }),
-      node('go-billing', 560, 280, 'execute_flow', 'Billing', { flowName: 'Billing' }),
-      node('hi', 560, 420, 'send_message', 'Welcome', { text: `Hi {{contact.name}}! Welcome to ${companyName}. How can I help you today?` }),
-      node('ask', 800, 420, 'ask_question', 'Ask for topic', { question: 'What do you need help with?', variable: 'topic', choices: ['Order status', 'Returns', 'Billing'] }),
-      node('route2', 1040, 420, 'route_topic', 'Route the answer', { routes }),
-      node('other', 1280, 420, 'send_message', 'Offer the menu', { text: 'I can help with orders, returns, and billing. Tell me which one you need.' }),
-      node('end', 1500, 420, 'end_flow', 'End'),
-    ],
-    edges: [
-      { id: 'e-start', source: 'start', target: 'route' },
-      { id: 'e-orders', source: 'route', target: 'go-orders', sourceHandle: 'orders' },
-      { id: 'e-returns', source: 'route', target: 'go-returns', sourceHandle: 'returns' },
-      { id: 'e-billing', source: 'route', target: 'go-billing', sourceHandle: 'billing' },
-      { id: 'e-other', source: 'route', target: 'hi', sourceHandle: 'other' },
-      { id: 'e-hi', source: 'hi', target: 'ask' },
-      { id: 'e-ask', source: 'ask', target: 'route2' },
-      { id: 'e-orders-2', source: 'route2', target: 'go-orders', sourceHandle: 'orders' },
-      { id: 'e-returns-2', source: 'route2', target: 'go-returns', sourceHandle: 'returns' },
-      { id: 'e-billing-2', source: 'route2', target: 'go-billing', sourceHandle: 'billing' },
-      { id: 'e-other-2', source: 'route2', target: 'other', sourceHandle: 'other' },
-      { id: 'e-end', source: 'other', target: 'end' },
-    ],
-  }
+  return greetingWelcomeGraph({
+    greeting: assistantGreeting(companyName),
+    followUp: 'Hi {{contact.name}}. What do you need help with?',
+    routes: SUPPORT_ROUTES.map((route) => ({ ...route, flowName: route.flowName })),
+    menu: 'I can help with orders, returns, and billing. Tell me which one you need.',
+    choices: ['Order status', 'Returns', 'Billing'],
+  })
 }
 
 function billingGraph() {
@@ -106,43 +77,24 @@ function billingGraph() {
 }
 
 function productWelcomeGraph() {
-  const y = 180
-  const routes = PRODUCT_ROUTES.map(({ handle, phrases }) => ({ handle, phrases }))
-  return {
-    nodes: [
-      node('start', 80, y, 'trigger_start', 'Visitor arrives'),
-      node('route', 300, y, 'route_topic', 'Route the question', { routes }),
-      node('features', 560, 40, 'send_message', 'Features', { text: 'BotStudio answers from your own flows and content. Your team steps in from the inbox when a person should take over.' }),
-      node('inbox', 560, 160, 'send_message', 'Inbox', { text: 'A message on this widget is saved as a chat. In the console, open Inbox to see it, then open the flow that answered. The overview counts the same chats.' }),
-      node('plan', 560, 280, 'send_message', 'Free plan', { text: 'The free plan needs no credit card. Start at https://app.botstudio.uk/sign-in?mode=register' }),
-      node('start-free', 560, 400, 'send_message', 'Start free', { text: 'You can start free at https://app.botstudio.uk/sign-in?mode=register' }),
-      node('hi', 560, 520, 'send_message', 'Hello', { text: 'Hi {{contact.name}}! I can tell you what BotStudio does, how the inbox works, or how to start free.' }),
-      node('ask', 820, 520, 'ask_question', 'Ask', { question: 'What would you like to know?', variable: 'topic', choices: ['Features', 'Inbox', 'Free plan', 'Start free'] }),
-      node('route2', 1060, 520, 'route_topic', 'Route the answer', { routes }),
-      node('other', 1300, 520, 'send_message', 'Menu', { text: 'Ask me about features, the inbox, the free plan, or how to start.' }),
-      node('end', 1520, 300, 'end_flow', 'End'),
+  return greetingWelcomeGraph({
+    greeting: assistantGreeting('BotStudio'),
+    followUp: 'Hi {{contact.name}}. What would you like to know?',
+    routes: [
+      { handle: 'features', phrases: ['feature', 'benefit'], answer: 'BotStudio answers from your own flows and content. Your team steps in from the inbox when a person should take over.' },
+      { handle: 'inbox', phrases: ['inbox', 'dashboard', 'flowchart', 'flow chart'], answer: 'A message on this widget is saved as a chat. In the console, open Inbox to see it, then open the flow that answered. The overview counts the same chats.' },
+      { handle: 'plan', phrases: ['price', 'pricing', 'free plan', 'cost', 'credit card'], answer: 'The free plan needs no credit card. Start at https://app.botstudio.uk/sign-in?mode=register' },
+      { handle: 'start', phrases: ['sign up', 'signup', 'register', 'start free', 'create an account'], answer: 'You can start free at https://app.botstudio.uk/sign-in?mode=register' },
     ],
-    edges: [
-      { id: 'e-start', source: 'start', target: 'route' },
-      { id: 'e-features', source: 'route', target: 'features', sourceHandle: 'features' },
-      { id: 'e-inbox', source: 'route', target: 'inbox', sourceHandle: 'inbox' },
-      { id: 'e-plan', source: 'route', target: 'plan', sourceHandle: 'plan' },
-      { id: 'e-start-free', source: 'route', target: 'start-free', sourceHandle: 'start' },
-      { id: 'e-other', source: 'route', target: 'hi', sourceHandle: 'other' },
-      { id: 'e-hi', source: 'hi', target: 'ask' },
-      { id: 'e-ask', source: 'ask', target: 'route2' },
-      { id: 'e-features-2', source: 'route2', target: 'features', sourceHandle: 'features' },
-      { id: 'e-inbox-2', source: 'route2', target: 'inbox', sourceHandle: 'inbox' },
-      { id: 'e-plan-2', source: 'route2', target: 'plan', sourceHandle: 'plan' },
-      { id: 'e-start-2', source: 'route2', target: 'start-free', sourceHandle: 'start' },
-      { id: 'e-other-2', source: 'route2', target: 'other', sourceHandle: 'other' },
-      { id: 'e-features-end', source: 'features', target: 'end' },
-      { id: 'e-inbox-end', source: 'inbox', target: 'end' },
-      { id: 'e-plan-end', source: 'plan', target: 'end' },
-      { id: 'e-start-end', source: 'start-free', target: 'end' },
-      { id: 'e-other-end', source: 'other', target: 'end' },
-    ],
-  }
+    menu: 'Ask me about features, the inbox, the free plan, or how to start.',
+    choices: ['Features', 'Inbox', 'Free plan', 'Start free'],
+  })
+}
+
+function graphForStockKind(kind: StockWelcomeKind, companyName: string) {
+  if (kind === 'product') return productWelcomeGraph()
+  if (kind === 'support') return supportWelcomeGraph(companyName)
+  return starterFlows(companyName).find((flow) => flow.name === 'Welcome & Routing')?.graph ?? null
 }
 
 function graphHasRouter(graph: unknown): boolean {
@@ -225,6 +177,40 @@ async function ensureWelcomeRouter(botId: string, tenantId: string, environmentI
   return true
 }
 
+/** Replaces a stock stacked welcome. A chart that already greets, or a custom edit, stays. */
+async function refreshStockWelcomeGraphs(botId: string, tenantId: string, environmentIds: string[], companyName: string) {
+  const flows = await prisma.flow.findMany({
+    where: { botId, name: { in: ['Welcome & Routing', 'Product welcome'] } },
+    include: { versions: { orderBy: { version: 'desc' } } },
+  })
+  let published = 0
+  for (const flow of flows) {
+    let version = flow.versions[0]?.version ?? 0
+    for (const environmentId of environmentIds) {
+      const current = publishedSource(flow.versions, environmentId)
+      const kind = stockWelcomeKind(current?.graph)
+      if (!kind) continue
+      const graph = graphForStockKind(kind, companyName)
+      if (!graph) continue
+      version += 1
+      const created = await prisma.flowVersion.create({
+        data: {
+          tenantId,
+          flowId: flow.id,
+          version,
+          status: 'published',
+          environmentId,
+          graph: graph as object,
+          publishedAt: new Date(),
+        },
+      })
+      flow.versions.unshift(created)
+      published += 1
+    }
+  }
+  return published
+}
+
 async function ensureSupportRouting() {
   const bot = await acmeBot()
   if (!bot) return { status: 'skipped' as const }
@@ -242,7 +228,8 @@ async function ensureSupportRouting() {
     returns = await publishNamed(bot.id, bot.tenantId, env.id, 'Return Request') || returns
     welcome = await ensureWelcomeRouter(bot.id, bot.tenantId, env.id, companyName) || welcome
   }
-  return { status: 'ok' as const, welcome, billing, orders, returns }
+  const refreshed = await refreshStockWelcomeGraphs(bot.id, bot.tenantId, targets.map((env) => env.id), companyName)
+  return { status: 'ok' as const, welcome, billing, orders, returns, refreshed }
 }
 
 const SANDBOX_CHANNEL_NAMES: Record<string, string> = {
@@ -691,6 +678,7 @@ async function ensureProductBot() {
       },
     })
   }
+  await refreshStockWelcomeGraphs(bot.id, tenant.id, [env.id], 'BotStudio')
   const source = await prisma.knowledgeSource.findFirst({ where: { botId: bot.id, name: 'BotStudio guide' } })
   if (!source) {
     const created = await prisma.knowledgeSource.create({
