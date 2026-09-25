@@ -19,7 +19,8 @@ import { finishBotLines, saveContactName, takeNameTurn } from '../lib/visitor-na
 import { fillNameTokens } from '@ybot/shared'
 import { proposeDraftFlows, textMightStartDraft } from '../lib/draft-flows.js'
 import { runFlowIfPublished } from '../lib/flow-runner.js'
-import { BELLA_PUBLIC_CHANNEL, resolveDemoChannel } from '../lib/demo-page.js'
+import { appBuildLabel, BELLA_PUBLIC_CHANNEL, resolveDemoChannel } from '../lib/demo-page.js'
+import { visitorTurn } from '../lib/widget-open.js'
 import { streamDoneEvent } from '../lib/widget-rating.js'
 import { onInboundCustomerMessage, onOutboundReply } from '../lib/sla.js'
 import { fileURLToPath } from 'node:url'
@@ -151,36 +152,47 @@ const WIDGET_INLINE_JS = /* js */`
     csatState=rating;render();
     fetch(API_BASE+'/public/csat/'+channelId,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({conversationId:conversationId,rating:rating})}).catch(function(){});
   }
+  var greeting=false;
+  async function postChat(text,opening){
+    var hist=messages.slice(-10).map(function(m){return{role:m.role==='user'?'user':'assistant',content:m.text};});
+    if(!opening)addMsg('user',text);
+    var bi=addMsg('bot','',true);
+    var body={sessionId:sessionId,history:hist};
+    if(conversationId)body.conversationId=conversationId;
+    if(opening)body.opening=true; else body.message=text;
+    if(visitorName)body.visitorName=visitorName;
+    var res=await fetch(API_BASE+'/public/chat/'+channelId,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+    if(!res.ok||!res.body){updMsg(bi,'Sorry, something went wrong. ('+res.status+')');return;}
+    var reader=res.body.getReader(),dec=new TextDecoder(),buf='',botText='';
+    while(true){
+      var r=await reader.read();if(r.done)break;
+      buf+=dec.decode(r.value,{stream:true});
+      var lines=buf.split('\\n');buf=lines.pop()||'';
+      for(var i=0;i<lines.length;i++){
+        var line=lines[i];
+        if(line.startsWith('data: ')){try{var d=JSON.parse(line.slice(6));if(d.conversationId)conversationId=d.conversationId;if(d.chunk){botText+=d.chunk;updMsg(bi,botText,true);}if(d.done)updMsg(bi,botText,false,!!d.ended);}catch(e){}}
+      }
+    }
+    if(!botText)updMsg(bi,"I\\'m sorry, I couldn\\'t generate a response.",false,false);
+  }
   async function send(){
     var text=ta.value.trim();if(!text||loading)return;
     ta.value='';
     loading=true;sendB.disabled=true;
-    var hist=messages.slice(-10).map(function(m){return{role:m.role==='user'?'user':'assistant',content:m.text};});
-    addMsg('user',text);var bi=addMsg('bot','',true);
-    try{
-      var body={message:text,sessionId:sessionId,conversationId:conversationId,history:hist};
-      if(visitorName)body.visitorName=visitorName;
-      var res=await fetch(API_BASE+'/public/chat/'+channelId,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
-      if(!res.ok||!res.body){updMsg(bi,'Sorry, something went wrong. ('+res.status+')');loading=false;sendB.disabled=false;return;}
-      var reader=res.body.getReader(),dec=new TextDecoder(),buf='',botText='';
-      while(true){
-        var r=await reader.read();if(r.done)break;
-        buf+=dec.decode(r.value,{stream:true});
-        var lines=buf.split('\\n');buf=lines.pop()||'';
-        for(var i=0;i<lines.length;i++){
-          var line=lines[i];
-          if(line.startsWith('data: ')){try{var d=JSON.parse(line.slice(6));if(d.conversationId)conversationId=d.conversationId;if(d.chunk){botText+=d.chunk;updMsg(bi,botText,true);}if(d.done)updMsg(bi,botText,false,!!d.ended);}catch(e){}}
-        }
-      }
-      if(!botText)updMsg(bi,"I\\'m sorry, I couldn\\'t generate a response.",false,false);
-    }catch(e){updMsg(bi,"Couldn\\'t reach the server. Please try again.");}
+    try{await postChat(text,false);}catch(e){updMsg(messages.length-1,"Couldn\\'t reach the server. Please try again.");}
+    finally{loading=false;sendB.disabled=false;}
+  }
+  async function greet(){
+    if(greeting||messages.length||loading)return;
+    greeting=true;loading=true;sendB.disabled=true;
+    try{await postChat('',true);}catch(e){updMsg(messages.length-1,"Couldn\\'t reach the server. Please try again.");}
     finally{loading=false;sendB.disabled=false;}
   }
   function toggle(force){
     open=force!==undefined?force:!open;
     panel.style.display=open?'flex':'none';
     bubble.innerHTML=open?'&times;':'&#128172;';
-    if(open)setTimeout(function(){ta.focus();},50);
+    if(open){setTimeout(function(){ta.focus();},50);greet();}
   }
   bubble.onclick=function(){toggle();};sendB.onclick=send;
   ta.onkeydown=function(e){if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();send();}};
@@ -197,7 +209,7 @@ export async function widgetRoutes(app: FastifyInstance) {
   app.get('/widget.js', async (_request, reply) => {
     setCors(reply)
     reply.header('Content-Type', 'application/javascript; charset=utf-8')
-    reply.header('Cache-Control', 'public, max-age=300')
+    reply.header('Cache-Control', 'public, max-age=60')
 
     // Try to serve the pre-built bundle first
     try {
@@ -281,6 +293,7 @@ export async function widgetRoutes(app: FastifyInstance) {
     }
     const channel = requested
     const personaName = channel?.bot?.personaName ?? channel?.bot?.name ?? ''
+    const build = appBuildLabel()
 
     return reply
       .header('Content-Type', 'text/html; charset=utf-8')
@@ -298,8 +311,9 @@ export async function widgetRoutes(app: FastifyInstance) {
     body{font-family:"Inter",system-ui,sans-serif;color:var(--ink);background:var(--bg);line-height:1.6}
     h1,h2,h3{font-family:"Fraunces",Georgia,serif;font-weight:600;letter-spacing:-.5px}
     .wrap{max-width:1080px;margin:0 auto;padding:0 24px}
-    header{display:flex;align-items:center;justify-content:space-between;padding:22px 0}
+    header{display:flex;align-items:center;justify-content:space-between;padding:22px 0;gap:16px}
     .logo{font-family:"Fraunces",serif;font-size:22px;font-weight:600}
+    .build{font-family:ui-monospace,SFMono-Regular,monospace;font-size:12px;color:var(--muted);white-space:nowrap}
     .logo span{color:var(--accent)}
     nav a{color:var(--muted);text-decoration:none;margin-left:26px;font-size:15px;font-weight:500}
     nav a:hover{color:var(--ink)}
@@ -330,11 +344,14 @@ export async function widgetRoutes(app: FastifyInstance) {
   <div class="wrap">
     <header>
       <div class="logo">Bella<span>.</span>Hair Studio</div>
-      <nav>
-        <a href="#services">Services</a>
-        <a href="#about">About</a>
-        <a href="#book" onclick="openChat();return false">Book</a>
-      </nav>
+      <div style="display:flex;align-items:center;gap:18px">
+        <nav>
+          <a href="#services">Services</a>
+          <a href="#about">About</a>
+          <a href="#book" onclick="openChat();return false">Book</a>
+        </nav>
+        <span class="build" title="${build.title}">${build.short}</span>
+      </div>
     </header>
     <section class="hero">
       <div>
@@ -366,13 +383,14 @@ export async function widgetRoutes(app: FastifyInstance) {
       <p class="lede">Open Mon–Sat, 9am–6pm · 14 Rosewood Lane · Walk-ins welcome when we have space.</p>
     </section>
   </div>
-  <footer>© Bella Hair Studio · Powered by <a href="${origin}" style="color:inherit">BotStudio</a></footer>
+  <footer>© Bella Hair Studio · <span title="${build.title}">${build.short}</span> · Powered by <a href="${origin}" style="color:inherit">BotStudio</a></footer>
   <script>
     window.YBotChannelId='${channelId}';
     window.YBotTitle='Chat with Bella Hair Studio';
     window.YBotAccentColor='#8b5cf6';
     ${personaName ? `window.YBotBotName='${personaName}';` : ''}
     function openChat(){if(window.YBotWidget)window.YBotWidget.open();}
+    document.addEventListener('DOMContentLoaded', function(){openChat();});
   </script>
   <script src="/api/v1/widget.js?id=${channelId}" defer></script>
 </body>
@@ -387,13 +405,15 @@ export async function widgetRoutes(app: FastifyInstance) {
     const { channelId } = request.params
     const body = request.body as {
       message?: string
+      opening?: boolean
       sessionId?: string
       conversationId?: string
       visitorName?: string
       history?: Array<{ role: string; content: string }>
     }
-    const userText = (body.message ?? '').trim()
-    if (!userText) return reply.status(400).send({ error: 'message required' })
+    const turn = visitorTurn({ message: body.message, opening: body.opening === true })
+    if (!turn) return reply.status(400).send({ error: 'message required' })
+    const userText = turn.text
 
     const channel = await prisma.channel.findFirst({ where: { id: channelId, isActive: true }, include: { bot: true } })
     if (!channel?.bot) return reply.status(404).send({ error: 'Channel not found' })
@@ -453,7 +473,8 @@ export async function widgetRoutes(app: FastifyInstance) {
     }
 
     // ── Save inbound user message ────────────────────────────────────────
-    if (conversationId) {
+    // An opening greeting is the bot's first line. There is no visitor message yet.
+    if (conversationId && turn.showVisitor) {
       await prisma.message.create({
         data: { tenantId, conversationId, direction: 'inbound', authorKind: 'user', content: { text: userText } },
       }).catch(() => {})
