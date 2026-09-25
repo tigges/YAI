@@ -32,13 +32,25 @@ function atStart(graph: FlowGraph, text: string, name = 'Ada'): Session {
   return session(text, name, start)
 }
 
+interface TurnNode {
+  id: string
+  data?: { kind?: string; config?: Record<string, unknown> }
+}
+
 /** A message followed straight into a question lands in one bubble. Each line may ask once. */
-function stackedTurn(graph: { nodes?: Array<{ id: string; data?: { kind?: string; config?: Record<string, unknown> } }>; edges?: Array<{ source: string; target: string }> }): string | undefined {
-  const nodes = graph.nodes ?? []
+function stackedTurn(graph: unknown): string | undefined {
+  if (!graph || typeof graph !== 'object') return undefined
+  const record = graph as { nodes?: unknown; edges?: unknown }
+  const nodes = Array.isArray(record.nodes) ? record.nodes.filter((node): node is TurnNode => (
+    !!node && typeof node === 'object' && typeof (node as TurnNode).id === 'string'
+  )) : []
   const byId = new Map(nodes.map((node) => [node.id, node]))
-  for (const edge of graph.edges ?? []) {
-    const source = byId.get(edge.source)
-    const target = byId.get(edge.target)
+  const edges = Array.isArray(record.edges) ? record.edges : []
+  for (const edge of edges) {
+    if (!edge || typeof edge !== 'object') continue
+    const link = edge as { source?: unknown; target?: unknown }
+    const source = typeof link.source === 'string' ? byId.get(link.source) : undefined
+    const target = typeof link.target === 'string' ? byId.get(link.target) : undefined
     if (source?.data?.kind === 'send_message' && target?.data?.kind === 'ask_question') return `${source.id}->${target.id}`
   }
   for (const node of nodes) {
