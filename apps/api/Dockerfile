@@ -71,5 +71,15 @@ COPY --from=builder /app/apps/api/package.json         apps/api/package.json
 COPY apps/api/docker-entrypoint.sh ./docker-entrypoint.sh
 RUN chmod +x docker-entrypoint.sh
 
+# Node resolves a package import from the file that imports it, then walks
+# upward. The flow runner is @ybot/runtime, and this image does not copy that
+# package's node_modules. Link the workspace packages at the app root so an
+# import from apps/runtime can find them.
+RUN mkdir -p /app/node_modules/@ybot \
+ && ln -sfn /app/packages/shared /app/node_modules/@ybot/shared \
+ && ln -sfn /app/packages/db /app/node_modules/@ybot/db \
+ && ln -sfn /app/packages/llm /app/node_modules/@ybot/llm \
+ && ln -sfn /app/apps/runtime /app/node_modules/@ybot/runtime
+
 EXPOSE 3001
 CMD ["sh", "docker-entrypoint.sh"]

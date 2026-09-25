@@ -1,4 +1,4 @@
-import { fillNameTokens, isNameVariable, nameForSpeech } from '@ybot/shared'
+import { fillNameTokens, isNameVariable, nameForSpeech } from './contact-speech.js'
 
 function lookup(variables: Record<string, unknown>, path: string): unknown {
   const keys = path.trim().split('.')
