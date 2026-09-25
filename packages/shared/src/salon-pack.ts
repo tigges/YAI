@@ -244,7 +244,8 @@ function bookFlow(topic: Topic): StarterFlow {
   const nodes: object[] = [
     { id: 'b-start', type: 'flow-node', position: { x: 40, y }, data: { kind: 'trigger_start', label: 'Book', config: {} } },
     { id: 'b-save', type: 'flow-node', position: { x: 260, y }, data: { kind: 'set_variable', label: 'Keep the request', config: { variable: 'topic', value: '{{_last_user_message}}' } } },
-    { id: 'b-named', type: 'flow-node', position: { x: 500, y }, data: { kind: 'condition', label: 'Name known?', config: { conditions: [{ field: 'contact.name', operator: 'equals', value: 'there' }] } } },
+    say('b-ack', 500, y, 'Acknowledge', 'I can book that.'),
+    { id: 'b-named', type: 'flow-node', position: { x: 740, y }, data: { kind: 'condition', label: 'Name known?', config: { conditions: [{ field: 'contact.name', operator: 'equals', value: 'there' }] } } },
     ask('b-name', 760, y - 160, 'Name', NAME_QUESTION, 'guest_name'),
     { id: 'b-route', type: 'flow-node', position: { x: 1020, y }, data: { kind: 'route_topic', label: 'What they want', config: { routes: serviceRoutes } } },
     ask('b-want', 1280, y + 280, 'Ask what they want', 'What would you like done? A cut, colour, or something else is fine, and not sure is fine too.', 'request'),
@@ -275,7 +276,8 @@ function bookFlow(topic: Topic): StarterFlow {
   ]
   const edges: object[] = [
     { id: 'e-start', source: 'b-start', target: 'b-save' },
-    { id: 'e-save', source: 'b-save', target: 'b-named' },
+    { id: 'e-save', source: 'b-save', target: 'b-ack' },
+    { id: 'e-ack', source: 'b-ack', target: 'b-named' },
     { id: 'e-named-yes', source: 'b-named', target: 'b-name', sourceHandle: 'yes' },
     { id: 'e-named-no', source: 'b-named', target: 'b-route', sourceHandle: 'no' },
     { id: 'e-name', source: 'b-name', target: 'b-route' },
@@ -330,7 +332,7 @@ function cancelFlow(topic: Topic): StarterFlow {
     graph: {
       nodes: [
         { id: 'c1', type: 'flow-node', position: { x: 80, y }, data: { kind: 'trigger_start', label: 'Cancel', config: {} } },
-        { id: 'c2', type: 'flow-node', position: { x: 300, y }, data: { kind: 'ask_question', label: 'Intro', config: { question: topic.answer, variable: 'cancel_note' } } },
+        { id: 'c2', type: 'flow-node', position: { x: 300, y }, data: { kind: 'send_message', label: 'Intro', config: { text: topic.answer } } },
         { id: 'c3', type: 'flow-node', position: { x: 540, y }, data: { kind: 'ask_question', label: 'Name', config: { question: 'What name is the appointment under?', variable: 'guest_name' } } },
         { id: 'c4', type: 'flow-node', position: { x: 780, y }, data: { kind: 'ask_question', label: 'When', config: { question: 'Which day and time should I cancel?', variable: 'appointment_time' } } },
         { id: 'c5', type: 'flow-node', position: { x: 1020, y }, data: { kind: 'send_message', label: 'Confirm', config: { text: 'I have noted the cancellation for {{guest_name}} on {{appointment_time}}. The studio will confirm it in this chat.' } } },
@@ -380,7 +382,7 @@ function rescheduleFlow(topic: Topic): StarterFlow {
     graph: {
       nodes: [
         { id: 'm1', type: 'flow-node', position: { x: 80, y }, data: { kind: 'trigger_start', label: 'Reschedule', config: {} } },
-        { id: 'm2', type: 'flow-node', position: { x: 300, y }, data: { kind: 'ask_question', label: 'Intro', config: { question: topic.answer, variable: 'move_note' } } },
+        { id: 'm2', type: 'flow-node', position: { x: 300, y }, data: { kind: 'send_message', label: 'Intro', config: { text: topic.answer } } },
         { id: 'm3', type: 'flow-node', position: { x: 540, y }, data: { kind: 'ask_question', label: 'Name', config: { question: 'What name is the appointment under?', variable: 'guest_name' } } },
         { id: 'm4', type: 'flow-node', position: { x: 780, y }, data: { kind: 'ask_question', label: 'Current time', config: { question: 'Which day and time is it now?', variable: 'appointment_time' } } },
         { id: 'm5', type: 'flow-node', position: { x: 1020, y }, data: { kind: 'ask_question', label: 'New day', config: { question: 'Which day would you like instead?', variable: 'new_day' } } },
@@ -409,7 +411,7 @@ function consultationFlow(topic: Topic): StarterFlow {
     graph: {
       nodes: [
         { id: 'n1', type: 'flow-node', position: { x: 80, y }, data: { kind: 'trigger_start', label: 'Consultation', config: {} } },
-        { id: 'n2', type: 'flow-node', position: { x: 300, y }, data: { kind: 'ask_question', label: 'Intro', config: { question: topic.answer, variable: 'consult_note' } } },
+        { id: 'n2', type: 'flow-node', position: { x: 300, y }, data: { kind: 'send_message', label: 'Intro', config: { text: topic.answer } } },
         { id: 'n3', type: 'flow-node', position: { x: 540, y }, data: { kind: 'ask_question', label: 'Time', config: { question: TIME_PREFERENCE, variable: 'preferred_day' } } },
         { id: 'n4', type: 'flow-node', position: { x: 780, y }, data: { kind: 'send_message', label: 'Confirm', config: { text: 'I have noted a consultation for {{preferred_day}}. The studio will confirm the exact time in this chat.' } } },
         { id: 'n5', type: 'flow-node', position: { x: 1020, y }, data: { kind: 'end_flow', label: 'End', config: {} } },
@@ -439,41 +441,56 @@ function welcomeFlow(companyName: string, topics: Topic[]): StarterFlow {
     phrases: topic.phrases,
     flowName: topic.flowName,
   }))
+  const greeting = `Hi, I'm Bella at ${company}.`
   const y = 80
   const nodes: object[] = [
     { id: 'start', type: 'flow-node', position: { x: 80, y }, data: { kind: 'trigger_start', label: 'Start', config: {} } },
     { id: 'save', type: 'flow-node', position: { x: 300, y }, data: { kind: 'set_variable', label: 'Keep the request', config: { variable: 'topic', value: '{{_last_user_message}}' } } },
-    { id: 'route', type: 'flow-node', position: { x: 540, y }, data: { kind: 'route_topic', label: 'Route by topic', config: { routes } } },
-    { id: 'named', type: 'flow-node', position: { x: 820, y: 420 }, data: { kind: 'condition', label: 'Name known?', config: { conditions: [{ field: 'contact.name', operator: 'equals', value: 'there' }] } } },
-    ask('greet', 1080, 280, 'Hello', `Hi, I'm Bella at ${company}.`, 'greeting_reply'),
-    ask('name', 1320, 280, 'Name', NAME_QUESTION, 'guest_name'),
-    ask('want', 1560, 420, 'Ask', 'Hi {{contact.name}}. What would you like done? A cut, colour, or something else is fine, and not sure is fine too.', 'request'),
-    { id: 'route2', type: 'flow-node', position: { x: 1820, y: 420 }, data: { kind: 'route_topic', label: 'Route the answer', config: { routes } } },
-    say('menu', 2080, 560, 'Offer a next step', 'I can help with a booking, a price, our hours, or a person at the studio. Tell me which you need.'),
-    { id: 'end', type: 'flow-node', position: { x: 2320, y: 560 }, data: { kind: 'end_flow', label: 'End', config: {} } },
+    { id: 'route', type: 'flow-node', position: { x: 540, y }, data: { kind: 'route_topic', label: 'Route the opening', config: { routes } } },
+    { id: 'named', type: 'flow-node', position: { x: 820, y: 280 }, data: { kind: 'condition', label: 'Name known?', config: { conditions: [{ field: 'contact.name', operator: 'equals', value: 'there' }] } } },
+    ask('greet', 1080, 160, 'Hello', greeting, 'greeting_reply'),
+    ask('greet-known', 1080, 400, 'Hello by name', 'Hi {{contact.name}}.', 'greeting_reply'),
+    { id: 'route2', type: 'flow-node', position: { x: 1340, y: 280 }, data: { kind: 'route_topic', label: 'Route the reply', config: { routes } } },
+    { id: 'named2', type: 'flow-node', position: { x: 1600, y: 480 }, data: { kind: 'condition', label: 'Still unnamed?', config: { conditions: [{ field: 'contact.name', operator: 'equals', value: 'there' }] } } },
+    say('yes', 1840, 360, 'Acknowledge', 'Yes.'),
+    ask('name', 2080, 360, 'Name', NAME_QUESTION, 'guest_name'),
+    ask('want', 2320, 520, 'Ask', 'Hi {{contact.name}}. What would you like done? A cut, colour, or something else is fine, and not sure is fine too.', 'request'),
+    { id: 'route3', type: 'flow-node', position: { x: 2580, y: 520 }, data: { kind: 'route_topic', label: 'Route what they want', config: { routes } } },
+    say('menu', 2840, 680, 'Offer a next step', 'I can help with a booking, a price, our hours, or a person at the studio. Tell me which you need.'),
+    { id: 'end', type: 'flow-node', position: { x: 3100, y: 680 }, data: { kind: 'end_flow', label: 'End', config: {} } },
   ]
   const edges: object[] = [
     { id: 'e-start', source: 'start', target: 'save' },
     { id: 'e-save', source: 'save', target: 'route' },
     { id: 'e-other', source: 'route', target: 'named', sourceHandle: 'other' },
     { id: 'e-named-yes', source: 'named', target: 'greet', sourceHandle: 'yes' },
-    { id: 'e-named-no', source: 'named', target: 'want', sourceHandle: 'no' },
-    { id: 'e-greet', source: 'greet', target: 'name' },
+    { id: 'e-named-no', source: 'named', target: 'greet-known', sourceHandle: 'no' },
+    { id: 'e-greet', source: 'greet', target: 'route2' },
+    { id: 'e-greet-known', source: 'greet-known', target: 'route2' },
+    { id: 'e-other-2', source: 'route2', target: 'named2', sourceHandle: 'other' },
+    { id: 'e-named2-yes', source: 'named2', target: 'yes', sourceHandle: 'yes' },
+    { id: 'e-named2-no', source: 'named2', target: 'want', sourceHandle: 'no' },
+    { id: 'e-yes', source: 'yes', target: 'name' },
     { id: 'e-name', source: 'name', target: 'want' },
-    { id: 'e-want', source: 'want', target: 'route2' },
-    { id: 'e-other-2', source: 'route2', target: 'menu', sourceHandle: 'other' },
+    { id: 'e-want', source: 'want', target: 'route3' },
+    { id: 'e-other-3', source: 'route3', target: 'menu', sourceHandle: 'other' },
     { id: 'e-end', source: 'menu', target: 'end' },
   ]
   topics.forEach((topic, index) => {
-    const id = `go-${handleFor(topic.flowName)}`
+    const handle = handleFor(topic.flowName)
+    const greetId = `hi-${handle}`
+    const jumpId = `go-${handle}`
+    nodes.push(say(greetId, 820, y + index * 72, 'Greet', greeting))
     nodes.push({
-      id,
+      id: jumpId,
       type: 'flow-node',
-      position: { x: 980, y: y + index * 72 },
+      position: { x: 1100, y: y + index * 72 },
       data: { kind: 'execute_flow', label: topic.flowName, config: { flowName: topic.flowName } },
     })
-    edges.push({ id: `e-${handleFor(topic.flowName)}`, source: 'route', target: id, sourceHandle: handleFor(topic.flowName) })
-    edges.push({ id: `e2-${handleFor(topic.flowName)}`, source: 'route2', target: id, sourceHandle: handleFor(topic.flowName) })
+    edges.push({ id: `e-${handle}`, source: 'route', target: greetId, sourceHandle: handle })
+    edges.push({ id: `e-hi-${handle}`, source: greetId, target: jumpId })
+    edges.push({ id: `e2-${handle}`, source: 'route2', target: jumpId, sourceHandle: handle })
+    edges.push({ id: `e3-${handle}`, source: 'route3', target: jumpId, sourceHandle: handle })
   })
   return {
     name: SALON_WELCOME_NAME,

@@ -37,7 +37,16 @@ interface TurnNode {
   data?: { kind?: string; config?: Record<string, unknown> }
 }
 
-/** A message followed straight into a question lands in one bubble. Each line may ask once. */
+function questionCount(node: TurnNode | undefined): number {
+  const config = node?.data?.config ?? {}
+  const text = String(config['text'] ?? config['question'] ?? '')
+  return (text.match(/\?/g) ?? []).length
+}
+
+/**
+ * A turn may answer and then ask once. Two question marks before the chart waits is too many.
+ * An ask_question ends the turn, so the next question is a later reply.
+ */
 function stackedTurn(graph: unknown): string | undefined {
   if (!graph || typeof graph !== 'object') return undefined
   const record = graph as { nodes?: unknown; edges?: unknown }
@@ -45,18 +54,31 @@ function stackedTurn(graph: unknown): string | undefined {
     !!node && typeof node === 'object' && typeof (node as TurnNode).id === 'string'
   )) : []
   const byId = new Map(nodes.map((node) => [node.id, node]))
-  const edges = Array.isArray(record.edges) ? record.edges : []
-  for (const edge of edges) {
+  const next = new Map<string, string[]>()
+  for (const edge of Array.isArray(record.edges) ? record.edges : []) {
     if (!edge || typeof edge !== 'object') continue
     const link = edge as { source?: unknown; target?: unknown }
-    const source = typeof link.source === 'string' ? byId.get(link.source) : undefined
-    const target = typeof link.target === 'string' ? byId.get(link.target) : undefined
-    if (source?.data?.kind === 'send_message' && target?.data?.kind === 'ask_question') return `${source.id}->${target.id}`
+    if (typeof link.source !== 'string' || typeof link.target !== 'string') continue
+    next.set(link.source, [...(next.get(link.source) ?? []), link.target])
+  }
+  function walk(id: string, asked: number, seen: Set<string>): string | undefined {
+    if (seen.has(id)) return undefined
+    const node = byId.get(id)
+    if (!node) return undefined
+    const count = asked + questionCount(node)
+    if (count > 1) return id
+    if (node.data?.kind === 'ask_question') return undefined
+    const further = new Set(seen)
+    further.add(id)
+    for (const target of next.get(id) ?? []) {
+      const hit = walk(target, count, further)
+      if (hit) return hit
+    }
+    return undefined
   }
   for (const node of nodes) {
-    const config = node.data?.config ?? {}
-    const text = String(config['text'] ?? config['question'] ?? '')
-    if ((text.match(/\?/g) ?? []).length > 1) return node.id
+    const hit = walk(node.id, 0, new Set())
+    if (hit) return `${node.id}->${hit}`
   }
   return undefined
 }
@@ -108,8 +130,9 @@ test('a salon widget answers prices, bookings, and the Bella address', async () 
 
   const hours = await machine.run(session('What are your opening hours?'), graph, 'What are your opening hours?')
   assert.equal(hours.jumpToFlow, 'Salon hours')
-  assert.equal(spoken(hours).includes('Welcome to Bella Hair Studio'), false)
+  assert.match(spoken(hours), /Hi, I'm Bella at Bella Hair Studio/)
   assert.equal(spoken(hours).includes('What would you like done'), false)
+  assert.equal((spoken(hours).match(/\?/g) ?? []).length, 0)
 
   const prices = await machine.run(session('How much is a haircut?'), graph, 'How much is a haircut?')
   assert.equal(prices.jumpToFlow, 'Services and prices')
@@ -149,21 +172,31 @@ test('a salon widget answers prices, bookings, and the Bella address', async () 
 
   const hello = await machine.run(session('hello'), graph, 'hello')
   assert.equal(hello.jumpToFlow, undefined)
-  assert.equal(spoken(hello), 'Hi Ada. What would you like done? A cut, colour, or something else is fine, and not sure is fine too.')
+  assert.equal(hello.session.status, 'waiting_input')
+  assert.equal(spoken(hello), 'Hi Ada.')
+  const knownReply = await reply(machine, hello, graph, 'just saying hello')
+  assert.equal(spoken(knownReply), 'Hi Ada. What would you like done? A cut, colour, or something else is fine, and not sure is fine too.')
 
   const stranger = await machine.run(session('hello', 'there'), graph, 'hello')
   assert.equal(stranger.jumpToFlow, undefined)
   assert.equal(stranger.session.status, 'waiting_input')
   assert.equal(spoken(stranger), "Hi, I'm Bella at Bella Hair Studio.")
-  const askName = await reply(machine, stranger, graph, 'hello')
-  assert.equal(spoken(askName), "What's your name?")
+  const askName = await reply(machine, stranger, graph, 'do you want to know my name?')
+  assert.equal(spoken(askName), "Yes.\nWhat's your name?")
+  assert.equal(askName.session.status, 'waiting_input')
   const namedGuest = await reply(machine, askName, graph, 'Sophie', 'Sophie')
   assert.equal(spoken(namedGuest), 'Hi Sophie. What would you like done? A cut, colour, or something else is fine, and not sure is fine too.')
   const haircut = await reply(machine, namedGuest, graph, 'a haircut')
   assert.equal(haircut.jumpToFlow, 'Book an appointment')
+  assert.equal(spoken(haircut).includes("Hi, I'm Bella"), false)
+
+  const hoursAfterHello = await reply(machine, { session: (await machine.run(session('hi', 'there'), graph, 'hi')).session }, graph, 'What are your opening hours?')
+  assert.equal(hoursAfterHello.jumpToFlow, 'Salon hours')
+  assert.equal(spoken(hoursAfterHello).includes("Hi, I'm Bella"), false)
 
   const lighter = await machine.run(session("I'd like to go lighter", 'there'), graph, "I'd like to go lighter")
   assert.equal(lighter.jumpToFlow, 'Book an appointment')
+  assert.match(spoken(lighter), /Hi, I'm Bella at Bella Hair Studio/)
   assert.equal(spoken(lighter).includes("What's your name?"), false)
 
   const reaction = await machine.run(session('I had an allergic reaction'), graph, 'I had an allergic reaction')
@@ -193,7 +226,9 @@ test('a salon widget answers prices, bookings, and the Bella address', async () 
   assert.match(JSON.stringify(bookGraph), /Consultation/)
 
   const colour = await machine.run(atStart(bookGraph, 'Can I book a colour?', 'there'), bookGraph, 'Can I book a colour?')
+  assert.match(spoken(colour), /I can book that/)
   assert.match(spoken(colour), /What's your name\?/)
+  assert.equal((spoken(colour).match(/\?/g) ?? []).length, 1)
   assert.equal(spoken(colour).includes('What would you like done'), false)
   const named = await reply(machine, colour, bookGraph, 'Sophie', 'Sophie')
   assert.match(spoken(named), /box dye or henna/)
@@ -218,7 +253,9 @@ test('a salon widget answers prices, bookings, and the Bella address', async () 
   assert.equal(addon.session.status, 'completed')
 
   const cut = await machine.run(atStart(bookGraph, 'book a haircut'), bookGraph, 'book a haircut')
+  assert.match(spoken(cut), /I can book that/)
   assert.match(spoken(cut), /been to us before/)
+  assert.equal((spoken(cut).match(/\?/g) ?? []).length, 1)
   assert.equal(spoken(cut).includes('patch test'), false)
   const returning = await reply(machine, cut, bookGraph, 'I have been before')
   assert.match(spoken(returning), /Saturday morning or a weekday after 5/)
@@ -240,26 +277,21 @@ test('a salon widget answers prices, bookings, and the Bella address', async () 
   assert.match(spoken(handed), /passing this chat to the studio/)
 })
 
-test('cancel, reschedule, and consultation ask one thing, then wait', async () => {
+test('cancel, reschedule, and consultation answer and then ask once', async () => {
   const pack = hairStudioPack('Bella Hair Studio')
   const machine = new SessionMachine({ llm: {}, db: {}, httpFetch: fetch } as unknown as ExecutionServices)
-  const steps: Array<[string, string[]]> = [
-    ['Cancel appointment', ['note a cancellation', 'What name is the appointment under', 'Which day and time should I cancel']],
-    ['Reschedule', ['note a new time', 'What name is the appointment under', 'Which day and time is it now', 'Which day would you like instead']],
-    ['Consultation', ['free and takes about 15 minutes', 'Saturday morning or a weekday after 5']],
+  const steps: Array<[string, string, string]> = [
+    ['Cancel appointment', 'note a cancellation', 'What name is the appointment under'],
+    ['Reschedule', 'note a new time', 'What name is the appointment under'],
+    ['Consultation', 'free and takes about 15 minutes', 'Saturday morning or a weekday after 5'],
   ]
-  for (const [name, prompts] of steps) {
+  for (const [name, answer, followUp] of steps) {
     const graph = pack.flows.find((flow) => flow.name === name)!.graph as unknown as FlowGraph
-    let turn = await machine.run(atStart(graph, name), graph, name)
-    for (let index = 0; index < prompts.length; index += 1) {
-      assert.match(spoken(turn), new RegExp(prompts[index]!.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')))
-      assert.equal((spoken(turn).match(/\?/g) ?? []).length <= 1, true, `${name} turn ${index}`)
-      if (index < prompts.length - 1) {
-        assert.equal(turn.session.status, 'waiting_input', name)
-        assert.equal(spoken(turn).includes(prompts[index + 1]!), false, name)
-        turn = await reply(machine, turn, graph, 'Sophie')
-      }
-    }
+    const turn = await machine.run(atStart(graph, name), graph, name)
+    assert.match(spoken(turn), new RegExp(answer))
+    assert.match(spoken(turn), new RegExp(followUp.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')))
+    assert.equal((spoken(turn).match(/\?/g) ?? []).length, 1, name)
+    assert.equal(turn.session.status, 'waiting_input', name)
   }
 })
 
