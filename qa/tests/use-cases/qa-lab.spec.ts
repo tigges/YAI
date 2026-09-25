@@ -28,7 +28,8 @@ test('QA Lab saves a contact, a ticket, and a flow', async ({ page }) => {
   const scratch = page.getByText('QA Scratch Flow', { exact: true })
   if (await scratch.count() === 0) {
     await page.getByRole('button', { name: 'New Flow' }).click()
-    await page.getByPlaceholder('e.g. Welcome & Routing').fill('QA Scratch Flow')
+    await page.getByRole('button', { name: 'Guided' }).click()
+    await page.getByLabel('Name').fill('QA Scratch Flow')
     await page.getByRole('dialog').getByRole('button', { name: 'Create flow' }).click()
     await expect(page.getByRole('button', { name: 'Save' })).toBeVisible()
     await page.getByRole('button', { name: 'Save' }).click()

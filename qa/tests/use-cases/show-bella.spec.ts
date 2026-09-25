@@ -5,12 +5,12 @@ test('show the Bella demo', { tag: '@smoke' }, async ({ page }) => {
   await signIn(page, bellaEmail, bellaPassword)
 
   await page.goto('/build/flows')
-  await expect(page.getByText('Welcome & Routing')).toBeVisible()
-  await expect(page.getByText('Order Status', { exact: true })).toBeVisible()
+  await expect(page.getByText('Salon welcome')).toBeVisible()
+  await expect(page.getByText('Book an appointment', { exact: true })).toBeVisible()
 
-  await page.getByText('Welcome & Routing').click()
-  await expect(page.getByText('Welcome Message')).toBeVisible()
-  await page.getByText('Welcome Message').click()
+  await page.getByText('Salon welcome').click()
+  await expect(page.getByText('Hello').first()).toBeVisible()
+  await page.getByText('Hello').first().click()
   await expect(page.getByText('Bella Hair Studio')).toBeVisible()
 
   await page.goto('/inbox/chats')

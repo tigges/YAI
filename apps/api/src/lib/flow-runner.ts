@@ -44,6 +44,22 @@ function startNodeId(graph: FlowGraph): string | undefined {
   return graph.nodes.find((node) => node.data.kind === 'trigger_start' || node.data.kind === 'start')?.id
 }
 
+function asRecord(value: unknown): Record<string, unknown> {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {}
+  return { ...(value as Record<string, unknown>) }
+}
+
+/** A saved session from an older chart may not have flow, global, and contact. */
+export function resumeVariables(raw: unknown, userText: string, contactName: string): SessionVariables {
+  const record = asRecord(raw)
+  const flow = asRecord(record['flow'])
+  const global = asRecord(record['global'])
+  const contact = asRecord(record['contact'])
+  flow['_last_user_message'] = userText
+  contact['name'] = contactName
+  return { flow, global, contact }
+}
+
 export async function runFlowIfPublished(opts: {
   conversationId: string
   botId: string
@@ -61,8 +77,8 @@ export async function runFlowIfPublished(opts: {
   const envId = convo?.environmentId
   if (!envId) return { handled: false, messages: [] }
 
-  const fsRecord = await prisma.flowSession.findUnique({ where: { conversationId } })
-  const active = fsRecord
+  let fsRecord = await prisma.flowSession.findUnique({ where: { conversationId } })
+  let active = fsRecord
     ? await prisma.flowVersion.findUnique({ where: { id: fsRecord.flowVersionId }, include: { flow: true } })
     : await entryVersion(botId, envId)
   if (!active) return { handled: false, messages: [] }
@@ -72,16 +88,36 @@ export async function runFlowIfPublished(opts: {
   const llmAdapter = model ? createLlmAdapterForModel(model) : defaultLlm
   const machine = new SessionMachine({ llm: llmAdapter, db: prisma, httpFetch: fetch })
 
-  const first = await runVersion({
-    machine,
-    version: active,
-    fsRecord,
-    conversationId,
-    botId,
-    tenantId,
-    userText,
-    contactName: named.spoken,
-  })
+  let first
+  try {
+    first = await runVersion({
+      machine,
+      version: active,
+      fsRecord,
+      conversationId,
+      botId,
+      tenantId,
+      userText,
+      contactName: named.spoken,
+    })
+  } catch (error) {
+    if (!fsRecord) throw error
+    await prisma.flowSession.delete({ where: { conversationId } }).catch(() => {})
+    const entry = await entryVersion(botId, envId)
+    if (!entry) throw error
+    fsRecord = null
+    active = entry
+    first = await runVersion({
+      machine,
+      version: entry,
+      fsRecord: null,
+      conversationId,
+      botId,
+      tenantId,
+      userText,
+      contactName: named.spoken,
+    })
+  }
   if (!first) return { handled: false, messages: [] }
 
   let version = active
@@ -218,22 +254,21 @@ async function runVersion(opts: {
       updatedAt: new Date(),
     }
   } else {
-    const vars = opts.fsRecord.variables as unknown as SessionVariables
-    vars.flow['_last_user_message'] = opts.userText
-    vars.contact = { ...vars.contact, name: opts.contactName }
+    const saved = opts.fsRecord
+    const onGraph = graph.nodes.some((node) => node.id === saved.currentNodeId)
     session = {
-      id: opts.fsRecord.id,
+      id: saved.id,
       conversationId: opts.conversationId,
-      botId: opts.fsRecord.botId,
-      tenantId: opts.fsRecord.tenantId,
-      flowId: opts.fsRecord.flowId,
-      flowVersionId: opts.fsRecord.flowVersionId,
-      currentNodeId: opts.fsRecord.currentNodeId,
-      variables: vars,
-      status: opts.fsRecord.status as Session['status'],
-      waitingFor: opts.fsRecord.waitingFor as Session['waitingFor'] | undefined,
-      createdAt: opts.fsRecord.createdAt,
-      updatedAt: opts.fsRecord.updatedAt,
+      botId: saved.botId,
+      tenantId: saved.tenantId,
+      flowId: saved.flowId,
+      flowVersionId: saved.flowVersionId,
+      currentNodeId: onGraph ? saved.currentNodeId : startId,
+      variables: resumeVariables(saved.variables, opts.userText, opts.contactName),
+      status: onGraph ? saved.status as Session['status'] : 'running',
+      waitingFor: onGraph ? saved.waitingFor as Session['waitingFor'] | undefined : undefined,
+      createdAt: saved.createdAt,
+      updatedAt: saved.updatedAt,
     }
   }
 
