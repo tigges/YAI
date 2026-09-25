@@ -1,6 +1,4 @@
 const API = 'https://app.botstudio.uk/api/v1/public/chat/botstudio-web'
-const SESSION_KEY = 'botstudio-hero-session'
-const CONVO_KEY = 'botstudio-hero-conversation'
 
 export interface HeroChatEls {
   log: HTMLElement
@@ -23,24 +21,32 @@ export function readSseEvents(buffer: string): { events: Array<{ conversationId?
   return { events, rest }
 }
 
+/** A page load starts a new chat. An earlier visit does not resume a finished session. */
+export function freshHeroSession(): string {
+  return `web_${Date.now()}_${Math.random().toString(36).slice(2)}`
+}
+
+export function heroPayload(input: {
+  sessionId: string
+  conversationId?: string | null
+  message?: string
+  opening?: boolean
+}): { sessionId: string; conversationId?: string; message?: string; opening?: boolean } {
+  return {
+    sessionId: input.sessionId,
+    ...(input.conversationId ? { conversationId: input.conversationId } : {}),
+    ...(input.opening ? { opening: true } : { message: input.message ?? '' }),
+  }
+}
+
 export function startHeroChat(els: HeroChatEls, endpoint = API): void {
   const { log, form, input } = els
   const sendBtn = form.querySelector<HTMLButtonElement>('button')
-  let sessionId = sessionStorage.getItem(SESSION_KEY) ?? ''
-  if (!sessionId) {
-    sessionId = `web_${Date.now()}_${Math.random().toString(36).slice(2)}`
-    sessionStorage.setItem(SESSION_KEY, sessionId)
-  }
-  let conversationId = sessionStorage.getItem(CONVO_KEY)
-  let busy = false
-
-  const empty = document.createElement('p')
-  empty.className = 'widget-empty'
-  empty.textContent = 'Ask a question. This chat is live.'
-  log.append(empty)
+  const sessionId = freshHeroSession()
+  let conversationId: string | null = null
+  let chain: Promise<void> = Promise.resolve()
 
   function bubble(role: 'user' | 'bot', text: string): HTMLParagraphElement {
-    empty.remove()
     const node = document.createElement('p')
     node.className = role === 'user' ? 'bubble mine' : 'bubble'
     node.textContent = text
@@ -49,20 +55,14 @@ export function startHeroChat(els: HeroChatEls, endpoint = API): void {
     return node
   }
 
-  form.addEventListener('submit', async (event) => {
-    event.preventDefault()
-    const text = input.value.trim()
-    if (!text || busy) return
-    busy = true
+  async function deliver(text: string, opening: boolean): Promise<void> {
     if (sendBtn) sendBtn.disabled = true
-    input.value = ''
-    bubble('user', text)
     const reply = bubble('bot', '')
     try {
       const res = await fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: text, sessionId, conversationId }),
+        body: JSON.stringify(heroPayload({ sessionId, conversationId, message: text, opening })),
       })
       if (!res.ok || !res.body) throw new Error(String(res.status))
       const reader = res.body.getReader()
@@ -76,10 +76,7 @@ export function startHeroChat(els: HeroChatEls, endpoint = API): void {
         const parsed = readSseEvents(buf)
         buf = parsed.rest
         for (const item of parsed.events) {
-          if (item.conversationId) {
-            conversationId = item.conversationId
-            sessionStorage.setItem(CONVO_KEY, item.conversationId)
-          }
+          if (item.conversationId) conversationId = item.conversationId
           if (item.chunk) {
             spoken += item.chunk
             reply.textContent = spoken
@@ -91,9 +88,23 @@ export function startHeroChat(els: HeroChatEls, endpoint = API): void {
     } catch {
       reply.textContent = 'Could not reach the server. Please try again.'
     } finally {
-      busy = false
       if (sendBtn) sendBtn.disabled = false
-      input.focus()
     }
+  }
+
+  function enqueue(text: string, opening: boolean): void {
+    chain = chain.then(() => deliver(text, opening))
+  }
+
+  form.addEventListener('submit', (event) => {
+    event.preventDefault()
+    const text = input.value.trim()
+    if (!text) return
+    input.value = ''
+    bubble('user', text)
+    enqueue(text, false)
+    input.focus()
   })
+
+  enqueue('', true)
 }
