@@ -7,6 +7,15 @@ const PLACEHOLDER = /^(visitor|guest|there|unknown|user)$/i
 const GREETING = /^(hi|hello|hey|hiya|yo|good morning|good afternoon|good evening)[!?.\s]*$/i
 const NAME = /^[\p{L}][\p{L}'’.\-]*(?: [\p{L}][\p{L}'’.\-]*){0,2}$/u
 const NAME_VARIABLE = /^(?:contact|user|visitor|customer)\.name$/i
+const NOT_A_NAME = new Set([
+  'a', 'an', 'the', 'to', 'for', 'and', 'or',
+  'hi', 'hello', 'hey', 'hiya', 'yo',
+  'help', 'feature', 'features', 'inbox', 'plan', 'start', 'free',
+  'book', 'booking', 'colour', 'color', 'price', 'prices', 'hours',
+  'yes', 'no', 'ok', 'okay', 'thanks', 'thank', 'please',
+  'want', 'need', 'appointment', 'haircut',
+  'what', 'how', 'when', 'where', 'today', 'can', 'could',
+])
 
 const NEUTRAL_NAME = 'there'
 
@@ -19,6 +28,8 @@ function usableContactName(raw: string | null | undefined): string | undefined {
   if (!name || name.length > 40 || PLACEHOLDER.test(name) || GREETING.test(name)) return undefined
   if (name.includes('{{') || name.includes('}}')) return undefined
   if (!NAME.test(name)) return undefined
+  const words = name.split(' ')
+  if (words.some((word) => word.length < 2 || NOT_A_NAME.has(word.toLowerCase()))) return undefined
   return name
 }
 

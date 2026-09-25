@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { readSseEvents } from './hero-chat.ts'
+import { freshHeroSession, heroPayload, readSseEvents } from './hero-chat.ts'
 
 test('a live chat frame keeps the reply and the conversation id', () => {
   const raw = 'data: {"conversationId":"c1"}\n\ndata: {"chunk":"Hi there. How can I help you today?"}\n\ndata: {"done":true}\n\n'
@@ -9,6 +9,19 @@ test('a live chat frame keeps the reply and the conversation id', () => {
   assert.equal(events[0]?.conversationId, 'c1')
   assert.equal(events[1]?.chunk, 'Hi there. How can I help you today?')
   assert.equal(events[2]?.done, true)
+})
+
+test('a page load greets on a new session', () => {
+  const first = freshHeroSession()
+  const second = freshHeroSession()
+  assert.notEqual(first, second)
+  assert.match(first, /^web_/)
+  assert.deepEqual(heroPayload({ sessionId: first, opening: true }), { sessionId: first, opening: true })
+  assert.deepEqual(heroPayload({ sessionId: first, conversationId: 'c1', message: 'features' }), {
+    sessionId: first,
+    conversationId: 'c1',
+    message: 'features',
+  })
 })
 
 test('a split frame waits for the rest of the line', () => {

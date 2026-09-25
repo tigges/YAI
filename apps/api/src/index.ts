@@ -54,14 +54,16 @@ await app.register(cors, {
 })
 
 // ── Rate limiting ──────────────────────────────────────────────────────────
-// Global: 200 req/min per IP. Auth + public chat override below.
+// The console opens many screens in a minute. Login and the public chat keep
+// their own tighter limits. A full limit answers 429, so a burst is not a crash.
 await app.register(rateLimit, {
   global: true,
-  max: 200,
+  max: 1200,
   timeWindow: '1 minute',
   keyGenerator: (req) =>
     (req.headers['x-forwarded-for'] as string | undefined)?.split(',')[0]?.trim() ?? req.ip,
   errorResponseBuilder: (_req, context) => ({
+    statusCode: 429,
     error: {
       code: 'RATE_LIMITED',
       message: `Too many requests — try again in ${Math.ceil((context.ttl ?? 60000) / 1000)}s`,

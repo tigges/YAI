@@ -80,16 +80,7 @@ export function planNameTurn(
     }
   }
 
-  const openedWith = usableContactName(userText)
-  if (openedWith) {
-    const first = openedWith.split(' ')[0]!
-    return {
-      spoken: first,
-      displayName: openedWith,
-      metadata: rememberChat(meta, { conversationId, spoken: first, nameAsked: true, awaitingName: false }),
-    }
-  }
-
+  // A first line is a request. A name counts only after this chat asked for one.
   return { spoken: 'there' }
 }
 
@@ -110,7 +101,16 @@ export function finishBotLines(
   const known = spokenFirstName(spoken) ?? spokenFirstName(state.spoken)
   if (known || state.nameAsked || !contact?.id) return { lines: cleaned }
   if (!cleaned.some((line) => line.trim().length > 0)) return { lines: cleaned }
-  if (cleaned.some((line) => line.includes(NAME_QUESTION))) return { lines: cleaned }
+  if (cleaned.some((line) => line.includes(NAME_QUESTION))) {
+    return {
+      lines: cleaned,
+      metadata: rememberChat(meta, {
+        conversationId: options?.conversationId ?? '',
+        nameAsked: true,
+        awaitingName: true,
+      }),
+    }
+  }
   if (options?.waiting) return { lines: cleaned }
   return {
     lines: [...cleaned, NAME_QUESTION],

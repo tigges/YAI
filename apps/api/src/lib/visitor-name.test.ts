@@ -46,8 +46,16 @@ test('an unknown visitor is greeted, then asked once', () => {
   assert.equal(waiting.metadata, undefined)
 })
 
-test('a real name is used and a later reply is saved', () => {
-  const opened = planNameTurn({ id: 'c', displayName: 'Visitor' }, 'Sarah Jones', 'chat-1')
+test('a real name is used only after this chat asked', () => {
+  const unasked = planNameTurn({ id: 'c', displayName: 'Visitor' }, 'Sarah Jones', 'chat-1')
+  assert.equal(unasked.spoken, 'there')
+  assert.equal(unasked.displayName, undefined)
+
+  const opened = planNameTurn(
+    { id: 'c', displayName: 'Visitor', metadata: { chatName: { conversationId: 'chat-1', nameAsked: true, awaitingName: true } } },
+    'Sarah Jones',
+    'chat-1',
+  )
   assert.equal(opened.spoken, 'Sarah')
   assert.equal(opened.displayName, 'Sarah Jones')
 
@@ -70,8 +78,44 @@ test('a real name is used and a later reply is saved', () => {
   assert.equal(saved.awaitingName, false)
 })
 
+test('ordinary words are not a name, even when we asked', () => {
+  for (const word of ['help', 'features', 'N', 'hi there', 'book a colour']) {
+    const plan = planNameTurn(
+      { id: 'c', metadata: { chatName: { conversationId: 'chat-1', nameAsked: true, awaitingName: true } } },
+      word,
+      'chat-1',
+    )
+    assert.equal(plan.thanks, undefined, word)
+    assert.equal(plan.spoken, 'there', word)
+  }
+})
+
+test('a flow that already asked the name does not glue it onto the menu', () => {
+  const asked = finishBotLines(
+    ["What's your name?"],
+    { id: 'c' },
+    'there',
+    { conversationId: 'chat-1' },
+  )
+  assert.deepEqual(asked.lines, ["What's your name?"])
+  const state = asked.metadata?.['chatName'] as { nameAsked?: boolean; awaitingName?: boolean }
+  assert.equal(state.nameAsked, true)
+  assert.equal(state.awaitingName, true)
+  const menu = finishBotLines(
+    ['Ask me about features, the inbox, the free plan, or how to start.'],
+    { id: 'c', metadata: asked.metadata },
+    'there',
+    { conversationId: 'chat-1' },
+  )
+  assert.deepEqual(menu.lines, ['Ask me about features, the inbox, the free plan, or how to start.'])
+})
+
 test('a new chat does not reuse a name remembered from an earlier chat', () => {
-  const earlier = planNameTurn({ id: 'c', displayName: 'Visitor' }, 'Sophie Turner', 'chat-1')
+  const earlier = planNameTurn(
+    { id: 'c', displayName: 'Visitor', metadata: { chatName: { conversationId: 'chat-1', nameAsked: true, awaitingName: true } } },
+    'Sophie Turner',
+    'chat-1',
+  )
   const contact = { id: 'c', displayName: 'Sophie Turner', metadata: earlier.metadata }
   const opened = planNameTurn(contact, 'hi', 'chat-2')
   assert.equal(opened.spoken, 'there')
