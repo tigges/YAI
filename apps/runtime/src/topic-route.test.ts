@@ -14,6 +14,25 @@ test('matchTopic picks the longest phrase', () => {
   assert.equal(matchTopic('I need to return a kettle', routes), 'returns')
   assert.equal(matchTopic('Please cancel my order', routes), 'cancel-order')
   assert.equal(matchTopic('hello', routes), 'other')
+  assert.equal(matchTopic('wnat a ctu', [
+    { handle: 'colour', phrases: ['colour', 'color', 'balayage', 'a colour'] },
+    { handle: 'cut', phrases: ['haircut', 'a cut', 'a trim', 'trim', 'fringe'] },
+    { handle: 'book', phrases: ['book'] },
+  ]), 'cut')
+  assert.equal(matchTopic('haricut', [
+    { handle: 'cut', phrases: ['haircut', 'a cut'] },
+    { handle: 'colour', phrases: ['colour'] },
+  ]), 'cut')
+  assert.equal(matchTopic('colur', [
+    { handle: 'cut', phrases: ['haircut', 'a cut'] },
+    { handle: 'colour', phrases: ['colour', 'color'] },
+  ]), 'colour')
+  assert.equal(matchTopic('cat', [
+    { handle: 'cut', phrases: ['haircut', 'a cut', 'trim'] },
+  ]), 'other')
+  assert.equal(matchTopic('back', [
+    { handle: 'book', phrases: ['book'] },
+  ]), 'other')
   assert.equal(
     matchTopic('Please change the delivery address', [
       { handle: 'orders', phrases: ['order', 'delivery'] },
@@ -99,4 +118,41 @@ test('a condition saved as true and false still takes the no branch', async () =
   }
   const result = await machine.run(session, graph, 'order 1')
   assert.match(result.newMessages.map((message) => message.content.text).join('\n'), /Not found/)
+})
+
+test('a booking sentence is not kept as the guest name', async () => {
+  const services = { llm: {}, db: {}, httpFetch: fetch } as unknown as ExecutionServices
+  const machine = new SessionMachine(services)
+  const graph: FlowGraph = {
+    nodes: [
+      { id: 'start', data: { kind: 'trigger_start', label: 'Start', config: {} } },
+      { id: 'ask', data: { kind: 'ask_question', label: 'Name', config: { question: "What's your name?", variable: 'guest_name' } } },
+      { id: 'next', data: { kind: 'send_message', label: 'Next', config: { text: 'Have you been to us before?' } } },
+    ],
+    edges: [
+      { id: 'e1', source: 'start', target: 'ask' },
+      { id: 'e2', source: 'ask', target: 'next' },
+    ],
+  }
+  const fresh = (): Session => ({
+    id: 's4',
+    conversationId: 'c4',
+    botId: 'b1',
+    tenantId: 't1',
+    flowId: 'f1',
+    flowVersionId: 'v1',
+    currentNodeId: 'start',
+    variables: { flow: {}, global: {}, contact: { name: 'there' } },
+    status: 'running',
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  })
+  const asked = await machine.run(fresh(), graph, 'hi')
+  const slipped = await machine.run(asked.session, graph, 'wnat a cut')
+  assert.equal(slipped.session.variables.flow['guest_name'], undefined)
+  assert.match(slipped.newMessages.map((message) => message.content.text).join('\n'), /been to us before/)
+
+  const askedAgain = await machine.run(fresh(), graph, 'hi')
+  const named = await machine.run(askedAgain.session, graph, 'Sophie')
+  assert.equal(named.session.variables.flow['guest_name'], 'Sophie')
 })

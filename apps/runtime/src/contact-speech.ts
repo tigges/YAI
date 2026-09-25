@@ -23,7 +23,7 @@ export function isNameVariable(path: string): boolean {
   return NAME_VARIABLE.test(path.trim())
 }
 
-function usableContactName(raw: string | null | undefined): string | undefined {
+export function usableContactName(raw: string | null | undefined): string | undefined {
   const name = (raw ?? '').trim().replace(/\s+/g, ' ')
   if (!name || name.length > 40 || PLACEHOLDER.test(name) || GREETING.test(name)) return undefined
   if (name.includes('{{') || name.includes('}}')) return undefined

@@ -1,3 +1,4 @@
+import { usableContactName } from './contact-speech.js'
 import type { NodeContext, NodeResult, Session, ExecutionServices } from './types.js'
 import {
   executeTriggerStart, executeSendMessage, executeAskQuestion,
@@ -78,7 +79,11 @@ export class SessionMachine {
     // If session is waiting for input, resume from that node with the user's text
     if (session.status === 'waiting_input' && session.waitingFor && incomingText) {
       const { variable } = session.waitingFor
-      session.variables.flow[variable] = incomingText
+      if (variable === 'guest_name' && !usableContactName(incomingText)) {
+        delete session.variables.flow[variable]
+      } else {
+        session.variables.flow[variable] = incomingText
+      }
       session.waitingFor = undefined
       session.status = 'running'
       // Advance past the waiting node (e.g. ask_question) — don't re-execute it
