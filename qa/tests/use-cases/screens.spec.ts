@@ -50,7 +50,7 @@ test('every screen opens', { tag: '@smoke' }, async ({ page }) => {
   await page.goto('/analytics/reports')
   await expect(page.getByRole('button', { name: 'New Report' })).toBeVisible()
   await page.goto('/configure/database')
-  await expect(page.getByRole('button', { name: 'Create Table' })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Create Table', exact: true })).toBeVisible()
   await page.goto('/configure/integrations')
   await expect(page.getByText('Stripe', { exact: true })).toBeVisible()
   await expect(page.getByText('Soon').first()).toBeVisible()
