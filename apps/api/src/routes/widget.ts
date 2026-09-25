@@ -19,6 +19,7 @@ import { finishBotLines, saveContactName, takeNameTurn } from '../lib/visitor-na
 import { fillNameTokens } from '@ybot/shared'
 import { proposeDraftFlows, textMightStartDraft } from '../lib/draft-flows.js'
 import { runFlowIfPublished } from '../lib/flow-runner.js'
+import { BELLA_PUBLIC_CHANNEL, resolveDemoChannel } from '../lib/demo-page.js'
 import { streamDoneEvent } from '../lib/widget-rating.js'
 import { onInboundCustomerMessage, onOutboundReply } from '../lib/sla.js'
 import { fileURLToPath } from 'node:url'
@@ -260,7 +261,25 @@ export async function widgetRoutes(app: FastifyInstance) {
   app.get<{ Params: { channelId: string } }>('/public/demo/:channelId', async (request, reply) => {
     const { channelId } = request.params
     const origin = requestOrigin(request)
-    const channel = await prisma.channel.findFirst({ where: { id: channelId, isActive: true }, include: { bot: true } })
+    const requested = await prisma.channel.findFirst({ where: { id: channelId, isActive: true }, include: { bot: true } })
+    const fallback = requested
+      ? null
+      : await prisma.channel.findFirst({ where: { id: BELLA_PUBLIC_CHANNEL, isActive: true }, include: { bot: true } })
+    const active = new Set<string>()
+    if (requested) active.add(requested.id)
+    if (fallback) active.add(fallback.id)
+    const target = resolveDemoChannel(channelId, active)
+    if (!target) {
+      return reply
+        .status(404)
+        .header('Content-Type', 'text/html; charset=utf-8')
+        .header('Cache-Control', 'no-store')
+        .send('<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><title>Demo not available</title></head><body><p>This demo link is no longer available.</p></body></html>')
+    }
+    if (target.redirect) {
+      return reply.header('Cache-Control', 'no-store').redirect(`/api/v1/public/demo/${target.channelId}`)
+    }
+    const channel = requested
     const personaName = channel?.bot?.personaName ?? channel?.bot?.name ?? ''
 
     return reply
