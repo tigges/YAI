@@ -1,3 +1,5 @@
+import { messageForStatus } from './api-error'
+
 const BASE = import.meta.env.VITE_API_URL ?? '/api/v1'
 
 function getToken(): string | null {
@@ -12,8 +14,8 @@ function getToken(): string | null {
 }
 
 export class ApiError extends Error {
-  constructor(public status: number, public body: { code: string; message: string }) {
-    super(body?.message ?? `HTTP ${status}`)
+  constructor(public status: number, public body?: { code?: string; message?: string }) {
+    super(messageForStatus(status, body))
     this.name = 'ApiError'
   }
 }
@@ -29,7 +31,10 @@ export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> 
     credentials: 'include',
   })
   const json = (await res.json().catch(() => ({}))) as T
-  if (!res.ok) throw new ApiError(res.status, (json as { error: { code: string; message: string } }).error)
+  if (!res.ok) {
+    const error = (json as { error?: { code?: string; message?: string } }).error
+    throw new ApiError(res.status, error)
+  }
   return json
 }
 

@@ -87,7 +87,7 @@ function EnvSwitcher() {
 
 export function TopBar({ darkMode, onToggleDark }: TopBarProps) {
   const navigate = useNavigate()
-  const { user, bots, botsLoading, selectedBotId, selectBot, clearAuth } = useAppStore()
+  const { user, bots, botsLoading, botsError, selectedBotId, selectBot, clearAuth } = useAppStore()
   const { data: agentStatus = 'offline' } = useAgentStatus()
   const updateStatus = useUpdateAgentStatus()
   const { data: tenant } = useQuery({
@@ -131,7 +131,7 @@ export function TopBar({ darkMode, onToggleDark }: TopBarProps) {
                 </div>
               )}
               <span className="font-medium text-[var(--text-primary)] max-w-[140px] truncate">
-                {botsLoading ? 'Loading…' : (selectedBot?.name ?? 'Select Bot')}
+                {botsLoading ? 'Loading…' : botsError && !selectedBot ? 'Server unavailable' : (selectedBot?.name ?? 'Select Bot')}
               </span>
               <ChevronDown size={13} className="text-[var(--text-muted)]" />
             </button>

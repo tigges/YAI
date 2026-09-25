@@ -14,7 +14,7 @@ export function AppShell() {
   const [collapsed, setCollapsed] = useState(false)
   const [darkMode, setDarkMode] = useState(savedDarkMode)
   const navigate = useNavigate()
-  const { bots, setBots, setBotsLoading, clearAuth } = useAppStore()
+  const { bots, setBots, setBotsLoading, setBotsError, clearAuth } = useAppStore()
 
   // Bootstrap: on every page refresh the bots list starts empty because it is
   // intentionally excluded from localStorage persistence.  Fetch once from the
@@ -30,7 +30,10 @@ export function AppShell() {
         if (status === 401 || status === 403) {
           clearAuth()
           navigate({ to: '/sign-in' })
+          return
         }
+        const message = err instanceof Error ? err.message : 'The server is not responding. Try again in a moment.'
+        setBotsError(message)
       })
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])

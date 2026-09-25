@@ -53,7 +53,7 @@ export function FlowsPage() {
   const [confirmRemove, setConfirmRemove] = useState(false)
   const [packError, setPackError] = useState('')
 
-  const { data: flows = [], isLoading } = useFlows()
+  const { data: flows = [], isLoading, isError, error, refetch } = useFlows()
   const createFlow = useCreateFlow()
   const saveCanvas = useSaveCanvas()
   const updateFlow = useUpdateFlow()
@@ -219,6 +219,13 @@ export function FlowsPage() {
 
         {isLoading ? (
           <div className="space-y-2">{Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-12 w-full rounded-[var(--radius-md)]" />)}</div>
+        ) : isError ? (
+          <EmptyState
+            icon={<Workflow size={20} />}
+            title="Could not load flows"
+            description={error instanceof Error ? error.message : 'The server is not responding. Try again in a moment.'}
+            action={<Button size="md" variant="secondary" onClick={() => { void refetch() }}>Try again</Button>}
+          />
         ) : filtered.length === 0 ? (
           <EmptyState
             icon={<Workflow size={20} />}
