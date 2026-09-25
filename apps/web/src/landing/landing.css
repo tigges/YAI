@@ -235,7 +235,16 @@ h1,
   display: flex;
   flex-direction: column;
   gap: 8px;
+  min-height: 280px;
+  max-height: 420px;
+  overflow-y: auto;
   padding: 14px;
+}
+
+.widget-empty {
+  margin: auto 0;
+  color: var(--text-muted);
+  font-size: 13px;
 }
 
 .bubble {
@@ -258,13 +267,38 @@ h1,
 .widget-input {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  gap: 8px;
   margin: 0 14px 14px;
   padding: 8px 8px 8px 12px;
   border: 1px solid var(--border);
   border-radius: 999px;
-  color: var(--text-muted);
+  background: var(--bg-surface);
+}
+
+.widget-input input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  outline: none;
+  background: transparent;
+  color: var(--text-primary);
+  font: inherit;
   font-size: 13px;
+}
+
+.widget-input input::placeholder {
+  color: var(--text-muted);
+}
+
+.sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  border: 0;
 }
 
 .send {
@@ -272,8 +306,15 @@ h1,
   place-items: center;
   width: 28px;
   height: 28px;
+  border: 0;
   border-radius: 999px;
   background: var(--accent);
+  cursor: pointer;
+}
+
+.send:disabled {
+  cursor: default;
+  opacity: 0.6;
 }
 
 .steps {

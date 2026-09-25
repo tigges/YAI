@@ -32,7 +32,6 @@ import { initQueues } from './queues.js'
 
 const PORT = parseInt(process.env['PORT'] ?? '3001', 10)
 const HOST = process.env['HOST'] ?? '0.0.0.0'
-const FRONTEND_URL = process.env['FRONTEND_URL'] ?? 'http://localhost:5173'
 const JWT_SECRET = process.env['JWT_SECRET'] ?? 'dev-secret-change-me'
 
 const isDev = process.env['NODE_ENV'] !== 'production'
@@ -46,8 +45,11 @@ const app = Fastify({
     : true,
 })
 
+// Reflect the caller's origin. The website widget is embedded on the marketing
+// site and on customer sites, so a single FRONTEND_URL blocks those chats in the
+// browser. The channel allowlist still decides who may use a widget.
 await app.register(cors, {
-  origin: FRONTEND_URL,
+  origin: true,
   credentials: true,
 })
 

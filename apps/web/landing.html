@@ -45,37 +45,24 @@
             <p class="fine">Free plan · No credit card · UK/EU data hosting</p>
           </div>
 
-          <aside class="widget" aria-label="Example of a full website chat">
+          <aside class="widget" aria-label="Chat with BotStudio">
             <div class="widget-head">
-              <span class="avatar" aria-hidden="true">C</span>
+              <span class="avatar" aria-hidden="true">B</span>
               <span class="who">
-                <strong>Cal</strong>
-                <span class="sub"><span class="dot" aria-hidden="true"></span> Acme Support · Online</span>
+                <strong>BotStudio</strong>
+                <span class="sub"><span class="dot" aria-hidden="true"></span> Online</span>
               </span>
             </div>
-            <div class="widget-body">
-              <p class="bubble">Hi Sarah. I can help with orders, returns, and billing.</p>
-              <p class="bubble mine">Where is order AC-20441?</p>
-              <p class="bubble">It left the warehouse yesterday. Delivery is Thursday, between 2 and 6 pm.</p>
-              <div class="status-card">
-                <strong>AC-20441</strong>
-                <span>On the way · Thursday</span>
-              </div>
-              <p class="bubble mine">Can I change the delivery address?</p>
-              <p class="bubble">Yes. Send the new address and I will update the order.</p>
-              <div class="chips" aria-hidden="true">
-                <span>Track order</span>
-                <span>Start a return</span>
-              </div>
-            </div>
-            <div class="widget-input">
-              <span>Type a message...</span>
-              <span class="send" aria-hidden="true">
+            <div class="widget-body" id="hero-log" role="log" aria-live="polite"></div>
+            <form class="widget-input" id="hero-form">
+              <label class="sr" for="hero-text">Message</label>
+              <input id="hero-text" name="message" placeholder="How can I help you today?" autocomplete="off" />
+              <button class="send" type="submit" aria-label="Send">
                 <svg viewBox="0 0 24 24" width="14" height="14">
                   <path d="M4 12h14M13 6l6 6-6 6" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
                 </svg>
-              </span>
-            </div>
+              </button>
+            </form>
           </aside>
         </section>
 
@@ -160,11 +147,6 @@
     </main>
 
     <footer class="foot">BotStudio · London</footer>
-    <script>
-      window.YBotTitle = 'BotStudio'
-      window.YBotAccentColor = '#111827'
-    </script>
-    <script src="https://app.botstudio.uk/api/v1/widget.js?id=botstudio-web" async></script>
     <script type="module" src="/src/landing/main.ts"></script>
   </body>
 </html>
