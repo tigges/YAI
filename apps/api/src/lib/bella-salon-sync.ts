@@ -1,3 +1,4 @@
+import { graphKeepsLearning } from '@ybot/shared'
 import { graphAction } from './copy-graphs.js'
 
 /** The retail starter welcome. Bella's public page should not speak it. */
@@ -8,9 +9,22 @@ export function isShopWelcomeGraph(name: string, graph: unknown): boolean {
 }
 
 /**
- * Environments whose published copy is missing or older than the pack graph.
- * The caller publishes a new version there and leaves a matching copy alone.
+ * Pack refresh skips an environment whose published chart already carries
+ * a learning route. Other environments still receive the pack when their
+ * published copy is missing or older.
  */
+export function environmentsToRefresh(
+  graph: unknown,
+  published: Array<{ environmentId: string; graph: unknown }>,
+  environmentIds: string[],
+): string[] {
+  const open = environmentIds.filter((environmentId) => {
+    const current = published.find((item) => item.environmentId === environmentId)
+    return !current || !graphKeepsLearning(current.graph)
+  })
+  return environmentsNeedingGraph(graph, published, open)
+}
+
 export function environmentsNeedingGraph(
   graph: unknown,
   published: Array<{ environmentId: string; graph: unknown }>,

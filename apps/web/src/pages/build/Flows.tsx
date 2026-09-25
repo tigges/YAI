@@ -6,6 +6,7 @@ import { useNavigate } from '@tanstack/react-router'
 import { useFlows, useCreateFlow, useDeleteFlow, useUpdateFlow, usePublishFlow, useSaveCanvas, useImportStarterPack, useRemoveStarterPack } from '../../lib/hooks'
 import type { CorporatePackResult, PackRemovalResult } from '../../lib/api'
 import { FlowWizard } from './FlowWizard'
+import { LearnFromChats } from './LearnFromChats'
 import { reviewFlow } from './PublishCheck'
 import type { Flow, FlowGraph } from '../../lib/api'
 import { useAppStore } from '../../store/app'
@@ -62,6 +63,7 @@ export function FlowsPage() {
   const importPack = useImportStarterPack()
   const removePack = useRemoveStarterPack()
   const environments = useAppStore((s) => s.bots.find((b) => b.id === s.selectedBotId)?.environments) ?? NO_ENVIRONMENTS
+  const botName = useAppStore((s) => s.bots.find((b) => b.id === s.selectedBotId)?.name ?? '')
   const selectedEnv = useAppStore((s) => s.selectedEnv)
   const environmentId = useAppStore((s) => s.bots.find((b) => b.id === s.selectedBotId)?.environments.find((env) => env.kind === s.selectedEnv)?.id ?? '')
   const envLabel = selectedEnv === 'production' ? 'Production' : 'Sandbox'
@@ -144,6 +146,12 @@ export function FlowsPage() {
       />
 
       <div className="flex-1 overflow-auto p-6">
+        <LearnFromChats
+          botName={botName}
+          envLabel={envLabel}
+          environmentId={environmentId}
+          sandboxId={environments.find((env) => env.kind === 'sandbox')?.id ?? ''}
+        />
         {checked.length > 0 && (
           <div className="mb-4 rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--bg-surface)] p-4">
             <p className="text-sm font-medium text-[var(--text-primary)]">Connection check</p>

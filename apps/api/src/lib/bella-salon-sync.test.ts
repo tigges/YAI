@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { environmentsNeedingGraph, isShopWelcomeGraph } from './bella-salon-sync.js'
+import { environmentsNeedingGraph, environmentsToRefresh, isShopWelcomeGraph } from './bella-salon-sync.js'
 
 test('the shop welcome is the retail menu, not the salon greeting', () => {
   assert.equal(isShopWelcomeGraph('Welcome & Routing', { text: 'I can help with an order, a return, billing' }), true)
@@ -20,4 +20,21 @@ test('a salon graph is published only where the saved copy differs', () => {
     ['production'],
   )
   assert.deepEqual(environmentsNeedingGraph(graph, [], ['sandbox', 'production']), ['sandbox', 'production'])
+})
+
+test('a published learning route is left in place on that environment', () => {
+  const pack = { nodes: [{ id: 'start' }] }
+  const learned = {
+    nodes: [{
+      id: 'route',
+      data: { kind: 'route_topic', config: { routes: [{ handle: 'learned', phrases: ['book a colour'], learning: true }] } },
+    }],
+  }
+  assert.deepEqual(
+    environmentsToRefresh(pack, [
+      { environmentId: 'sandbox', graph: learned },
+      { environmentId: 'production', graph: { nodes: [{ id: 'old' }] } },
+    ], ['sandbox', 'production']),
+    ['production'],
+  )
 })

@@ -32,6 +32,15 @@ export function useFlows() {
   })
 }
 
+export function useLearning(environmentId: string) {
+  const bid = botId()
+  return useQuery({
+    queryKey: ['learn', bid, environmentId],
+    queryFn: () => api.learn.summary(bid, environmentId).then((r) => r.data),
+    enabled: !isDemoMode() && !!environmentId,
+  })
+}
+
 export function useRemoveStarterPack() {
   const qc = useQueryClient()
   const bid = botId()
